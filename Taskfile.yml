@@ -1,0 +1,353 @@
+version: '3'
+
+# =============================================================================
+# Ubuntu Website - Root Taskfile
+# =============================================================================
+#
+# This is the root Taskfile that includes all domain-specific modules.
+# Most tasks are defined in taskfiles/*.yml for organization.
+#
+# Quick Reference:
+#   task                 - Show project info
+#   task dev             - Start Hugo dev server
+#   task build           - Build production site
+#   task git:deploy      - Commit and deploy
+#   task help            - List all tasks
+#
+# Module Namespaces:
+#   hugo:*      - Hugo static site generator
+#   cf:*        - Cloudflare Pages management
+#   git:*       - Git operations
+#   translate:* - Translation workflow
+#   analytics:* - Cloudflare Web Analytics (cmd/analytics)
+#   sitecheck:* - Site reachability checks (cmd/sitecheck)
+#   genlogo:*   - Logo/branding generation (cmd/genlogo)
+#   mailerlite:* - MailerLite subscriber management (cmd/mailerlite)
+#   env:*       - Environment management
+#   url:*       - URL shortcuts + SEO dashboards
+#   tools:*     - Cross-platform tools (xplat, gh, task)
+#   toolchain:* - Compilers/runtimes (golang, rust)
+#   release:*   - Release builds for binary tools
+#   ci:*        - CI interface tasks
+#   dev:*       - Development workflow (wraps pc + tui)
+#   pc:*        - Process-Compose (dev process orchestration)
+#   tui:*       - Task-UI (web dashboard for tasks)
+#
+# =============================================================================
+
+# =============================================================================
+# Includes
+# =============================================================================
+
+includes:
+  # Domain modules
+  hugo: ./taskfiles/Taskfile.hugo.yml
+  cf: ./taskfiles/Taskfile.cf.yml
+  translate: ./taskfiles/Taskfile.translate.yml
+  analytics: ./taskfiles/Taskfile.analytics.yml
+  sitecheck: ./taskfiles/Taskfile.sitecheck.yml
+  genlogo: ./taskfiles/Taskfile.genlogo.yml
+  mailerlite: ./taskfiles/Taskfile.mailerlite.yml
+  env: ./taskfiles/Taskfile.env.yml
+  url: ./taskfiles/Taskfile.url.yml
+
+  # Infrastructure modules
+  lanip: ./taskfiles/Taskfile.lanip.yml
+  ci: ./taskfiles/Taskfile.ci.yml
+
+  # Tools & Toolchains (git exposed at top-level for convenience: git:deploy, git:status)
+  git:
+    taskfile: ./taskfiles/tools/Taskfile.git.yml
+  tools: ./taskfiles/Taskfile.tools.yml
+  toolchain: ./taskfiles/Taskfile.toolchain.yml
+
+  # Release builds
+  release: ./taskfiles/Taskfile.release.yml
+
+  # Test tools (minimal binaries for fast workflow testing)
+  dummy: ./taskfiles/Taskfile.dummy.yml
+  dummy-cgo: ./taskfiles/Taskfile.dummy-cgo.yml
+
+  # Development workflow
+  dev: ./taskfiles/Taskfile.dev.yml
+  pc: ./taskfiles/tools/Taskfile.process-compose.yml
+  tui: ./taskfiles/tools/Taskfile.task-ui.yml
+  wrangler: ./taskfiles/tools/Taskfile.wrangler.yml
+
+# =============================================================================
+# Environment
+# =============================================================================
+
+dotenv:
+  - '.env'
+  - 'xplat.env'
+
+# =============================================================================
+# Variables
+# =============================================================================
+
+vars:
+  # Project
+  PROJECT_NAME: ubuntu-website
+  DOMAIN: www.ubuntusoftware.net
+
+  # Cloudflare Account
+  CF_ACCOUNT_ID: 7384af54e33b8a54ff240371ea368440
+  CF_ZONE_ID: 867fb5996096b895b47114b6564ee0fb
+  CF_WEB_ANALYTICS_SITE_TAG: 4c28a6bfb5514996914a603c999d5c79
+
+  # Deployment URLs
+  URL_PRODUCTION: https://www.ubuntusoftware.net
+  URL_PREVIEW: https://ubuntu-website.pages.dev
+  URL_DEV: http://localhost:1313
+
+  # Cloudflare Dashboard URLs
+  CF_DASH_BASE: https://dash.cloudflare.com/{{.CF_ACCOUNT_ID}}
+  CF_DASH_DOMAIN: '{{.CF_DASH_BASE}}/ubuntusoftware.net'
+  CF_DASH_PAGES: '{{.CF_DASH_BASE}}/pages/view/{{.PROJECT_NAME}}'
+  CF_DASH_PAGES_SETTINGS: '{{.CF_DASH_PAGES}}/settings/production'
+
+  # Commands
+  ENV_CMD: cmd/env/main.go
+
+  # Directories (gitignored)
+  DIR_PUBLIC: public
+  DIR_RESOURCES: resources
+  DIR_NODE_MODULES: node_modules
+  DIR_BUILD: .build
+  DIR_PLAYWRIGHT: .playwright-mcp
+  DIR_VIA: .via
+  DIR_LOGS: logs
+  DIR_TASK: .task
+
+  # Files (gitignored)
+  FILE_HUGO_LOCK: .hugo_build.lock
+  FILE_HUGO_STATS: hugo_stats.json
+  FILE_BUN_LOCK: bun.lockb
+  FILE_NPM_LOCK: package-lock.json
+  FILE_ENV: .env
+  FILE_ANALYTICS_STATE: .analytics-state.json
+  FILE_SITECHECK_STATE: .sitecheck-state.json
+
+  # Hugo
+  HUGO_BUILD_FLAGS: --gc --minify
+  HUGO_DEV_FLAGS: --buildDrafts --buildFuture
+  HUGO_PREVIEW_FLAGS: -e production --minify
+
+  # Go
+  GO_VERSION: "1.25"
+  CGO_ENABLED: "1"
+
+  # Wrangler (installed via wrangler:check:deps)
+  # Full path since ~/.bun/bin may not be in PATH
+  WRANGLER_CMD: '{{.HOME}}/.bun/bin/wrangler'
+
+  # Global binary install directory - all tools use this
+  # Unix: ~/.local/bin (standard for user binaries)
+  # Windows: ~/bin (simpler path)
+  BIN_INSTALL_DIR: '{{if eq OS "windows"}}{{.HOME}}/bin{{else}}{{.HOME}}/.local/bin{{end}}'
+
+  # xplat - cross-platform binary (uses global BIN_INSTALL_DIR)
+  XPLAT_BIN: '{{.BIN_INSTALL_DIR}}/xplat{{exeExt}}'
+
+# =============================================================================
+# Tasks
+# =============================================================================
+
+tasks:
+  # ===========================================================================
+  # Default & Info
+  # ===========================================================================
+
+  default:
+    desc: Show project information (runs when you type 'task')
+    cmds:
+      - task: info
+
+  info:
+    desc: Show all URLs and project information
+    cmds:
+      - |
+        # Get branch info
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        echo "========================================"
+        echo "Ubuntu Website - Project Info"
+        echo "========================================"
+        echo ""
+
+        # Branch Status - PROMINENT DISPLAY
+        echo "========== GIT BRANCH =========="
+        if [ "$CURRENT_BRANCH" = "main" ]; then
+          echo "WARNING: You are on MAIN branch"
+          echo "Commits will deploy to PRODUCTION!"
+        else
+          echo "Current branch: $CURRENT_BRANCH"
+          echo "(Safe to commit - preview deployment)"
+        fi
+        echo "================================"
+        echo ""
+
+        echo "Project: {{.PROJECT_NAME}}"
+        echo "Domain: {{.DOMAIN}}"
+        echo ""
+        echo "Development URL:"
+        echo "  Local: {{.URL_DEV}}"
+        echo ""
+        echo "Production URLs:"
+        echo "  Main: {{.URL_PRODUCTION}}"
+        echo "  Preview: {{.URL_PREVIEW}}"
+        echo ""
+        COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        if [ "$COMMIT" != "unknown" ]; then
+          echo "Current Commit Preview:"
+          echo "  https://$COMMIT.ubuntu-website.pages.dev"
+          echo ""
+        fi
+        echo "Cloudflare Dashboards:"
+        echo "  Domain: {{.CF_DASH_DOMAIN}}"
+        echo "  Pages: {{.CF_DASH_PAGES}}"
+        echo "  Settings: {{.CF_DASH_PAGES_SETTINGS}}"
+        echo ""
+        echo "Quick Commands:"
+        echo "  task setup             - Install Hugo, Bun, dependencies"
+        echo "  task dev               - Start development server"
+        echo "  task url:dev           - Open local dev in browser"
+        echo "  task build             - Build production site"
+        echo "  task git:deploy        - Commit and deploy to production"
+        echo "  task cf:status         - Check deployment status"
+        echo "  task url:prod          - Open production site"
+        echo "  task help              - Show all available tasks"
+        echo "========================================"
+
+  help:
+    desc: Show help
+    cmds:
+      - task --list
+
+  # ===========================================================================
+  # Setup & Installation
+  # ===========================================================================
+
+  setup:
+    desc: Complete setup - install Hugo, Bun, and dependencies
+    cmds:
+      - task: install:hugo
+      - task: install:bun
+      - task: install:deps
+
+  install:hugo:
+    desc: Install Hugo Extended (via Homebrew)
+    cmds:
+      - |
+        if command -v hugo &> /dev/null; then
+          echo "Hugo already installed"
+          hugo version
+        else
+          echo "Installing Hugo Extended via Homebrew..."
+          brew install hugo
+          hugo version
+        fi
+
+  install:bun:
+    desc: Install Bun
+    cmds:
+      - |
+        if command -v bun &> /dev/null; then
+          echo "Bun already installed"
+        else
+          curl -fsSL https://bun.sh/install | bash
+        fi
+      - bun --version
+
+  install:deps:
+    desc: Install dependencies
+    cmds:
+      - bun install
+      - go mod download
+
+  # ===========================================================================
+  # Aliases (backward compatibility)
+  # ===========================================================================
+
+  dev:
+    desc: "[alias] Start Hugo development server"
+    cmds:
+      - task: hugo:dev
+
+  dev:lan:
+    desc: "[alias] Start Hugo dev server with LAN IP"
+    cmds:
+      - task: hugo:dev:lan
+
+  build:
+    desc: "[alias] Build production site"
+    cmds:
+      - task: hugo:build
+
+  preview:
+    desc: "[alias] Preview production build"
+    cmds:
+      - task: hugo:preview
+
+  clean:
+    desc: "[alias] Clean build artifacts"
+    cmds:
+      - task: hugo:clean
+
+  # ===========================================================================
+  # CI Interface (called by GitHub Actions workflows)
+  # ===========================================================================
+  # Workflows call these tasks - all logic stays in Taskfile.
+  # Most ci:* tasks are in taskfiles/Taskfile.ci.yml
+  # Note: ci:analytics and ci:sitecheck use binaries via their respective taskfiles
+
+  ci:analytics:
+    desc: "[Monitor] Analytics - Run analytics check for CI"
+    deps: [analytics:check:deps]
+    cmds:
+      - '{{.HOME}}/.local/bin/analytics{{exeExt}} -github-issue'
+
+  ci:sitecheck:
+    desc: "[Monitor] Sitecheck - Run site check for CI"
+    deps: [sitecheck:check:deps]
+    cmds:
+      - '{{.HOME}}/.local/bin/sitecheck{{exeExt}} -github-issue'
+
+  ci:translate:
+    desc: "[Monitor] Translate - Check translation status for CI"
+    deps: [translate:check:deps]
+    vars:
+      TRANSLATE: '{{.HOME}}/.local/bin/translate{{exeExt}}'
+    cmds:
+      # Run all checks, output markdown report
+      # Exits non-zero if ANY check finds issues
+      - |
+        echo "# Translation Status Report"
+        echo ""
+        FOUND=0
+        {{.TRANSLATE}} -github-issue content missing || FOUND=1
+        {{.TRANSLATE}} -github-issue content stale || FOUND=1
+        {{.TRANSLATE}} -github-issue content orphans || FOUND=1
+        {{.TRANSLATE}} -github-issue menu check || FOUND=1
+        [ $FOUND -eq 0 ]
+
+  # ===========================================================================
+  # Code Quality
+  # ===========================================================================
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  lint:
+    desc: Lint code
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./... -v
+

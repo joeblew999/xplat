@@ -1,0 +1,41 @@
+# Development Workflow
+#
+# Unified interface to dev tools (wraps pc and tui namespaces).
+#
+# Usage:
+#   task dev:up      Start all dev processes
+#   task dev:down    Stop all processes
+#   task dev:logs    View combined logs
+#   task dev:status  Show process status
+#   task dev:ui      Start Task-UI web dashboard
+#
+# REQUIRES: xplat (for binary management)
+
+version: '3'
+
+tasks:
+  up:
+    desc: Start all dev processes (Hugo + tools)
+    cmds:
+      - task: :pc:up
+
+  down:
+    desc: Stop all dev processes
+    cmds:
+      - task: :pc:down
+
+  logs:
+    desc: View combined process logs
+    cmds:
+      - task: :pc:logs
+
+  status:
+    desc: Show process status
+    cmds:
+      - task: :pc:status
+
+  # Task-UI (web dashboard)
+  ui:
+    desc: Start Task-UI web dashboard
+    cmds:
+      - task: :tui:up

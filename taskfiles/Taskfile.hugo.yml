@@ -1,0 +1,90 @@
+# Hugo Tasks
+#
+# Hugo static site generator commands for development,
+# building, and preview.
+#
+# Usage:
+#   task hugo:dev       - Start development server
+#   task hugo:build     - Build production site
+#   task hugo:preview   - Preview production build
+#   task hugo:clean     - Clean build artifacts
+#
+# Aliases (backward compat):
+#   task dev            - hugo:dev
+#   task build          - hugo:build
+#   task preview        - hugo:preview
+#   task clean          - hugo:clean
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Development
+  # ===========================================================================
+
+  dev:
+    desc: Start Hugo development server
+    cmds:
+      - |
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        echo "========================================"
+        echo "Hugo Development Server"
+        echo "========================================"
+        echo ""
+        if [ "$CURRENT_BRANCH" = "main" ]; then
+          echo "Branch: MAIN (production)"
+        else
+          echo "Branch: $CURRENT_BRANCH (preview)"
+        fi
+        echo ""
+        echo "Local URL: {{.URL_DEV}}"
+        LAN_IP=$(go run ./cmd/lanip 2>/dev/null || echo "unknown")
+        echo "LAN URL:   http://$LAN_IP:1313"
+        echo ""
+        echo "Quick Commands:"
+        echo "  task url:dev       - Open in browser"
+        echo "  task hugo:dev:lan  - Start with LAN baseURL (for mobile)"
+        echo "  Ctrl+C             - Stop server"
+        echo "========================================"
+        echo ""
+      - hugo server {{.HUGO_DEV_FLAGS}} --bind 0.0.0.0
+
+  dev:lan:
+    desc: Start Hugo dev server with LAN IP (for mobile testing)
+    cmds:
+      - |
+        LAN_IP=$(go run ./cmd/lanip 2>/dev/null || echo "127.0.0.1")
+        echo "========================================"
+        echo "Hugo Development Server (LAN Mode)"
+        echo "========================================"
+        echo ""
+        echo "LAN URL: http://$LAN_IP:1313"
+        echo ""
+        echo "Use this URL on your mobile device"
+        echo "========================================"
+        echo ""
+        hugo server {{.HUGO_DEV_FLAGS}} --bind 0.0.0.0 --baseURL "http://$LAN_IP:1313"
+
+  # ===========================================================================
+  # Build
+  # ===========================================================================
+
+  build:
+    desc: Build production site
+    cmds:
+      - hugo {{.HUGO_BUILD_FLAGS}}
+
+  preview:
+    desc: Preview production build
+    cmds:
+      - hugo server {{.HUGO_PREVIEW_FLAGS}}
+
+  # ===========================================================================
+  # Clean
+  # ===========================================================================
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - '{{.XPLAT_BIN}} rm -rf {{.DIR_PUBLIC}} {{.DIR_RESOURCES}} {{.FILE_HUGO_LOCK}}'

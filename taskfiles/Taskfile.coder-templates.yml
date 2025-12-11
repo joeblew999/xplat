@@ -1,0 +1,71 @@
+# Coder Templates Tasks
+#
+# Terraform template scaffolding and management for Coder.
+# https://coder.com/docs/templates
+#
+# Usage:
+#   task coder-templates:list    - List available templates
+#   task coder-templates:create  - Scaffold new template
+#   task coder-templates:push    - Push template to Coder
+#
+# TODO: Implement tasks
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Template Management
+  # ===========================================================================
+
+  list:
+    desc: "[STUB] List available templates"
+    cmds:
+      - 'echo "TODO: coder templates list"'
+
+  create:
+    desc: "[STUB] Scaffold a new template"
+    cmds:
+      - 'echo "TODO: coder templates create"'
+
+  push:
+    desc: "[STUB] Push template to Coder server"
+    cmds:
+      - 'echo "TODO: coder templates push"'
+
+  pull:
+    desc: "[STUB] Pull template from Coder server"
+    cmds:
+      - 'echo "TODO: coder templates pull"'
+
+  # ===========================================================================
+  # Template Development
+  # ===========================================================================
+
+  init:
+    desc: "[STUB] Initialize a new template from starter"
+    cmds:
+      - 'echo "TODO: coder templates init"'
+
+  validate:
+    desc: "[STUB] Validate template Terraform"
+    cmds:
+      - 'echo "TODO: terraform validate"'
+
+  plan:
+    desc: "[STUB] Plan template changes"
+    cmds:
+      - 'echo "TODO: terraform plan"'
+
+  # ===========================================================================
+  # Starters
+  # ===========================================================================
+
+  starters:
+    desc: "[STUB] List available template starters"
+    cmds:
+      - 'echo "TODO: List Coder template starters"'
+      - echo "  - docker"
+      - echo "  - kubernetes"
+      - echo "  - aws-linux"
+      - echo "  - gcp-linux"
+      - echo "  - fly-docker"

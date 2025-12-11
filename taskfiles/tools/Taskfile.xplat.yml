@@ -1,0 +1,429 @@
+# xplat - Cross-Platform Taskfile Utilities
+#
+# Downloads and installs the xplat binary from GitHub Releases.
+# This module has no REQUIRES as it bootstraps itself.
+#
+# Other modules can use xplat for cross-platform operations:
+#   xplat which <binary>   - Find binary in PATH
+#   xplat glob <pattern>   - Expand glob pattern (supports **)
+#
+# Pattern: All tool taskfiles define TOOL_BIN with {{exeExt}} for Windows support
+
+version: '3'
+
+vars:
+  XPLAT_VERSION: v0.2.0
+  XPLAT_REPO: joeblew999/ubuntu-website
+  # Binary name with platform-specific extension (.exe on Windows)
+  XPLAT_BIN: 'xplat{{exeExt}}'
+  XPLAT_CGO: '0'  # No CGO needed - can cross-compile
+  XPLAT_AFFINITY: cross  # Can cross-compile from any platform
+  # BIN_INSTALL_DIR: Where to install binaries
+  # Always use absolute HOME-based path to avoid nested taskfile resolution issues
+  BIN_INSTALL_DIR: '{{if eq OS "windows"}}{{.HOME}}/bin{{else}}{{.HOME}}/.local/bin{{end}}'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure xplat is installed (builds from source or downloads)
+    run: once
+    cmds:
+      - |
+        # Check if xplat exists and works
+        if command -v xplat >/dev/null 2>&1; then
+          INSTALLED=$(xplat version 2>/dev/null || echo "unknown")
+          echo "OK: xplat $INSTALLED"
+          exit 0
+        fi
+
+        # Create install directory
+        mkdir -p "{{.BIN_INSTALL_DIR}}"
+
+        # Detect OS for extension
+        EXT=""
+        case "$(uname -s)" in
+          MINGW*|MSYS*|CYGWIN*) EXT=".exe" ;;
+        esac
+
+        # Strategy 1: Build from source if Go is available AND source exists
+        # This works in CI (always has Go) and locally in this repo
+        # External consumers (remote includes) will skip to download
+        # toSlash converts backslashes to forward slashes for shell compatibility on Windows
+        if command -v go >/dev/null 2>&1 && [ -d "{{toSlash .ROOT_DIR}}/cmd/xplat" ]; then
+          echo "Building xplat from source..."
+          go build -o "{{.BIN_INSTALL_DIR}}/xplat${EXT}" "{{toSlash .ROOT_DIR}}/cmd/xplat"
+          chmod +x "{{.BIN_INSTALL_DIR}}/xplat${EXT}"
+          echo "OK: xplat built from source"
+          echo ""
+          echo "Add to PATH if not already:"
+          echo "  export PATH=\"{{.BIN_INSTALL_DIR}}:\$PATH\""
+          exit 0
+        fi
+
+        # Strategy 2: Download from GitHub Release
+        # Used when: no Go installed, or source not available (remote includes)
+        echo "Downloading xplat {{.XPLAT_VERSION}} from GitHub..."
+
+        # Detect OS and architecture
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+
+        case "$OS" in
+          mingw*|msys*|cygwin*) OS="windows" ;;
+        esac
+
+        case "$ARCH" in
+          x86_64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+        esac
+
+        BINARY="xplat-${OS}-${ARCH}${EXT}"
+        URL="https://github.com/{{.XPLAT_REPO}}/releases/download/xplat-{{.XPLAT_VERSION}}/${BINARY}"
+
+        echo "Downloading from: $URL"
+
+        # Download binary
+        if command -v curl >/dev/null 2>&1; then
+          HTTP_CODE=$(curl -sL -w "%{http_code}" "$URL" -o "{{.BIN_INSTALL_DIR}}/xplat${EXT}")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Download failed (HTTP $HTTP_CODE)"
+            echo "Release xplat-{{.XPLAT_VERSION}} may not exist yet."
+            echo "Install Go and re-run to build from source."
+            rm -f "{{.BIN_INSTALL_DIR}}/xplat${EXT}"
+            exit 1
+          fi
+        elif command -v wget >/dev/null 2>&1; then
+          wget -q "$URL" -O "{{.BIN_INSTALL_DIR}}/xplat${EXT}" || {
+            echo "ERROR: Download failed"
+            echo "Release xplat-{{.XPLAT_VERSION}} may not exist yet."
+            echo "Install Go and re-run to build from source."
+            rm -f "{{.BIN_INSTALL_DIR}}/xplat${EXT}"
+            exit 1
+          }
+        else
+          echo "ERROR: curl or wget required to download xplat"
+          exit 1
+        fi
+
+        # Make executable
+        chmod +x "{{.BIN_INSTALL_DIR}}/xplat${EXT}"
+
+        # Verify
+        if "{{.BIN_INSTALL_DIR}}/xplat${EXT}" version >/dev/null 2>&1; then
+          echo "OK: xplat {{.XPLAT_VERSION}} installed to {{.BIN_INSTALL_DIR}}"
+          echo ""
+          echo "Add to PATH if not already:"
+          echo "  export PATH=\"{{.BIN_INSTALL_DIR}}:\$PATH\""
+        else
+          echo "ERROR: xplat installation failed"
+          exit 1
+        fi
+
+  check:validate:
+    desc: Verify all xplat commands work correctly
+    cmds:
+      - |
+        echo "========================================"
+        echo "xplat Command Validation"
+        echo "========================================"
+        ERRORS=0
+
+        # Test version
+        echo ""
+        echo "Testing: xplat version"
+        if xplat version; then
+          echo "  OK"
+        else
+          echo "  FAILED"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test which
+        echo ""
+        echo "Testing: xplat which"
+        if xplat which go >/dev/null 2>&1; then
+          echo "  OK: found $(xplat which go)"
+        else
+          echo "  SKIP: go not in PATH (expected in some environments)"
+        fi
+
+        # Test glob (using ROOT_DIR for absolute path)
+        echo ""
+        echo "Testing: xplat glob"
+        COUNT=$(xplat glob "{{toSlash .ROOT_DIR}}/taskfiles/*.yml" | wc -l | tr -d ' ')
+        if [ "$COUNT" -gt 0 ]; then
+          echo "  OK: found $COUNT files"
+        else
+          echo "  FAILED: no files found"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test glob with ** pattern
+        echo ""
+        echo "Testing: xplat glob (recursive **)"
+        COUNT=$(xplat glob "{{toSlash .ROOT_DIR}}/taskfiles/**/*.yml" | wc -l | tr -d ' ')
+        if [ "$COUNT" -gt 0 ]; then
+          echo "  OK: found $COUNT files recursively"
+        else
+          echo "  FAILED: recursive glob failed"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test mkdir (use cross-platform temp dir)
+        echo ""
+        echo "Testing: xplat mkdir"
+        # Use TEMP on Windows, TMPDIR on macOS, /tmp on Linux
+        TEMPBASE="${TEMP:-${TMPDIR:-/tmp}}"
+        TESTDIR="$TEMPBASE/xplat-test-$$"
+        if xplat mkdir -p "$TESTDIR/nested/dir"; then
+          if [ -d "$TESTDIR/nested/dir" ]; then
+            echo "  OK: created nested directories"
+          else
+            echo "  FAILED: directory not created"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: mkdir returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test touch
+        echo ""
+        echo "Testing: xplat touch"
+        if xplat touch "$TESTDIR/testfile.txt"; then
+          if [ -f "$TESTDIR/testfile.txt" ]; then
+            echo "  OK: created file"
+          else
+            echo "  FAILED: file not created"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: touch returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test cat
+        echo ""
+        echo "Testing: xplat cat"
+        echo "test content" > "$TESTDIR/testfile.txt"
+        CONTENT=$(xplat cat "$TESTDIR/testfile.txt")
+        if [ "$CONTENT" = "test content" ]; then
+          echo "  OK: read file contents"
+        else
+          echo "  FAILED: content mismatch"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test cp
+        echo ""
+        echo "Testing: xplat cp"
+        if xplat cp "$TESTDIR/testfile.txt" "$TESTDIR/copied.txt"; then
+          if [ -f "$TESTDIR/copied.txt" ]; then
+            echo "  OK: copied file"
+          else
+            echo "  FAILED: copied file not found"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: cp returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test cp -r (recursive)
+        echo ""
+        echo "Testing: xplat cp -r (recursive)"
+        if xplat cp -r "$TESTDIR/nested" "$TESTDIR/nested-copy"; then
+          if [ -d "$TESTDIR/nested-copy/dir" ]; then
+            echo "  OK: copied directory recursively"
+          else
+            echo "  FAILED: recursive copy incomplete"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: cp -r returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test mv (rename)
+        echo ""
+        echo "Testing: xplat mv (rename)"
+        xplat touch "$TESTDIR/to-rename.txt"
+        if xplat mv "$TESTDIR/to-rename.txt" "$TESTDIR/renamed.txt"; then
+          if [ -f "$TESTDIR/renamed.txt" ] && [ ! -f "$TESTDIR/to-rename.txt" ]; then
+            echo "  OK: renamed file"
+          else
+            echo "  FAILED: rename incomplete"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: mv returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test mv (move to directory)
+        echo ""
+        echo "Testing: xplat mv (move to directory)"
+        if xplat mv "$TESTDIR/renamed.txt" "$TESTDIR/nested/"; then
+          if [ -f "$TESTDIR/nested/renamed.txt" ]; then
+            echo "  OK: moved file to directory"
+          else
+            echo "  FAILED: move incomplete"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: mv to directory returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test env
+        echo ""
+        echo "Testing: xplat env"
+        HOME_VAL=$(xplat env HOME)
+        if [ -n "$HOME_VAL" ]; then
+          echo "  OK: HOME=$HOME_VAL"
+        else
+          echo "  FAILED: HOME not found"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test env with default
+        echo ""
+        echo "Testing: xplat env -d (default)"
+        VAL=$(xplat env NONEXISTENT_VAR_12345 -d "default_value")
+        if [ "$VAL" = "default_value" ]; then
+          echo "  OK: default value returned"
+        else
+          echo "  FAILED: default not returned"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test rm
+        echo ""
+        echo "Testing: xplat rm"
+        if xplat rm "$TESTDIR/copied.txt"; then
+          if [ ! -f "$TESTDIR/copied.txt" ]; then
+            echo "  OK: removed file"
+          else
+            echo "  FAILED: file still exists"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: rm returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Test rm -rf (recursive force)
+        echo ""
+        echo "Testing: xplat rm -rf (recursive)"
+        if xplat rm -rf "$TESTDIR"; then
+          if [ ! -d "$TESTDIR" ]; then
+            echo "  OK: removed directory tree"
+          else
+            echo "  FAILED: directory still exists"
+            ERRORS=$((ERRORS + 1))
+          fi
+        else
+          echo "  FAILED: rm -rf returned error"
+          ERRORS=$((ERRORS + 1))
+        fi
+
+        # Summary
+        echo ""
+        echo "========================================"
+        if [ $ERRORS -gt 0 ]; then
+          echo "FAILED: $ERRORS error(s)"
+          exit 1
+        else
+          echo "PASSED: All xplat commands validated"
+        fi
+
+  check:health:
+    desc: Check xplat can access GitHub (for updates)
+    cmds:
+      - |
+        echo "Checking GitHub connectivity..."
+        if curl -sI "https://github.com/{{.XPLAT_REPO}}/releases" >/dev/null 2>&1; then
+          echo "OK: GitHub reachable"
+        else
+          echo "WARN: Cannot reach GitHub (offline?)"
+        fi
+        echo "xplat:check:health passed"
+
+  # ===========================================================================
+  # Tasks
+  # ===========================================================================
+
+  debug:
+    desc: Show Task built-in variables and xplat commands
+    cmds:
+      - |
+        echo "========================================"
+        echo "Task Built-in Variables"
+        echo "========================================"
+        echo ""
+        echo "ROOT_DIR:     {{toSlash .ROOT_DIR}}"
+        echo "TASKFILE_DIR: {{.TASKFILE_DIR}}"
+        echo "USER_WORKING_DIR: {{.USER_WORKING_DIR}}"
+        echo ""
+        echo "OS:     {{OS}}"
+        echo "ARCH:   {{ARCH}}"
+        echo "exeExt: {{exeExt}}"
+        echo ""
+        echo "HOME:     {{.HOME}}"
+        echo ""
+        echo "========================================"
+        echo "xplat Commands"
+        echo "========================================"
+        echo ""
+        xplat --help | grep -A 100 "Available Commands:" | head -20
+        echo ""
+        echo "========================================"
+        echo "xplat Version"
+        echo "========================================"
+        xplat version
+
+  upgrade:
+    desc: Upgrade xplat to latest version
+    cmds:
+      - |
+        echo "Checking for updates..."
+        LATEST=$(curl -sI "https://github.com/{{.XPLAT_REPO}}/releases/latest" | grep -i location | sed 's/.*tag\/xplat-//' | tr -d '\r\n')
+        CURRENT=$(xplat version 2>/dev/null || echo "unknown")
+
+        if [ "$LATEST" = "$CURRENT" ]; then
+          echo "Already at latest version: $CURRENT"
+          exit 0
+        fi
+
+        echo "Upgrading from $CURRENT to $LATEST..."
+        # Force reinstall
+        rm -f "{{.BIN_INSTALL_DIR}}/xplat"
+        XPLAT_VERSION="$LATEST" task tools:xplat:check:deps
+
+  # ===========================================================================
+  # Wrapper Tasks (API isolation layer)
+  # ===========================================================================
+  # These tasks wrap xplat commands to provide API isolation.
+  # If xplat CLI changes, only these wrappers need updating.
+  # Other taskfiles call these wrappers instead of xplat directly.
+
+  binary:install:
+    desc: Install a binary (wrapper for xplat binary install)
+    # Usage: task tools:xplat:binary:install -- <name> <version> <repo> [--source <path>]
+    cmds:
+      - '{{.XPLAT_BIN}} binary install {{.CLI_ARGS}}'
+
+  release:build:
+    desc: Build release binaries for all platforms (wrapper for xplat release build)
+    # Usage: task tools:xplat:release:build -- <tool>
+    cmds:
+      - '{{.XPLAT_BIN}} release build {{.CLI_ARGS}}'
+
+  release:list:
+    desc: List built release binaries (wrapper for xplat release list)
+    # Usage: task tools:xplat:release:list -- <tool>
+    cmds:
+      - '{{.XPLAT_BIN}} release list {{.CLI_ARGS}}'

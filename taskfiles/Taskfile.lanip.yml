@@ -1,0 +1,56 @@
+# LAN IP Tasks
+#
+# Cross-platform LAN IP detection using Go.
+# Works on macOS, Linux, Windows.
+#
+# REQUIRES: golang
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+  # deps     - ensure required tools are installed (delegates to golang)
+  # validate - smoke test, runs in CI on change
+  # health   - external system check (network reachability)
+
+  check:deps:
+    desc: Ensure dependencies are installed (delegates to toolchain:golang)
+    cmds:
+      - task: :toolchain:golang:check:deps
+
+  check:validate:
+    desc: Smoke test lanip module works
+    cmds:
+      - |
+        echo "Validating lanip module..."
+        LAN_IP=$(go run ./cmd/lanip 2>&1)
+        if [ $? -ne 0 ]; then
+          echo "lanip:check:validate FAILED: $LAN_IP"
+          exit 1
+        fi
+        echo "LAN IP: $LAN_IP"
+        echo "lanip:check:validate passed"
+
+  check:health:
+    desc: Check network connectivity (can reach external DNS)
+    cmds:
+      - |
+        echo "Checking network health..."
+        LAN_IP=$(go run ./cmd/lanip 2>&1)
+        if [ $? -ne 0 ] || [ -z "$LAN_IP" ]; then
+          echo "lanip:check:health FAILED: No LAN IP detected"
+          exit 1
+        fi
+        echo "LAN IP: $LAN_IP"
+        echo "lanip:check:health passed"
+
+  # ===========================================================================
+  # Tasks
+  # ===========================================================================
+
+  get:
+    desc: Get LAN IP address
+    cmds:
+      - go run ./cmd/lanip

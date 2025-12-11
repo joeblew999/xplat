@@ -1,0 +1,89 @@
+# Coder on Fly.io Tasks
+#
+# Deploy and manage Coder server on Fly.io.
+# https://coder.com/docs/install/fly
+#
+# Usage:
+#   task coder-fly:deploy   - Deploy Coder to Fly.io
+#   task coder-fly:status   - Check deployment status
+#   task coder-fly:logs     - View Coder logs
+#
+# TODO: Implement tasks
+
+version: '3'
+
+vars:
+  # Fly.io app name for Coder server
+  CODER_FLY_APP: coder-server
+
+tasks:
+  # ===========================================================================
+  # Deployment
+  # ===========================================================================
+
+  deploy:
+    desc: "[STUB] Deploy Coder server to Fly.io"
+    cmds:
+      - 'echo "TODO: Deploy Coder to Fly.io"'
+      - echo "  fly launch --name {{.CODER_FLY_APP}}"
+
+  destroy:
+    desc: "[STUB] Destroy Coder deployment on Fly.io"
+    cmds:
+      - 'echo "TODO: fly apps destroy {{.CODER_FLY_APP}}"'
+
+  # ===========================================================================
+  # Status & Monitoring
+  # ===========================================================================
+
+  status:
+    desc: "[STUB] Check Coder deployment status"
+    cmds:
+      - 'echo "TODO: fly status -a {{.CODER_FLY_APP}}"'
+
+  logs:
+    desc: "[STUB] View Coder server logs"
+    cmds:
+      - 'echo "TODO: fly logs -a {{.CODER_FLY_APP}}"'
+
+  ssh:
+    desc: "[STUB] SSH into Coder server"
+    cmds:
+      - 'echo "TODO: fly ssh console -a {{.CODER_FLY_APP}}"'
+
+  # ===========================================================================
+  # Scaling
+  # ===========================================================================
+
+  scale:
+    desc: "[STUB] Scale Coder server"
+    cmds:
+      - 'echo "TODO: fly scale count 1 -a {{.CODER_FLY_APP}}"'
+
+  # ===========================================================================
+  # Secrets
+  # ===========================================================================
+
+  secrets:list:
+    desc: "[STUB] List Fly.io secrets for Coder"
+    cmds:
+      - 'echo "TODO: fly secrets list -a {{.CODER_FLY_APP}}"'
+
+  secrets:set:
+    desc: "[STUB] Set a Fly.io secret for Coder"
+    cmds:
+      - 'echo "TODO: fly secrets set KEY=value -a {{.CODER_FLY_APP}}"'
+
+  # ===========================================================================
+  # Database
+  # ===========================================================================
+
+  db:create:
+    desc: "[STUB] Create Postgres database for Coder on Fly.io"
+    cmds:
+      - 'echo "TODO: fly postgres create --name {{.CODER_FLY_APP}}-db"'
+
+  db:attach:
+    desc: "[STUB] Attach database to Coder app"
+    cmds:
+      - 'echo "TODO: fly postgres attach {{.CODER_FLY_APP}}-db -a {{.CODER_FLY_APP}}"'

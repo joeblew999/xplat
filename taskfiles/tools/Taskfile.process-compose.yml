@@ -1,0 +1,139 @@
+# Process-Compose Tasks
+#
+# Local development process orchestration with health checks and auto-restart.
+# Uses xplat binary:install for cross-platform binary management.
+#
+# Usage:
+#   task pc:up              Start all dev processes with TUI dashboard
+#   task pc:down            Stop all processes
+#   task pc:logs            View combined logs
+#   task pc:status          Show process status
+#
+# Enable optional processes:
+#   process-compose up --enable translate
+#   process-compose up --enable mailerlite
+#
+# Documentation: https://github.com/F1bonacc1/process-compose
+#
+# REQUIRES: xplat (for binary management)
+
+version: '3'
+
+vars:
+  # Version from xplat.env (loaded by root Taskfile dotenv)
+  PC_VERSION: '{{.PC_VERSION}}'
+  PC_REPO: joeblew999/ubuntu-website
+  PC_BIN: 'process-compose{{exeExt}}'
+  PC_CGO: '0'  # No CGO needed
+  PC_CMD: '{{.BIN_INSTALL_DIR}}/{{.PC_BIN}}'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - lifecycle phase)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure process-compose binary is available (builds from source or downloads)
+    internal: true
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.PC_BIN}}"
+    cmds:
+      - task: :tools:xplat:binary:install
+        vars:
+          CLI_ARGS: 'process-compose {{.PROCESS_COMPOSE_VERSION}} {{.PC_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/process-compose"'
+
+  # ===========================================================================
+  # Core Commands (up/down/logs/status)
+  # ===========================================================================
+
+  up:
+    desc: Start all dev processes with TUI dashboard
+    deps: [check:deps]
+    cmds:
+      - '{{.PC_CMD}} up'
+
+  up:detached:
+    desc: Start dev processes in background (no TUI)
+    deps: [check:deps]
+    cmds:
+      - '{{.PC_CMD}} up -t=false -d'
+
+  down:
+    desc: Stop all dev processes
+    deps: [check:deps]
+    cmds:
+      - '{{.PC_CMD}} down'
+
+  logs:
+    desc: View combined process logs
+    deps: [check:deps]
+    cmds:
+      - '{{.PC_CMD}} logs'
+
+  status:
+    desc: Show process status
+    deps: [check:deps]
+    cmds:
+      - '{{.PC_CMD}} process list'
+
+  # ===========================================================================
+  # Process Control
+  # ===========================================================================
+
+  restart:
+    desc: Restart a specific process (PROCESS=hugo)
+    deps: [check:deps]
+    requires:
+      vars: [PROCESS]
+    cmds:
+      - '{{.PC_CMD}} process restart {{.PROCESS}}'
+
+  stop:
+    desc: Stop a specific process (PROCESS=hugo)
+    deps: [check:deps]
+    requires:
+      vars: [PROCESS]
+    cmds:
+      - '{{.PC_CMD}} process stop {{.PROCESS}}'
+
+  start:
+    desc: Start a specific process (PROCESS=hugo)
+    deps: [check:deps]
+    requires:
+      vars: [PROCESS]
+    cmds:
+      - '{{.PC_CMD}} process start {{.PROCESS}}'
+
+  # ===========================================================================
+  # Release (release:* - build for distribution)
+  # ===========================================================================
+
+  release:build:
+    desc: Build process-compose for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.PC_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .PROCESS_COMPOSE_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/process-compose'
+          CGO: '{{.PC_CGO}}'
+
+  release:test:
+    desc: Test built process-compose release binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.PC_BIN}}'
+
+  release:publish:
+    desc: Build all platforms and create GitHub release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - task: :tools:xplat:release:build
+        vars:
+          CLI_ARGS: 'pc'
+      - task: :tools:gh:release:publish
+        vars:
+          NAME: 'process-compose'
+          VERSION: '{{.VERSION}}'

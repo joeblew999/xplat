@@ -1,0 +1,43 @@
+# Release Utilities
+#
+# Utility tasks for managing release builds.
+# Actual build tasks are in each tool's Taskfile (sitecheck, analytics, etc.)
+# and use :toolchain:golang:build for the shared build logic.
+#
+# Usage:
+#   task release:clean  - Remove all built binaries
+#   task release:list   - List built binaries
+#
+# Build commands (in respective tool Taskfiles):
+#   task sitecheck:release:build   - Build sitecheck for current platform
+#   task analytics:release:build   - Build analytics for current platform
+#   task translate:release:build   - Build translate for current platform
+#   task genlogo:release:build     - Build genlogo for current platform
+
+version: '3'
+
+vars:
+  # Output directory for release binaries (can override via env)
+  RELEASE_DIR: '{{if env "RELEASE_DIR"}}{{env "RELEASE_DIR"}}{{else}}{{.ROOT_DIR}}/bin{{end}}'
+
+tasks:
+  # ===========================================================================
+  # Utilities
+  # ===========================================================================
+
+  clean:
+    desc: Remove all built release binaries
+    cmds:
+      - rm -rf "{{.RELEASE_DIR}}"
+      - echo "Cleaned release directory"
+
+  list:
+    desc: List built release binaries
+    cmds:
+      - |
+        if [ -d "{{.RELEASE_DIR}}" ]; then
+          echo "Built binaries in {{.RELEASE_DIR}}:"
+          ls -la "{{.RELEASE_DIR}}" 2>/dev/null || echo "  (empty)"
+        else
+          echo "No release directory found (run a build first)"
+        fi

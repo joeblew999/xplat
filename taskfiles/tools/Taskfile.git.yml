@@ -1,0 +1,286 @@
+# Git Tasks
+#
+# Cross-platform git workflow tasks.
+# Pure git commands - works on macOS, Linux, Windows.
+#
+# Lifecycle:
+#   task git:check:deps       - Ensure git is installed
+#   task git:check:validate   - Smoke test git works
+#   task git:check:health     - Check git remote is reachable
+#   task git:generate:gitignore - Generate .gitignore from vars
+#
+# REQUIRES: git
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+  # deps          - ensure required tools are installed
+  # validate      - smoke test, runs in CI on change
+  # health        - external system check, runs on cron
+  # health:fail   - test failure path (for testing notifications)
+
+  check:deps:
+    desc: Ensure git is installed (installs locally, fails in CI with instructions)
+    cmds:
+      - |
+        if command -v git >/dev/null 2>&1; then
+          echo "OK: git $(git --version | cut -d' ' -f3)"
+          exit 0
+        fi
+
+        # Detect CI environment - git should always be pre-installed
+        if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+          echo "ERROR: Git is not installed (unexpected in CI)"
+          exit 1
+        fi
+
+        # Local: try to install
+        echo "Installing git..."
+
+        case "$(uname -s)" in
+          Darwin)
+            xcode-select --install 2>/dev/null || true
+            until command -v git >/dev/null 2>&1; do
+              echo "Waiting for Xcode CLI tools..."
+              sleep 5
+            done
+            ;;
+          Linux)
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y git
+            elif command -v yum >/dev/null 2>&1; then
+              sudo yum install -y git
+            else
+              echo "ERROR: No package manager found"
+              exit 1
+            fi
+            ;;
+          *)
+            echo "ERROR: Unsupported OS"
+            exit 1
+            ;;
+        esac
+
+        # Verify installation
+        if command -v git >/dev/null 2>&1; then
+          echo "OK: git $(git --version | cut -d' ' -f3) installed"
+        else
+          echo "ERROR: Git installation failed"
+          exit 1
+        fi
+
+  check:validate:
+    desc: Smoke test git module works
+    cmds:
+      - |
+        echo "Validating git module..."
+        git --version
+        git rev-parse --is-inside-work-tree > /dev/null
+        echo "git:check:validate passed"
+
+  check:health:
+    desc: Check git remote is reachable
+    cmds:
+      - |
+        echo "Checking git remote health..."
+        git ls-remote --exit-code origin HEAD > /dev/null
+        echo "git:check:health passed"
+
+  check:health:fail:
+    desc: "[TEST] Force health check failure (for testing notifications)"
+    cmds:
+      - |
+        echo "Simulating health check failure..."
+        echo "git:check:health FAILED (intentional test)"
+        exit 1
+
+  # ===========================================================================
+  # Generate (generate:* - lifecycle phase)
+  # ===========================================================================
+  # Uses Task's sources/generates for idempotency - skips if unchanged
+
+  generate:gitignore:
+    desc: Generate .gitignore from Taskfile vars
+    sources:
+      - '{{.ROOT_DIR}}/Taskfile.yml'
+    generates:
+      - '{{.ROOT_DIR}}/.gitignore'
+    cmds:
+      # toSlash converts backslashes to forward slashes for shell compatibility on Windows
+      - |
+        cat > "{{toSlash .ROOT_DIR}}/.gitignore" << 'EOF'
+        # Hugo
+        {{.DIR_PUBLIC}}/
+        {{.DIR_RESOURCES}}/
+        {{.FILE_HUGO_LOCK}}
+        {{.FILE_HUGO_STATS}}
+
+        # Node/Bun
+        {{.DIR_NODE_MODULES}}/
+        {{.FILE_BUN_LOCK}}
+        {{.FILE_NPM_LOCK}}
+
+        # Go
+        {{.DIR_BUILD}}/
+        go.sum
+        *.test
+        *.out
+
+        # Environment
+        {{.FILE_ENV}}
+        {{.FILE_ENV}}.*
+
+        # Logs
+        {{.DIR_LOGS}}/
+
+        # Task (checksum cache)
+        {{.DIR_TASK}}/
+
+        # Testing
+        {{.DIR_PLAYWRIGHT}}/
+
+        # Via framework
+        {{.DIR_VIA}}/
+
+        # Analytics & monitoring state
+        {{.FILE_ANALYTICS_STATE}}
+        {{.FILE_SITECHECK_STATE}}
+
+        # IDE & OS
+        .vscode/
+        .DS_Store
+        EOF
+      - echo "Generated .gitignore"
+
+  # ===========================================================================
+  # Tasks
+  # ===========================================================================
+
+  status:
+    desc: Show git status and recent commits
+    cmds:
+      - |
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        echo "========================================"
+        echo "GIT STATUS"
+        echo "========================================"
+        echo ""
+        echo "========== CURRENT BRANCH =========="
+        if [ "$CURRENT_BRANCH" = "main" ]; then
+          echo "WARNING: Branch: MAIN (production)"
+        else
+          echo "Branch: $CURRENT_BRANCH (preview)"
+        fi
+        echo "===================================="
+        echo ""
+      - git status
+      - 'echo ""'
+      - 'echo "Recent commits:"'
+      - git log --oneline -5
+
+  commit:
+    desc: Generate gitignore, commit and push changes (triggers Cloudflare deployment)
+    cmds:
+      - |
+        # Check current branch
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+        echo ""
+        echo "========================================"
+        echo "GIT COMMIT & PUSH"
+        echo "========================================"
+        echo "Branch: $CURRENT_BRANCH"
+        echo ""
+
+        if [ "$CURRENT_BRANCH" = "main" ]; then
+          echo "WARNING WARNING WARNING WARNING WARNING"
+          echo ""
+          echo "You are committing to MAIN branch!"
+          echo "This will trigger PRODUCTION deployment"
+          echo "to: {{.URL_PRODUCTION}}"
+          echo ""
+          echo "WARNING WARNING WARNING WARNING WARNING"
+          echo ""
+          echo "Press Ctrl+C to cancel, or"
+          read -p "Type 'DEPLOY' to continue: " CONFIRM
+          if [ "$CONFIRM" != "DEPLOY" ]; then
+            echo "Cancelled."
+            exit 1
+          fi
+        else
+          echo "Safe: Preview deployment only"
+        fi
+      - task: generate:gitignore
+      - git add -A
+      - git diff --cached --stat
+      - 'echo ""'
+      - |
+        # Get commit message
+        if [ -n "{{.MESSAGE}}" ]; then
+          MSG="{{.MESSAGE}}"
+        else
+          read -p "Commit message: " MSG
+          if [ -z "$MSG" ]; then
+            MSG="Update site"
+          fi
+        fi
+        git commit -m "$MSG"
+      - git push
+      - 'echo ""'
+      - 'echo "Deployment triggered. Check status with: task cf:status"'
+
+  deploy:
+    desc: Quick commit and deploy to Cloudflare Pages
+    cmds:
+      - task: commit
+        vars:
+          MESSAGE: '{{.MESSAGE | default "Update site"}}'
+
+  preview:
+    desc: Create a preview branch for testing (triggers preview deployment)
+    cmds:
+      - git checkout -b preview/{{.BRANCH}}
+      - git push -u origin preview/{{.BRANCH}}
+      - |
+        COMMIT=$(git rev-parse --short HEAD)
+
+        echo ""
+        echo "========================================"
+        echo "Preview Branch Created"
+        echo "========================================"
+        echo "Branch: preview/{{.BRANCH}}"
+        echo ""
+        echo "Preview URLs (after deployment):"
+        echo "  Main: {{.URL_PREVIEW}}"
+        echo "  Commit: https://$COMMIT.ubuntu-website.pages.dev"
+        echo ""
+        echo "Dashboard: {{.CF_DASH_PAGES}}"
+        echo ""
+        echo "Quick Commands:"
+        echo "  task cf:status  - Check deployment status"
+        echo "  task cf:logs    - View deployment logs"
+        echo "========================================"
+    requires:
+      vars: [BRANCH]
+
+  cleanup-preview:
+    desc: Delete a preview branch
+    cmds:
+      - git checkout main
+      - git branch -D preview/{{.BRANCH}}
+      - git push origin --delete preview/{{.BRANCH}}
+      - 'echo "Deleted preview branch: preview/{{.BRANCH}}"'
+    requires:
+      vars: [BRANCH]
+
+  sync:
+    desc: Sync with remote and show deployment status
+    cmds:
+      - git pull
+      - 'echo ""'
+      - 'echo "Latest deployments:"'
+      - task: :cf:logs

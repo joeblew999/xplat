@@ -1,0 +1,249 @@
+# Dummy-CGO tool for testing CGO=1 release workflows
+# This tests that xplat correctly builds CGO=1 tools on each platform
+#
+# Expected behavior:
+#   - Linux: builds linux-amd64, linux-arm64 only
+#   - macOS: builds darwin-amd64, darwin-arm64 only
+#   - Windows: builds windows-amd64, windows-arm64 only
+#
+version: '3'
+
+vars:
+  DUMMY_CGO_VERSION: v0.0.1
+  DUMMY_CGO_REPO: joeblew999/ubuntu-website
+  DUMMY_CGO_BIN: 'dummy-cgo{{exeExt}}'
+  DUMMY_CGO_CGO: '1'  # KEY DIFFERENCE: CGO enabled
+  XPLAT_AFFINITY: native  # Must build on each platform (CGO=1)
+
+tasks:
+  # ===========================================================================
+  # Check (downloads from release if missing)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure dummy-cgo binary is available (builds from source or downloads)
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.DUMMY_CGO_BIN}}"
+    cmds:
+      - task: :tools:xplat:binary:install
+        vars:
+          CLI_ARGS: 'dummy-cgo {{.DUMMY_CGO_VERSION}} {{.DUMMY_CGO_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/dummy-cgo"'
+
+  check:validate:
+    desc: Verify dummy-cgo works
+    deps: [check:deps]
+    cmds:
+      - '"{{.BIN_INSTALL_DIR}}/{{.DUMMY_CGO_BIN}}"'
+
+  # ===========================================================================
+  # Run
+  # ===========================================================================
+
+  run:
+    desc: Run the dummy-cgo binary
+    deps: [check:deps]
+    cmds:
+      - '"{{.BIN_INSTALL_DIR}}/{{.DUMMY_CGO_BIN}}"'
+
+  # ===========================================================================
+  # Build (local development)
+  # ===========================================================================
+
+  build:
+    desc: Build dummy-cgo binary locally
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.DUMMY_CGO_BIN}}'
+          VERSION: dev
+          SOURCE: '{{.ROOT_DIR}}/cmd/dummy-cgo'
+          CGO: '{{.DUMMY_CGO_CGO}}'
+
+  # ===========================================================================
+  # Release
+  # ===========================================================================
+
+  release:build:
+    desc: Build dummy-cgo for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.DUMMY_CGO_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .DUMMY_CGO_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/dummy-cgo'
+          CGO: '{{.DUMMY_CGO_CGO}}'
+
+  release:test:
+    desc: Test built dummy-cgo binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.DUMMY_CGO_BIN}}'
+
+  release:verify:
+    desc: Verify platform binaries were built (CGO=1 builds native arch only)
+    cmds:
+      - |
+        echo "Verifying binaries..."
+        COUNT=$({{.XPLAT_BIN}} release list dummy-cgo 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$COUNT" -eq 0 ]; then
+          echo "ERROR: No binaries found"
+          exit 1
+        fi
+        echo "OK: $COUNT platform binary(ies) built"
+        {{.XPLAT_BIN}} release list dummy-cgo
+
+  release:create:
+    desc: Create GitHub release with all binaries
+    requires:
+      vars: [VERSION]
+    cmds:
+      - cmd: gh release delete "dummy-cgo-{{.VERSION}}" --yes --cleanup-tag 2>/dev/null || true
+      - task: :tools:gh:release:publish
+        vars:
+          NAME: 'dummy-cgo'
+          VERSION: '{{.VERSION}}'
+
+  release:publish:
+    desc: Build all platforms and create GitHub release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - task: :tools:xplat:release:build
+        vars:
+          CLI_ARGS: 'dummy-cgo'
+      - task: :tools:gh:release:publish
+        vars:
+          NAME: 'dummy-cgo'
+          VERSION: '{{.VERSION}}'
+
+  release:verify-assets:
+    desc: Verify GitHub release has expected assets (CGO=1 varies by platform)
+    requires:
+      vars: [VERSION]
+    cmds:
+      - |
+        TAG="dummy-cgo-{{.VERSION}}"
+        echo "Checking release: $TAG"
+
+        # Get list of actual assets in release
+        ACTUAL=$(gh release view "$TAG" --json assets -q '.assets | length')
+
+        if [ "$ACTUAL" -eq 0 ]; then
+          echo "ERROR: No assets found in release"
+          exit 1
+        fi
+
+        echo "OK: Release has $ACTUAL assets"
+        gh release view "$TAG" --json assets -q '.assets[].name'
+
+  release:verify-download:
+    desc: Download and verify binary from GitHub release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - |
+        TAG="dummy-cgo-{{.VERSION}}"
+        # Use xplat to get the binary name for current platform
+        BINARY=$({{.XPLAT_BIN}} release binary-name dummy-cgo)
+        URL="https://github.com/{{.DUMMY_CGO_REPO}}/releases/download/$TAG/$BINARY"
+
+        echo "Downloading: $URL"
+        curl -sL "$URL" -o /tmp/dummy-cgo-download-test
+        chmod +x /tmp/dummy-cgo-download-test
+
+        # Verify it runs and outputs expected version
+        OUTPUT=$(/tmp/dummy-cgo-download-test 2>&1)
+        echo "Output: $OUTPUT"
+        echo "Expected: {{.VERSION}}"
+
+        if [ "$OUTPUT" != "{{.VERSION}}" ]; then
+          echo "ERROR: Version mismatch!"
+          echo "  Expected: {{.VERSION}}"
+          echo "  Got: $OUTPUT"
+          rm /tmp/dummy-cgo-download-test
+          exit 1
+        fi
+
+        rm /tmp/dummy-cgo-download-test
+        echo "OK: Downloaded binary works and version matches"
+
+  release:cleanup:
+    desc: Delete test release
+    requires:
+      vars: [VERSION]
+    cmds:
+      - |
+        TAG="dummy-cgo-{{.VERSION}}"
+        echo "Deleting test release $TAG"
+        gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+
+  # ===========================================================================
+  # CI Test (full round-trip - same locally and in CI)
+  # ===========================================================================
+
+  ci:test:
+    desc: Full round-trip test (same locally and in CI)
+    vars:
+      # Use VERSION if provided, otherwise generate timestamp-based version
+      TEST_VERSION: '{{.VERSION | default (printf "v0.0.0-cgo-test-%s" (now | date "20060102-150405"))}}'
+      # Set SKIP_CLEANUP=true to skip cleanup (for CI multi-platform verify)
+      DO_CLEANUP: '{{if .SKIP_CLEANUP}}false{{else}}true{{end}}'
+    cmds:
+      - |
+        echo "=== Dummy-CGO CI Test ==="
+        echo "Version: {{.TEST_VERSION}}"
+        echo "Skip cleanup: {{if eq .DO_CLEANUP "true"}}no{{else}}yes{{end}}"
+        echo ""
+
+      # Phase 1: Build Validation
+      - 'echo "=== Phase 1: Build Validation ==="'
+      - task: build
+      - task: release:build
+      - task: release:test
+      - task: run
+
+      # Phase 2: Platform build (CGO=1 builds native only)
+      - 'echo "=== Phase 2: Platform Build (CGO=1) ==="'
+      - 'RELEASE_VERSION={{.TEST_VERSION}} {{.XPLAT_BIN}} release build dummy-cgo'
+
+      # Phase 3: Verify binaries in .build/
+      - 'echo "=== Phase 3: Verify Binaries ==="'
+      - task: release:verify
+
+      # Phase 4: Create GitHub release
+      - 'echo "=== Phase 4: Create GitHub Release ==="'
+      - task: release:create
+        vars: { VERSION: '{{.TEST_VERSION}}' }
+
+      # Phase 5: Verify release assets on GitHub
+      - 'echo "=== Phase 5: Verify Release Assets ==="'
+      - task: release:verify-assets
+        vars: { VERSION: '{{.TEST_VERSION}}' }
+
+      # Phase 6: Download and verify binary works
+      - 'echo "=== Phase 6: Verify Download ==="'
+      - task: release:verify-download
+        vars: { VERSION: '{{.TEST_VERSION}}' }
+
+      # Phase 7: Cleanup test release (skip if SKIP_CLEANUP=true)
+      - |
+        if [ "{{.DO_CLEANUP}}" = "true" ]; then
+          echo "=== Phase 7: Cleanup ==="
+        else
+          echo "=== Phase 7: Cleanup (SKIPPED) ==="
+          exit 0
+        fi
+      - task: release:cleanup
+        vars: { VERSION: '{{.TEST_VERSION}}' }
+
+      - 'echo ""'
+      - 'echo "=== PASS: Full round-trip test completed ==="'
+
+  ci:verify-download:
+    desc: Verify download from GitHub (for CI multi-platform jobs)
+    requires:
+      vars: [VERSION]
+    cmds:
+      - task: release:verify-download
+        vars: { VERSION: '{{.VERSION}}' }

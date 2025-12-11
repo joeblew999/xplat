@@ -1,0 +1,72 @@
+# Wrangler - Cloudflare CLI Taskfile
+#
+# Installs and manages wrangler CLI via Bun.
+# Used by cf.yml for Cloudflare Pages deployments, secrets, and cache purging.
+#
+# Wrangler is npm-only (no standalone binaries), so we install via Bun globally.
+# Uses full path to bun global bin dir since it may not be in PATH.
+#
+# Pattern: All tool taskfiles define TOOL_BIN with {{exeExt}} for Windows support
+# Note: Wrangler is a JS package, so it handles its own platform-specific shims
+
+version: '3'
+
+vars:
+  # Archetype: external - we install wrangler from npm, we don't build it
+  XPLAT_ARCHETYPE: external
+  # WRANGLER_VERSION comes from xplat.env (loaded by root Taskfile dotenv)
+  WRANGLER_VERSION: '{{.WRANGLER_VERSION}}'
+  # Binary name - npm/bun handles platform-specific shims (.cmd on Windows)
+  WRANGLER_BIN: 'wrangler'
+  # Bun global bin directory (consistent location)
+  BUN_GLOBAL_BIN: '{{.HOME}}/.bun/bin'
+
+tasks:
+  # ===========================================================================
+  # Checks
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure wrangler CLI is installed via Bun
+    status:
+      - test -f "{{.BUN_GLOBAL_BIN}}/{{.WRANGLER_BIN}}"
+    cmds:
+      - task: :toolchain:bun:check:require
+      - task: install
+
+  install:
+    desc: Install wrangler CLI globally via Bun
+    internal: true
+    cmds:
+      - 'echo "Installing wrangler {{.WRANGLER_VERSION}} via Bun..."'
+      - bun add -g wrangler@{{.WRANGLER_VERSION}}
+      - '"{{.BUN_GLOBAL_BIN}}/{{.WRANGLER_BIN}}" --version'
+      - 'echo "OK: wrangler installed to {{.BUN_GLOBAL_BIN}}"'
+
+  check:validate:
+    desc: Validate wrangler CLI works
+    deps: [check:deps]
+    cmds:
+      - |
+        VERSION=$("{{.BUN_GLOBAL_BIN}}/{{.WRANGLER_BIN}}" --version 2>/dev/null | head -1)
+        echo "OK: wrangler $VERSION"
+
+  # ===========================================================================
+  # Version Management
+  # ===========================================================================
+
+  version:
+    desc: Show installed wrangler version
+    deps: [check:deps]
+    cmds:
+      - '"{{.BUN_GLOBAL_BIN}}/{{.WRANGLER_BIN}}" --version'
+
+  upgrade:
+    desc: Upgrade wrangler to latest version
+    cmds:
+      - task: :toolchain:bun:check:require
+      - 'echo "Upgrading wrangler to latest..."'
+      - bun add -g wrangler@latest
+      - '"{{.BUN_GLOBAL_BIN}}/{{.WRANGLER_BIN}}" --version'
+      - 'echo "OK: wrangler upgraded"'
+      - 'echo "NOTE: Update WRANGLER_VERSION in xplat.env to pin this version"'

@@ -1,0 +1,584 @@
+# CI Tasks
+#
+# Tasks that are called by GitHub Actions workflows.
+# Each ci:<name> task should have a matching .github/workflows/<name>.yml
+#
+# Validation: Run `task ci:validate` to check bindings
+#
+# This file is designed to be reusable across repos via Taskfile includes.
+#
+# TOOLCHAIN → ACTION MAPPING:
+# Used by check:workflow-deps to verify workflows have required setup steps.
+#   golang → setup-go
+#   rust   → rust-toolchain OR setup-rust-toolchain
+#   node   → setup-node
+#   python → setup-python
+#   hugo   → setup-hugo (peaceiris/actions-hugo)
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Taskfile Validation (ci:taskfile)
+  # ===========================================================================
+  # Called by taskfile.yml workflow on push/PR
+  # Runs cross-platform (Linux, macOS, Windows)
+
+  taskfile:
+    desc: "[Core] Taskfile - Validate Taskfile works across platforms"
+    cmds:
+      - |
+        echo "## Taskfile Validation"
+        echo ""
+        echo "OS: $(uname -s 2>/dev/null || echo Windows)"
+        echo ""
+
+      # Bootstrap xplat first (builds from source since Go is available)
+      - echo "### Bootstrap xplat"
+      - task: :tools:xplat:check:deps
+
+      # Auto-discover and check toolchains based on module REQUIRES
+      - echo ""
+      - echo "### Toolchain Check (auto-discovered)"
+      - task: check:toolchains
+
+      # Auto-discover and check module dependencies
+      - echo ""
+      - echo "### Module Dependency Check (auto-discovered)"
+      - task: check:module-deps
+
+      # Auto-discover and validate modules
+      - echo ""
+      - echo "### Module Validation (auto-discovered)"
+      - task: check:module-validate
+
+      # Validate workflow↔task bindings
+      - echo ""
+      - echo "### CI Binding Validation"
+      - task: check:validate
+
+      # Validate workflow dependencies
+      - echo ""
+      - echo "### Workflow Dependencies"
+      - task: check:workflow-deps
+
+      # Validate version consistency
+      - echo ""
+      - echo "### Version Consistency"
+      - task: check:versions
+
+      # Test idempotency pattern (status: for true idempotency)
+      - echo ""
+      - echo "### Idempotency Pattern Test"
+      - task: :tools:idempotency-test:check:validate
+
+      - |
+        echo ""
+        echo "### Include Test"
+        echo "This task is loaded from: taskfiles/Taskfile.ci.yml"
+        echo ""
+        echo "### Variable Expansion Test"
+        echo "PROJECT_NAME: {{.PROJECT_NAME}}"
+        echo "DOMAIN: {{.DOMAIN}}"
+        echo ""
+        echo "Taskfile validated successfully"
+
+  health:
+    desc: "[Monitor] Health - Run all health checks"
+    cmds:
+      - |
+        echo "## Health Check"
+        echo ""
+        echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+
+      # Auto-discover and run health checks
+      - echo "### Module Health Checks (auto-discovered)"
+      - task: check:module-health
+
+      - echo ""
+      - echo "### GitHub Secrets Check"
+      - task: check:workflow-secrets
+
+      - |
+        echo ""
+        echo "All health checks passed"
+
+  health:test-fail:
+    desc: "[TEST] Force health check failure to test notifications"
+    cmds:
+      - |
+        echo "## Health Check (TEST FAILURE)"
+        echo ""
+        echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "This is an intentional failure to test the notification system."
+        echo ""
+
+      - task: :git:check:health:fail
+
+  # ===========================================================================
+  # Auto-Discovery Tasks
+  # ===========================================================================
+  # These tasks scan taskfiles/* to find modules and their requirements
+
+  check:toolchains:
+    desc: Auto-discover and check required toolchains from module REQUIRES
+    cmds:
+      - |
+        echo "Discovering required toolchains..."
+        echo "----------------------------------------"
+
+        # Collect unique toolchains from all module REQUIRES
+        # Use xplat glob for cross-platform file discovery
+        TOOLCHAINS=""
+
+        # Discover taskfiles using xplat glob (works on all platforms)
+        for TF in $(xplat glob "taskfiles/Taskfile.*.yml") $(xplat glob "taskfiles/toolchain/Taskfile.*.yml"); do
+          [ -f "$TF" ] || continue
+          # Extract first word only from REQUIRES (ignore comments in parentheses)
+          REQ=$(grep "^# REQUIRES:" "$TF" 2>/dev/null | sed 's/# REQUIRES: //' | awk '{print $1}')
+          [ -z "$REQ" ] && continue
+          # Skip non-toolchain requirements
+          case "$REQ" in
+            git|none|xplat|gh) continue ;;  # git always available, none/xplat/gh are not toolchains
+          esac
+          TOOLCHAINS="$TOOLCHAINS $REQ"
+        done
+
+        # Deduplicate and filter empty/invalid entries
+        TOOLCHAINS=$(echo "$TOOLCHAINS" | tr ' ' '\n' | grep -v '^$' | grep -v '^(' | sort -u | tr '\n' ' ')
+
+        if [ -z "$TOOLCHAINS" ]; then
+          echo "No toolchains required"
+          exit 0
+        fi
+
+        echo "Required toolchains: $TOOLCHAINS"
+        echo ""
+
+        # Check each toolchain
+        for TC in $TOOLCHAINS; do
+          [ -z "$TC" ] && continue
+          echo "Checking $TC..."
+          task "toolchain:${TC}:check:deps" || exit 1
+        done
+
+  check:module-deps:
+    desc: Auto-discover and run check:deps for all modules
+    cmds:
+      - |
+        echo "Discovering modules..."
+        echo "----------------------------------------"
+
+        # Discover top-level modules via task --list (works cross-platform)
+        # Pattern matches "* modulename:check:deps:" (not nested like toolchain:golang:)
+        MODULES=$(task --list 2>/dev/null | grep -E '^\* [a-z]+:check:deps:' | sed 's/^\* \([a-z]*\):check:deps:.*/\1/' | sort -u)
+
+        for MODULE in $MODULES; do
+          # Skip ci and toolchain (toolchain is a parent, we check its children separately)
+          case "$MODULE" in
+            ci|toolchain) continue ;;
+          esac
+
+          echo "Checking $MODULE..."
+          task "${MODULE}:check:deps" || exit 1
+        done
+
+  check:module-validate:
+    desc: Auto-discover and run check:validate for all modules
+    cmds:
+      - |
+        echo "Validating modules..."
+        echo "----------------------------------------"
+
+        # Discover all modules with check:validate (including nested like toolchain:golang)
+        MODULES=$(task --list 2>/dev/null | grep ':check:validate:' | sed 's/^\* \(.*\):check:validate:.*/\1/' | sort -u)
+
+        for MODULE in $MODULES; do
+          # Skip ci module
+          case "$MODULE" in
+            ci) continue ;;
+          esac
+
+          echo "Validating $MODULE..."
+          task "${MODULE}:check:validate" || exit 1
+        done
+
+  check:module-health:
+    desc: Auto-discover and run check:health for all modules
+    cmds:
+      - |
+        echo "Running health checks..."
+        echo "----------------------------------------"
+
+        # Discover all modules with check:health (including nested)
+        MODULES=$(task --list 2>/dev/null | grep ':check:health:' | sed 's/^\* \(.*\):check:health:.*/\1/' | sort -u)
+
+        for MODULE in $MODULES; do
+          # Skip ci module (to avoid recursion)
+          case "$MODULE" in
+            ci) continue ;;
+          esac
+
+          echo "Health check: $MODULE..."
+          task "${MODULE}:check:health" || exit 1
+        done
+
+  check:module-generate:
+    desc: Auto-discover and run generate:* tasks for all modules
+    cmds:
+      - |
+        echo "Running generate tasks..."
+        echo "----------------------------------------"
+
+        # Discover all modules with generate:* tasks
+        # Pattern matches things like git:generate:gitignore, genlogo:generate:all
+        TASKS=$(task --list 2>/dev/null | grep -E '^\* [a-z]+:generate:[a-z-]+:' | sed 's/^\* \([a-z:_-]*\):.*/\1/' | sort -u)
+
+        if [ -z "$TASKS" ]; then
+          echo "No generate tasks found"
+          exit 0
+        fi
+
+        for TASK in $TASKS; do
+          echo "Running $TASK..."
+          task "$TASK" || exit 1
+        done
+
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+  # validate         - verify workflow↔task bindings
+  # workflow-status  - show recent workflow runs
+  # workflow-secrets - verify GitHub secrets are configured
+  # workflow-deps    - verify workflows have required setup steps
+
+  check:validate:
+    desc: Verify bidirectional binding between workflows and ci tasks
+    cmds:
+      - |
+        echo "========================================"
+        echo "CI Binding Validation"
+        echo "========================================"
+        ERRORS=0
+
+        echo ""
+        echo "1. Workflow → Task (workflows call valid tasks)"
+        echo "----------------------------------------"
+
+        # Use xplat glob for cross-platform workflow discovery
+        TASK_CALLS=""
+        for WF in $(xplat glob ".github/workflows/*.yml"); do
+          [ -f "$WF" ] || continue
+          CALLS=$(grep "task ci:" "$WF" 2>/dev/null | grep -oE "ci:[a-z_-]+" || true)
+          TASK_CALLS="$TASK_CALLS $CALLS"
+        done
+
+        for TASK_CALL in $(echo "$TASK_CALLS" | tr ' ' '\n' | sort -u); do
+          [ -z "$TASK_CALL" ] && continue
+          if ! task --list 2>/dev/null | grep -q "^\* $TASK_CALL:"; then
+            echo "ERROR: Workflow calls '$TASK_CALL' but task doesn't exist"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "OK: $TASK_CALL"
+          fi
+        done
+
+        echo ""
+        echo "2. Task → Workflow (ci tasks have workflows)"
+        echo "----------------------------------------"
+        for TASK in $(task --list 2>/dev/null | grep "^\* ci:" | grep -v "ci:check:\|ci:health:test" | sed 's/\* \(ci:[a-z_-]*\):.*/\1/' | sort -u); do
+          # ci:sitecheck → *-sitecheck.yml (supports category prefixes)
+          TASK_NAME=$(echo "$TASK" | sed 's/ci://')
+          # Search for any workflow containing the task name (handles core-taskfile.yml, monitor-health.yml, etc.)
+          FOUND_WF=$(xplat glob ".github/workflows/*-${TASK_NAME}.yml" 2>/dev/null | head -1)
+          if [ -z "$FOUND_WF" ]; then
+            # Fallback: check legacy format without prefix
+            if [ -f ".github/workflows/${TASK_NAME}.yml" ]; then
+              FOUND_WF=".github/workflows/${TASK_NAME}.yml"
+            fi
+          fi
+          if [ -z "$FOUND_WF" ]; then
+            echo "ERROR: Task '$TASK' has no workflow matching *-${TASK_NAME}.yml or ${TASK_NAME}.yml"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "OK: $TASK → $(basename "$FOUND_WF")"
+          fi
+        done
+
+        echo ""
+        echo "========================================"
+        if [ $ERRORS -gt 0 ]; then
+          echo "FAILED: $ERRORS error(s)"
+          exit 1
+        else
+          echo "PASSED: All bindings valid"
+        fi
+
+  check:workflow-status:
+    desc: Check recent workflow run status
+    cmds:
+      - |
+        echo "## Recent Workflow Runs"
+        echo ""
+        gh run list --limit 5 --json name,status,conclusion,createdAt \
+          --jq '.[] | "\(.name): \(.status) (\(.conclusion)) - \(.createdAt)"'
+
+  check:workflow-secrets:
+    desc: Verify required GitHub secrets are configured for workflows
+    cmds:
+      - |
+        echo "========================================"
+        echo "Workflow Secrets Check"
+        echo "========================================"
+        ERRORS=0
+
+        # Get list of configured secrets
+        echo ""
+        echo "Checking GitHub secrets..."
+        echo "----------------------------------------"
+
+        # Collect required secrets from workflow comments
+        # Pattern: "# Required secrets:" followed by "#   - SECRET_NAME"
+
+        # Use xplat glob for cross-platform workflow discovery
+        REQUIRED_SECRETS=""
+
+        for WF in $(xplat glob ".github/workflows/*.yml"); do
+          [ -f "$WF" ] || continue
+          WF_NAME=$(basename "$WF")
+
+          # Extract secrets from "Required secrets:" block
+          SECRETS=$(awk '/^# Required secrets:/{found=1; next} found && /^#   - /{gsub(/^#   - /, ""); gsub(/ .*/, ""); print} found && !/^#/{found=0}' "$WF")
+
+          for SECRET in $SECRETS; do
+            echo "  $WF_NAME requires: $SECRET"
+            REQUIRED_SECRETS="$REQUIRED_SECRETS $SECRET"
+          done
+        done
+
+        if [ -z "$REQUIRED_SECRETS" ]; then
+          echo "  No secrets required by workflows"
+          echo ""
+          echo "========================================"
+          echo "PASSED: No secrets to check"
+          exit 0
+        fi
+
+        # Check if secrets exist in GitHub
+        echo ""
+        echo "Verifying secrets are configured..."
+        echo "----------------------------------------"
+
+        # Get configured secrets (requires gh CLI and repo access)
+        if ! command -v gh >/dev/null 2>&1; then
+          echo "SKIP: gh CLI not available"
+          exit 0
+        fi
+
+        CONFIGURED=$(gh secret list --json name --jq '.[].name' 2>/dev/null || echo "")
+        if [ -z "$CONFIGURED" ]; then
+          echo "SKIP: Cannot list secrets (may need gh auth or repo permissions)"
+          exit 0
+        fi
+
+        for SECRET in $(echo "$REQUIRED_SECRETS" | tr ' ' '\n' | sort -u); do
+          [ -z "$SECRET" ] && continue
+          if echo "$CONFIGURED" | grep -q "^${SECRET}$"; then
+            echo "OK: $SECRET is configured"
+          else
+            echo "ERROR: $SECRET is NOT configured"
+            echo "  → Add via: gh secret set $SECRET"
+            ERRORS=$((ERRORS + 1))
+          fi
+        done
+
+        echo ""
+        echo "========================================"
+        if [ $ERRORS -gt 0 ]; then
+          echo "FAILED: $ERRORS secret(s) missing"
+          exit 1
+        else
+          echo "PASSED: All secrets configured"
+        fi
+
+  check:versions:
+    desc: Verify tool versions are consistent across codebase
+    cmds:
+      - |
+        echo "========================================"
+        echo "Version Consistency Check"
+        echo "========================================"
+        echo ""
+        echo "Source of truth: xplat.env"
+        echo "----------------------------------------"
+        ERRORS=0
+
+        # Read expected versions from xplat.env
+        if [ ! -f "xplat.env" ]; then
+          echo "ERROR: xplat.env not found"
+          exit 1
+        fi
+
+        TASK_EXPECTED=$(grep "^TASK_VERSION=" xplat.env | cut -d= -f2)
+        GO_EXPECTED=$(grep "^GO_VERSION=" xplat.env | cut -d= -f2)
+
+        echo "TASK_VERSION=$TASK_EXPECTED"
+        echo "GO_VERSION=$GO_EXPECTED"
+        echo ""
+
+        # Check Task version in workflows
+        echo "Task version in workflows:"
+        echo "----------------------------------------"
+        for WF in $(xplat glob ".github/workflows/*.yml"); do
+          [ -f "$WF" ] || continue
+          WF_NAME=$(basename "$WF")
+          VERSION=$(grep -E "version: ['\"]?[0-9]+\.[0-9]+\.[0-9]+['\"]?" "$WF" 2>/dev/null | grep -v "go-version" | head -1 | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" || echo "")
+          if [ -n "$VERSION" ]; then
+            if [ "$VERSION" = "$TASK_EXPECTED" ]; then
+              echo "  OK: $WF_NAME (Task $VERSION)"
+            else
+              echo "  ERROR: $WF_NAME has Task $VERSION, expected $TASK_EXPECTED"
+              ERRORS=$((ERRORS + 1))
+            fi
+          fi
+        done
+
+        echo ""
+        echo "Go version in workflows:"
+        echo "----------------------------------------"
+        for WF in $(xplat glob ".github/workflows/*.yml"); do
+          [ -f "$WF" ] || continue
+          WF_NAME=$(basename "$WF")
+          VERSION=$(grep "go-version:" "$WF" 2>/dev/null | grep -oE "[0-9]+\.[0-9]+" | head -1 || echo "")
+          if [ -n "$VERSION" ]; then
+            if [ "$VERSION" = "$GO_EXPECTED" ]; then
+              echo "  OK: $WF_NAME (Go $VERSION)"
+            else
+              echo "  ERROR: $WF_NAME has Go $VERSION, expected $GO_EXPECTED"
+              ERRORS=$((ERRORS + 1))
+            fi
+          fi
+        done
+
+        echo ""
+        echo "Go version in Taskfile:"
+        echo "----------------------------------------"
+        TF_GO=$(grep "GO_VERSION:" Taskfile.yml 2>/dev/null | head -1 | grep -oE '"[0-9]+\.[0-9]+"' | tr -d '"' || echo "")
+        if [ -n "$TF_GO" ]; then
+          if [ "$TF_GO" = "$GO_EXPECTED" ]; then
+            echo "  OK: Taskfile.yml (Go $TF_GO)"
+          else
+            echo "  ERROR: Taskfile.yml has Go $TF_GO, expected $GO_EXPECTED"
+            ERRORS=$((ERRORS + 1))
+          fi
+        fi
+
+        echo ""
+        echo "========================================"
+        if [ $ERRORS -gt 0 ]; then
+          echo "FAILED: $ERRORS version mismatch(es)"
+          exit 1
+        else
+          echo "PASSED: All versions consistent"
+        fi
+
+  check:workflow-deps:
+    desc: Verify workflows have required setup steps based on REQUIRES
+    cmds:
+      - |
+        echo "========================================"
+        echo "Workflow Dependency Check"
+        echo "========================================"
+        ERRORS=0
+
+        # Toolchain → GitHub Action mapping
+        # This maps REQUIRES values to the action patterns we look for in workflows
+        toolchain_action() {
+          case "$1" in
+            golang) echo "setup-go" ;;
+            rust)   echo "rust-toolchain\|setup-rust-toolchain" ;;
+            node)   echo "setup-node" ;;
+            python) echo "setup-python" ;;
+            hugo)   echo "setup-hugo\|actions-hugo" ;;
+            *)      echo "" ;;
+          esac
+        }
+
+        # Step 1: Collect all toolchain requirements
+        echo ""
+        echo "Module requirements (from REQUIRES comments):"
+        echo "----------------------------------------"
+
+        # Use xplat glob for cross-platform file discovery
+        ALL_TOOLCHAINS=""
+
+        for TF in $(xplat glob "taskfiles/Taskfile.*.yml") $(xplat glob "taskfiles/toolchain/Taskfile.*.yml"); do
+          [ -f "$TF" ] || continue
+          MODULE=$(basename "$TF" | sed 's/Taskfile\.\(.*\)\.yml/\1/')
+          REQUIRES=$(grep "^# REQUIRES:" "$TF" 2>/dev/null | sed 's/# REQUIRES: //')
+
+          if [ -n "$REQUIRES" ]; then
+            echo "  $MODULE: $REQUIRES"
+            ALL_TOOLCHAINS="$ALL_TOOLCHAINS $REQUIRES"
+          fi
+        done
+
+        # Deduplicate toolchains
+        UNIQUE_TOOLCHAINS=$(echo "$ALL_TOOLCHAINS" | tr ' ' '\n' | grep -v '^git$' | sort -u | tr '\n' ' ')
+
+        if [ -z "$UNIQUE_TOOLCHAINS" ]; then
+          echo "  No toolchain requirements found"
+          echo ""
+          echo "========================================"
+          echo "PASSED: No dependencies to check"
+          exit 0
+        fi
+
+        echo ""
+        echo "Unique toolchains needed: $UNIQUE_TOOLCHAINS"
+
+        # Step 2: Check workflows that run ci: tasks
+        echo ""
+        echo "Checking workflows..."
+        echo "----------------------------------------"
+
+        # Use xplat glob for cross-platform workflow discovery
+        for WF in $(xplat glob ".github/workflows/*.yml"); do
+          [ -f "$WF" ] || continue
+          WF_NAME=$(basename "$WF")
+
+          # Does this workflow call ci: tasks?
+          if ! grep -q "task ci:" "$WF" 2>/dev/null; then
+            continue
+          fi
+
+          echo ""
+          echo "Workflow: $WF_NAME (calls ci: tasks)"
+
+          # Check each required toolchain
+          for TC in $UNIQUE_TOOLCHAINS; do
+            ACTION=$(toolchain_action "$TC")
+            if [ -z "$ACTION" ]; then
+              continue
+            fi
+
+            if grep -qE "$ACTION" "$WF" 2>/dev/null; then
+              echo "  OK: has $TC ($ACTION)"
+            else
+              echo "  ERROR: missing $TC setup"
+              echo "    → Add: uses: actions/$ACTION@v5"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+        done
+
+        echo ""
+        echo "========================================"
+        if [ $ERRORS -gt 0 ]; then
+          echo "FAILED: $ERRORS error(s)"
+          exit 1
+        else
+          echo "PASSED: All dependencies satisfied"
+        fi

@@ -1,0 +1,78 @@
+# Site Monitor
+#
+# Runs every 6 hours to check site reachability from global locations.
+# Creates a GitHub Issue if failures detected or significant changes occur.
+#
+# Uses check-host.net API (no secrets required)
+# Optional: Set SITE_URL variable to monitor a different site
+
+name: "[Monitor] Sitecheck"
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:        # Manual trigger
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.45.5
+
+      # Bootstrap xplat (required by sitecheck:check:deps)
+      - name: Install xplat
+        run: |
+          task tools:xplat:check:deps
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # Download previous state from artifact (if exists)
+      - name: Download previous state
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: sitecheck-state
+          path: .
+          if_no_artifact_found: ignore
+          workflow_conclusion: success
+          search_artifacts: true
+
+      # Run site check via Taskfile
+      - name: Run Site Check
+        id: check
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: task ci:sitecheck > report.md
+        continue-on-error: true
+
+      # Save state for next run
+      - name: Upload state
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitecheck-state
+          path: .sitecheck-state.json
+          retention-days: 90
+          overwrite: true
+          include-hidden-files: true
+
+      # Create issue if issues detected (exit code 1)
+      - name: Create Issue
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          task tools:gh:issue:create-from-file \
+            TITLE="Site Alert: Reachability issue detected" \
+            FILE="report.md" \
+            LABELS="site-monitor,automated"

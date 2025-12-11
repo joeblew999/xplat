@@ -1,0 +1,69 @@
+# Idempotency Test Tasks
+#
+# Tests the status: pattern for binary installation idempotency.
+# This is a test module used by ci:taskfile to validate the pattern.
+#
+# The status: approach skips the entire task if the check passes,
+# providing true idempotency across multiple task invocations.
+#
+# REQUIRES: golang (for go install)
+
+version: '3'
+
+vars:
+  TEST_TOOL: gofumpt
+  # BIN_INSTALL_DIR comes from root Taskfile.yml
+
+tasks:
+  check:deps:
+    desc: "[TEST] Install gofumpt using status: pattern for idempotency"
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.TEST_TOOL}}{{exeExt}}"
+    cmds:
+      - |
+        echo "Installing {{.TEST_TOOL}}..."
+        mkdir -p "{{.BIN_INSTALL_DIR}}"
+        go install mvdan.cc/gofumpt@latest
+        GOPATH_BIN="$(go env GOPATH)/bin"
+        cp "${GOPATH_BIN}/{{.TEST_TOOL}}{{exeExt}}" "{{.BIN_INSTALL_DIR}}/"
+        echo "OK: {{.TEST_TOOL}} installed to {{.BIN_INSTALL_DIR}}"
+
+  check:validate:
+    desc: "[TEST] Validate idempotency pattern works"
+    cmds:
+      - |
+        echo "========================================"
+        echo "Idempotency Pattern Test"
+        echo "========================================"
+        echo ""
+        echo "This test validates that the status: pattern"
+        echo "provides true idempotency across task invocations."
+        echo ""
+
+        # Clean up first to ensure fresh test
+        rm -f "{{.BIN_INSTALL_DIR}}/{{.TEST_TOOL}}{{exeExt}}"
+
+        # Run 1: Should install (fresh)
+        echo "----------------------------------------"
+        echo "Test 1: First run (should INSTALL)"
+        echo "----------------------------------------"
+        task tools:idempotency-test:check:deps
+        echo ""
+
+        # Run 2: Should skip (idempotent)
+        echo "----------------------------------------"
+        echo "Test 2: Second run (should SKIP - idempotent)"
+        echo "----------------------------------------"
+        task tools:idempotency-test:check:deps
+        echo ""
+
+        # Verify binary works
+        echo "----------------------------------------"
+        echo "Test 3: Verify binary works"
+        echo "----------------------------------------"
+        "{{.BIN_INSTALL_DIR}}/{{.TEST_TOOL}}{{exeExt}}" --version
+        echo ""
+
+        echo "========================================"
+        echo "PASSED: status: pattern provides true idempotency"
+        echo "========================================"

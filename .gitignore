@@ -1,0 +1,40 @@
+# Hugo
+public/
+resources/
+.hugo_build.lock
+hugo_stats.json
+
+# Node/Bun
+node_modules/
+bun.lockb
+package-lock.json
+
+# Go
+.build/
+go.sum
+*.test
+*.out
+
+# Environment
+.env
+.env.*
+
+# Logs
+logs/
+
+# Task (checksum cache)
+.task/
+
+# Testing
+.playwright-mcp/
+
+# Via framework
+.via/
+
+# Analytics & monitoring state
+.analytics-state.json
+.sitecheck-state.json
+
+# IDE & OS
+.vscode/
+.DS_Store

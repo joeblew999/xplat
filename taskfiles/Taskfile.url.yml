@@ -1,0 +1,69 @@
+# URL Helper Tasks
+#
+# Quick shortcuts to open various URLs in the browser.
+#
+# Usage:
+#   task url:dev      - Open local dev server
+#   task url:prod     - Open production site
+#   task url:preview  - Open preview deployment
+#   task url:commit   - Open current commit preview
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Development
+  # ===========================================================================
+
+  dev:
+    desc: Open local development server in browser
+    cmds:
+      - open {{.URL_DEV}}
+
+  # ===========================================================================
+  # Production
+  # ===========================================================================
+
+  prod:
+    desc: Open production website in browser
+    cmds:
+      - open {{.URL_PRODUCTION}}
+
+  preview:
+    desc: Open preview website in browser
+    cmds:
+      - open {{.URL_PREVIEW}}
+
+  commit:
+    desc: Open commit preview URL in browser
+    cmds:
+      - |
+        COMMIT=$(git rev-parse --short HEAD)
+        open https://$COMMIT.ubuntu-website.pages.dev
+
+  # ===========================================================================
+  # SEO & Analytics Dashboards
+  # ===========================================================================
+
+  search-console:
+    desc: Open Google Search Console
+    cmds:
+      - open "https://search.google.com/search-console"
+
+  cf-analytics:
+    desc: Open Cloudflare Web Analytics
+    cmds:
+      - open "https://dash.cloudflare.com/{{.CF_ACCOUNT_ID}}/web-analytics/overview?siteTag~in={{.CF_WEB_ANALYTICS_SITE_TAG}}"
+
+  seo-setup:
+    desc: Open all SEO setup pages (Search Console + Cloudflare Analytics)
+    cmds:
+      - echo "Opening Google Search Console..."
+      - open "https://search.google.com/search-console"
+      - echo "Opening Cloudflare Web Analytics..."
+      - open "https://dash.cloudflare.com/{{.CF_ACCOUNT_ID}}/web-analytics/overview?siteTag~in={{.CF_WEB_ANALYTICS_SITE_TAG}}"
+      - echo ""
+      - 'echo "Setup steps:"'
+      - echo "1. Google Search Console - Add property, Domain, ubuntusoftware.net"
+      - echo "2. Copy verification TXT record to Cloudflare DNS"
+      - echo "3. Cloudflare Analytics - Enable Web Analytics (one click)"

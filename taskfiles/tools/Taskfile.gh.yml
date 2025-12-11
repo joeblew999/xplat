@@ -1,0 +1,501 @@
+# gh - GitHub CLI Taskfile
+#
+# Wraps gh CLI for common GitHub operations.
+# Works both locally and in CI (gh is pre-installed in GitHub Actions).
+#
+# Auto-downloads from https://github.com/cli/cli/releases if not found.
+#
+# Pattern: All tool taskfiles define TOOL_BIN with {{exeExt}} for Windows support
+
+version: '3'
+
+vars:
+  # Archetype: external - we install gh CLI from cli/cli repo, we don't build it
+  XPLAT_ARCHETYPE: external
+  # GH_VERSION comes from xplat.env (loaded by root Taskfile dotenv)
+  GH_VERSION: '{{.GH_VERSION}}'
+  GH_BIN: 'gh{{exeExt}}'
+  # Source repo for downloads (not _REPO pattern - we don't release this)
+  GH_DOWNLOAD_REPO: cli/cli
+  # Platform mapping for gh release assets (gh uses macOS not darwin)
+  GH_OS_MAP: '{{if eq OS "darwin"}}macOS{{else if eq OS "windows"}}windows{{else}}linux{{end}}'
+  GH_ARCH_MAP: '{{if eq ARCH "amd64"}}amd64{{else if eq ARCH "arm64"}}arm64{{else}}{{ARCH}}{{end}}'
+  GH_EXT: '{{if eq OS "darwin"}}zip{{else if eq OS "windows"}}zip{{else}}tar.gz{{end}}'
+
+tasks:
+  # ===========================================================================
+  # Checks
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure gh CLI is installed (downloads if missing)
+    status:
+      - '{{.GH_BIN}} --version'
+    cmds:
+      - task: install
+
+  install:
+    desc: Download and install gh CLI from GitHub releases
+    internal: true
+    vars:
+      # Strip 'v' prefix for gh asset naming (v2.83.1 -> 2.83.1)
+      GH_VER_NUM: '{{trimPrefix "v" .GH_VERSION}}'
+      ASSET_NAME: 'gh_{{.GH_VER_NUM}}_{{.GH_OS_MAP}}_{{.GH_ARCH_MAP}}.{{.GH_EXT}}'
+      DOWNLOAD_URL: 'https://github.com/{{.GH_DOWNLOAD_REPO}}/releases/download/{{.GH_VERSION}}/{{.ASSET_NAME}}'
+    cmds:
+      - 'echo "Downloading gh {{.GH_VERSION}} for {{OS}}/{{ARCH}}..."'
+      - '{{.XPLAT_BIN}} fetch --extract --strip 2 --include "*/bin/gh*" "{{.DOWNLOAD_URL}}" --output "{{.BIN_INSTALL_DIR}}"'
+      - 'echo "OK: gh {{.GH_VERSION}} installed to {{.BIN_INSTALL_DIR}}"'
+      - '"{{.BIN_INSTALL_DIR}}/{{.GH_BIN}}" --version'
+
+  check:validate:
+    desc: Validate gh CLI works and show auth status
+    deps: [check:deps]
+    cmds:
+      - |
+        VERSION=$({{.GH_BIN}} --version | head -1 | cut -d' ' -f3)
+        echo "OK: gh $VERSION"
+
+        # Check auth (skip in CI - uses GITHUB_TOKEN automatically)
+        if [ -z "$GITHUB_ACTIONS" ]; then
+          if ! {{.GH_BIN}} auth status >/dev/null 2>&1; then
+            echo "WARN: gh not authenticated. Run: gh auth login"
+          else
+            echo "OK: gh authenticated"
+          fi
+        else
+          echo "OK: Running in GitHub Actions (uses GITHUB_TOKEN)"
+        fi
+
+  # ===========================================================================
+  # Releases
+  # ===========================================================================
+
+  release:list:
+    desc: List recent releases
+    cmds:
+      - '{{.GH_BIN}} release list --limit 10'
+
+  release:view:
+    desc: View latest release details
+    cmds:
+      - '{{.GH_BIN}} release view'
+
+  release:create:
+    desc: Create a release (usage - task gh:release:create -- TAG)
+    cmds:
+      - |
+        TAG="{{.CLI_ARGS}}"
+        if [ -z "$TAG" ]; then
+          echo "Usage: task gh:release:create -- TAG"
+          echo "Example: task gh:release:create -- v1.0.0"
+          exit 1
+        fi
+        {{.GH_BIN}} release create "$TAG" --generate-notes
+
+  release:create-with-assets:
+    desc: Create release with assets (usage - task gh:release:create-with-assets -- TAG FILE1 FILE2...)
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - |
+        ARGS="{{.CLI_ARGS}}"
+        TAG=$(echo "$ARGS" | cut -d' ' -f1)
+        FILES=$(echo "$ARGS" | cut -d' ' -f2-)
+
+        if [ -z "$TAG" ] || [ "$TAG" = "$FILES" ]; then
+          echo "Usage: task gh:release:create-with-assets -- TAG FILE1 [FILE2...]"
+          echo "Example: task gh:release:create-with-assets -- v1.0.0 dist/*"
+          exit 1
+        fi
+
+        {{.GH_BIN}} release create "$TAG" --generate-notes $FILES
+
+  release:publish:
+    desc: Create release with binaries from .build/ (requires NAME, VERSION vars)
+    requires:
+      vars: [NAME, VERSION]
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - |
+        TAG="{{.NAME}}-{{.VERSION}}"
+        echo "Creating release: $TAG"
+        echo "Assets:"
+        # Use xplat release list - single source of truth for platform/naming conventions
+        {{.XPLAT_BIN}} release list "{{.NAME}}"
+        # Get files as space-separated list
+        FILES=$({{.XPLAT_BIN}} release list "{{.NAME}}" | tr '\n' ' ')
+        echo ""
+        echo "Uploading to GitHub..."
+        {{.GH_BIN}} release create "$TAG" --generate-notes $FILES
+        echo ""
+        echo "Release created: https://github.com/$({{.GH_BIN}} repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/$TAG"
+
+  release:upload:
+    desc: Upload assets to existing release (usage - task gh:release:upload -- TAG FILE1 FILE2...)
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - |
+        ARGS="{{.CLI_ARGS}}"
+        TAG=$(echo "$ARGS" | cut -d' ' -f1)
+        FILES=$(echo "$ARGS" | cut -d' ' -f2-)
+
+        if [ -z "$TAG" ] || [ "$TAG" = "$FILES" ]; then
+          echo "Usage: task gh:release:upload -- TAG FILE1 [FILE2...]"
+          exit 1
+        fi
+
+        {{.GH_BIN}} release upload "$TAG" $FILES --clobber
+
+  release:delete:
+    desc: Delete a release (usage - task gh:release:delete -- TAG)
+    cmds:
+      - |
+        TAG="{{.CLI_ARGS}}"
+        if [ -z "$TAG" ]; then
+          echo "Usage: task gh:release:delete -- TAG"
+          exit 1
+        fi
+        {{.GH_BIN}} release delete "$TAG" --yes --cleanup-tag
+
+  # ===========================================================================
+  # Workflows & Runs
+  # ===========================================================================
+
+  workflow:list:
+    desc: List workflows
+    cmds:
+      - '{{.GH_BIN}} workflow list'
+
+  workflow:run:
+    desc: Trigger a workflow (usage - task gh:workflow:run -- WORKFLOW)
+    cmds:
+      - |
+        WORKFLOW="{{.CLI_ARGS}}"
+        if [ -z "$WORKFLOW" ]; then
+          echo "Usage: task gh:workflow:run -- WORKFLOW"
+          echo "Example: task gh:workflow:run -- xplat.yml"
+          exit 1
+        fi
+        {{.GH_BIN}} workflow run "$WORKFLOW"
+        echo "Triggered workflow: $WORKFLOW"
+
+  run:list:
+    desc: List recent workflow runs
+    cmds:
+      - '{{.GH_BIN}} run list --limit 10'
+
+  run:watch:
+    desc: Watch latest run until completion
+    cmds:
+      - '{{.GH_BIN}} run watch'
+
+  run:view:
+    desc: View latest run details
+    cmds:
+      - '{{.GH_BIN}} run view'
+
+  run:failed:
+    desc: Show failed runs
+    cmds:
+      - '{{.GH_BIN}} run list --status failure --limit 5'
+
+  run:logs:
+    desc: View logs for latest run
+    cmds:
+      - '{{.GH_BIN}} run view --log'
+
+  run:delete:
+    desc: Delete a workflow run (usage - task gh:run:delete -- RUN_ID)
+    cmds:
+      - |
+        RUN_ID="{{.CLI_ARGS}}"
+        if [ -z "$RUN_ID" ]; then
+          echo "Usage: task tools:gh:run:delete -- RUN_ID"
+          echo "Get RUN_ID from: task tools:gh:run:list"
+          exit 1
+        fi
+        {{.GH_BIN}} run delete "$RUN_ID"
+        echo "Deleted run: $RUN_ID"
+
+  run:delete-failed:
+    desc: Delete all failed workflow runs
+    cmds:
+      - |
+        echo "Deleting failed workflow runs..."
+        FAILED_RUNS=$({{.GH_BIN}} run list --status failure --json databaseId --jq '.[].databaseId')
+        if [ -z "$FAILED_RUNS" ]; then
+          echo "No failed runs to delete"
+          exit 0
+        fi
+        COUNT=0
+        for RUN_ID in $FAILED_RUNS; do
+          {{.GH_BIN}} run delete "$RUN_ID" 2>/dev/null || true
+          COUNT=$((COUNT + 1))
+        done
+        echo "Deleted $COUNT failed runs"
+
+  run:cleanup:
+    desc: Delete old workflow runs (keeps last KEEP per workflow, default 5)
+    vars:
+      KEEP: '{{.KEEP | default "5"}}'
+    cmds:
+      - |
+        echo "Cleaning up old workflow runs (keeping last {{.KEEP}} per workflow)..."
+        echo ""
+
+        # Get workflow IDs (more reliable than names with special chars)
+        {{.GH_BIN}} workflow list --json id,name | jq -r '.[] | "\(.id) \(.name)"' | while read -r ID NAME; do
+          echo "Processing: $NAME (id: $ID)"
+          # Get runs older than the KEEP most recent
+          RUNS=$({{.GH_BIN}} run list --workflow "$ID" --json databaseId --jq '.[{{.KEEP}}:] | .[].databaseId' 2>/dev/null)
+
+          if [ -n "$RUNS" ]; then
+            for RUN_ID in $RUNS; do
+              {{.GH_BIN}} run delete "$RUN_ID" 2>/dev/null || true
+            done
+            echo "  Cleaned up old runs"
+          else
+            echo "  No old runs to clean"
+          fi
+        done
+        echo ""
+        echo "Cleanup complete"
+
+  run:delete-all:
+    desc: Delete ALL workflow runs (shows progress and rate limit)
+    cmds:
+      - |
+        # Pre-flight checks
+        REMAINING=$({{.GH_BIN}} api rate_limit --jq '.resources.core.remaining')
+        TOTAL_RUNS=$({{.GH_BIN}} run list --json databaseId --jq 'length')
+
+        echo "GitHub API Rate Limit"
+        echo "====================="
+        echo "Remaining: $REMAINING"
+        echo "Runs to delete: $TOTAL_RUNS"
+        echo ""
+
+        if [ "$TOTAL_RUNS" -eq 0 ]; then
+          echo "No workflow runs to delete"
+          exit 0
+        fi
+
+        # Estimate time (~0.5s per delete)
+        ESTIMATED_SECS=$((TOTAL_RUNS / 2))
+        echo "Estimated time: ~${ESTIMATED_SECS}s"
+        echo ""
+
+        # Check if we have enough quota
+        NEEDED=$((TOTAL_RUNS + 10))
+        if [ "$REMAINING" -lt "$NEEDED" ]; then
+          echo "WARNING: May hit rate limit ($REMAINING remaining, need ~$NEEDED)"
+          echo "Consider waiting for reset or running in batches"
+          echo ""
+        fi
+
+        echo "Deleting..."
+        DELETED=0
+
+        while true; do
+          RUNS=$({{.GH_BIN}} run list --json databaseId --jq '.[].databaseId' 2>/dev/null)
+          if [ -z "$RUNS" ]; then
+            break
+          fi
+
+          for RUN_ID in $RUNS; do
+            {{.GH_BIN}} run delete "$RUN_ID" 2>/dev/null || true
+            DELETED=$((DELETED + 1))
+            # Progress every 10 deletions
+            if [ $((DELETED % 10)) -eq 0 ]; then
+              echo "  Progress: $DELETED/$TOTAL_RUNS deleted"
+            fi
+          done
+        done
+
+        echo ""
+        echo "Done: Deleted $DELETED workflow runs"
+
+        # Final rate limit check
+        FINAL=$({{.GH_BIN}} api rate_limit --jq '.resources.core.remaining')
+        echo "Rate limit remaining: $FINAL"
+
+  run:rate-limit:
+    desc: Show GitHub API rate limit status
+    cmds:
+      - |
+        echo "GitHub API Rate Limit"
+        echo "====================="
+        DATA=$({{.GH_BIN}} api rate_limit --jq '.resources.core')
+        LIMIT=$(echo "$DATA" | jq -r '.limit')
+        REMAINING=$(echo "$DATA" | jq -r '.remaining')
+        USED=$((LIMIT - REMAINING))
+        RESET=$(echo "$DATA" | jq -r '.reset')
+        RESET_TIME=$(date -r "$RESET" "+%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || date -d "@$RESET" "+%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || echo "$RESET")
+        echo "Limit:     $LIMIT"
+        echo "Remaining: $REMAINING"
+        echo "Used:      $USED"
+        echo "Resets:    $RESET_TIME"
+
+  run:count:
+    desc: Count workflow runs by status (with rate limit)
+    cmds:
+      - |
+        # Rate limit first
+        echo "GitHub API Rate Limit"
+        echo "====================="
+        DATA=$({{.GH_BIN}} api rate_limit --jq '.resources.core')
+        LIMIT=$(echo "$DATA" | jq -r '.limit')
+        REMAINING=$(echo "$DATA" | jq -r '.remaining')
+        RESET=$(echo "$DATA" | jq -r '.reset')
+        RESET_TIME=$(date -r "$RESET" "+%H:%M:%S" 2>/dev/null || date -d "@$RESET" "+%H:%M:%S" 2>/dev/null || echo "$RESET")
+        echo "Remaining: $REMAINING/$LIMIT (resets $RESET_TIME)"
+        echo ""
+
+        echo "Workflow Run Summary"
+        echo "===================="
+        TOTAL=$({{.GH_BIN}} run list --json databaseId --jq 'length')
+        SUCCESS=$({{.GH_BIN}} run list --status success --json databaseId --jq 'length')
+        FAILURE=$({{.GH_BIN}} run list --status failure --json databaseId --jq 'length')
+        PENDING=$({{.GH_BIN}} run list --status pending --json databaseId --jq 'length')
+        IN_PROGRESS=$({{.GH_BIN}} run list --status in_progress --json databaseId --jq 'length')
+        echo "Total:       $TOTAL"
+        echo "Success:     $SUCCESS"
+        echo "Failed:      $FAILURE"
+        echo "Pending:     $PENDING"
+        echo "In Progress: $IN_PROGRESS"
+
+  # ===========================================================================
+  # PRs & Issues
+  # ===========================================================================
+
+  pr:list:
+    desc: List open pull requests
+    cmds:
+      - '{{.GH_BIN}} pr list'
+
+  pr:create:
+    desc: Create PR from current branch
+    cmds:
+      - '{{.GH_BIN}} pr create --fill'
+
+  pr:view:
+    desc: View current PR
+    cmds:
+      - '{{.GH_BIN}} pr view'
+
+  pr:checks:
+    desc: View PR check status
+    cmds:
+      - '{{.GH_BIN}} pr checks'
+
+  issue:list:
+    desc: List open issues
+    cmds:
+      - '{{.GH_BIN}} issue list'
+
+  issue:create-from-file:
+    desc: Create an issue from a file (requires TITLE, FILE, LABELS vars)
+    cmds:
+      - |
+        if [ -z "{{.TITLE}}" ] || [ -z "{{.FILE}}" ]; then
+          echo "Usage: task tools:gh:issue:create-from-file TITLE='...' FILE='...' LABELS='...'"
+          exit 1
+        fi
+        {{.GH_BIN}} issue create --title "{{.TITLE}}" --body-file "{{.FILE}}" --label "{{.LABELS}}"
+
+  issue:create-or-comment:
+    desc: Create issue or add comment if one exists (TITLE, TITLE_PREFIX, FILE, LABELS, SEARCH_LABEL)
+    cmds:
+      - |
+        if [ -z "{{.TITLE}}" ] || [ -z "{{.FILE}}" ]; then
+          echo "Usage: task tools:gh:issue:create-or-comment TITLE='...' TITLE_PREFIX='...' FILE='...' LABELS='...' SEARCH_LABEL='...'"
+          exit 1
+        fi
+
+        EXISTING=$({{.GH_BIN}} issue list --state open --label "{{.SEARCH_LABEL}}" \
+          --search "{{.TITLE_PREFIX}} in:title" --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+        if [ -n "$EXISTING" ]; then
+          echo "Adding comment to existing issue #$EXISTING"
+          {{.GH_BIN}} issue comment "$EXISTING" --body-file "{{.FILE}}"
+        else
+          echo "Creating new issue"
+          {{.GH_BIN}} issue create --title "{{.TITLE}}" --body-file "{{.FILE}}" --label "{{.LABELS}}"
+        fi
+
+  # ===========================================================================
+  # Repository
+  # ===========================================================================
+
+  repo:view:
+    desc: View repository info
+    cmds:
+      - '{{.GH_BIN}} repo view'
+
+  repo:clone:
+    desc: Clone a repository (usage - task gh:repo:clone -- REPO)
+    cmds:
+      - |
+        REPO="{{.CLI_ARGS}}"
+        if [ -z "$REPO" ]; then
+          echo "Usage: task gh:repo:clone -- OWNER/REPO"
+          exit 1
+        fi
+        {{.GH_BIN}} repo clone "$REPO"
+
+  # ===========================================================================
+  # API (raw access)
+  # ===========================================================================
+
+  api:
+    desc: Make raw API call (usage - task gh:api -- ENDPOINT)
+    cmds:
+      - |
+        ENDPOINT="{{.CLI_ARGS}}"
+        if [ -z "$ENDPOINT" ]; then
+          echo "Usage: task gh:api -- ENDPOINT"
+          echo "Example: task gh:api -- repos/{owner}/{repo}/releases"
+          exit 1
+        fi
+        {{.GH_BIN}} api "$ENDPOINT"
+
+  # ===========================================================================
+  # Repository Secrets & Variables
+  # ===========================================================================
+  # Secrets: Encrypted, for sensitive values (API tokens)
+  # Variables: Plain text, for non-sensitive config (account IDs, URLs)
+
+  secret:list:
+    desc: List GitHub repository secrets
+    cmds:
+      - '{{.GH_BIN}} secret list'
+
+  secret:set:
+    desc: Set a GitHub repository secret (e.g., task tools:gh:secret:set -- CLOUDFLARE_API_TOKEN)
+    cmds:
+      - '{{.GH_BIN}} secret set {{.CLI_ARGS}}'
+
+  var:list:
+    desc: List GitHub repository variables
+    cmds:
+      - '{{.GH_BIN}} variable list'
+
+  var:set:
+    desc: Set a GitHub repository variable (e.g., task tools:gh:var:set -- CF_ACCOUNT_ID value)
+    cmds:
+      - '{{.GH_BIN}} variable set {{.CLI_ARGS}}'
+
+  var:sync:
+    desc: Sync repository variables from Taskfile values
+    cmds:
+      - |
+        echo "Syncing GitHub repository variables..."
+        echo ""
+        echo "Setting CF_ACCOUNT_ID={{.CF_ACCOUNT_ID}}"
+        {{.GH_BIN}} variable set CF_ACCOUNT_ID --body "{{.CF_ACCOUNT_ID}}"
+        echo "Setting CF_WEB_ANALYTICS_SITE_TAG={{.CF_WEB_ANALYTICS_SITE_TAG}}"
+        {{.GH_BIN}} variable set CF_WEB_ANALYTICS_SITE_TAG --body "{{.CF_WEB_ANALYTICS_SITE_TAG}}"
+        echo "Setting SITE_URL={{.URL_PRODUCTION}}"
+        {{.GH_BIN}} variable set SITE_URL --body "{{.URL_PRODUCTION}}"
+        echo ""
+        echo "Variables synced. Verify with: task tools:gh:var:list"

@@ -1,0 +1,219 @@
+# Cloudflare Tasks
+#
+# Cloudflare Pages management, cache purging, and dashboard shortcuts.
+# NOTE: Deployments now happen automatically via Git integration.
+#
+# REQUIRES: wrangler (installed via Bun)
+#
+# Usage:
+#   task cf:status      - Check deployment status
+#   task cf:logs        - View deployment logs
+#   task cf:purge       - Purge CDN cache
+#   task cf:open        - Open Pages dashboard
+
+version: '3'
+
+tasks:
+  # ===========================================================================
+  # Checks
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure wrangler CLI is available
+    cmds:
+      - task: :wrangler:check:deps
+
+  check:validate:
+    desc: Validate wrangler can access Cloudflare
+    deps: [check:deps]
+    cmds:
+      - |
+        # Quick validation that wrangler can list projects
+        if {{.WRANGLER_CMD}} pages project list --json 2>/dev/null | head -1 >/dev/null; then
+          echo "OK: wrangler can access Cloudflare"
+        else
+          echo "WARN: Could not validate Cloudflare access (may need login)"
+        fi
+
+  # ===========================================================================
+  # Status & Logs
+  # ===========================================================================
+
+  status:
+    desc: Check deployment status
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "========================================"
+        echo "Cloudflare Pages Status"
+        echo "========================================"
+        echo "Project: {{.PROJECT_NAME}}"
+        echo ""
+        echo "URLs:"
+        echo "  Production: {{.URL_PRODUCTION}}"
+        echo "  Preview: {{.URL_PREVIEW}}"
+        echo ""
+        echo "Dashboards:"
+        echo "  Pages: {{.CF_DASH_PAGES}}"
+        echo "  Settings: {{.CF_DASH_PAGES_SETTINGS}}"
+        echo ""
+        echo "Recent Deployments:"
+        echo "========================================"
+      - '{{.WRANGLER_CMD}} pages deployment list --project-name={{.PROJECT_NAME}}'
+
+  logs:
+    desc: View deployment logs
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "========================================"
+        echo "Recent Deployments"
+        echo "========================================"
+        echo "Dashboard: {{.CF_DASH_PAGES}}"
+        echo ""
+      - '{{.WRANGLER_CMD}} pages deployment list --project-name={{.PROJECT_NAME}} | head -10'
+
+  tail:
+    desc: Tail latest deployment logs
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "========================================"
+        echo "Tailing Deployment Logs"
+        echo "========================================"
+        echo "Dashboard: {{.CF_DASH_PAGES}}"
+        echo ""
+      - '{{.WRANGLER_CMD}} pages deployment tail --project-name={{.PROJECT_NAME}}'
+
+  preview-url:
+    desc: Get and open the latest preview deployment URL
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "========================================"
+        echo "Latest Preview Deployment"
+        echo "========================================"
+        LATEST_URL=$({{.WRANGLER_CMD}} pages deployment list --project-name={{.PROJECT_NAME}} | grep "Preview" | head -1 | awk '{print $10}')
+        if [ -n "$LATEST_URL" ]; then
+          echo "URL: $LATEST_URL"
+          echo ""
+          echo "Opening in browser..."
+          open "$LATEST_URL"
+        else
+          echo "No preview deployments found"
+        fi
+
+  # ===========================================================================
+  # Cache
+  # ===========================================================================
+
+  purge:
+    desc: Purge Cloudflare CDN cache
+    cmds:
+      - |
+        if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+          echo "ERROR: CLOUDFLARE_API_TOKEN must be set in .env"
+          exit 1
+        fi
+        echo "Purging Cloudflare cache for {{.DOMAIN}}..."
+        RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/{{.CF_ZONE_ID}}/purge_cache" \
+          -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+          -H "Content-Type: application/json" \
+          --data '{"purge_everything":true}')
+
+        if echo "$RESPONSE" | grep -q '"success": true'; then
+          echo "OK: Cache purged successfully"
+        else
+          echo "ERROR: Cache purge failed:"
+          echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+          exit 1
+        fi
+
+  # ===========================================================================
+  # Secrets
+  # ===========================================================================
+
+  secret:set:
+    desc: Set a secret for Cloudflare Pages (e.g., HUGO_VERSION)
+    deps: [check:deps]
+    cmds:
+      - 'echo "Setting secret for Pages project..."'
+      - '{{.WRANGLER_CMD}} pages secret put {{.CLI_ARGS}} --project-name={{.PROJECT_NAME}}'
+
+  secret:list:
+    desc: List secrets for Cloudflare Pages
+    deps: [check:deps]
+    cmds:
+      - '{{.WRANGLER_CMD}} pages secret list --project-name={{.PROJECT_NAME}}'
+
+  # ===========================================================================
+  # Dashboard URLs
+  # ===========================================================================
+
+  open:
+    desc: Open Cloudflare Pages dashboard in browser
+    cmds:
+      - open {{.CF_DASH_PAGES}}
+
+  open:settings:
+    desc: Open Cloudflare Pages settings in browser
+    cmds:
+      - open {{.CF_DASH_PAGES_SETTINGS}}
+
+  open:domain:
+    desc: Open domain dashboard in browser
+    cmds:
+      - open {{.CF_DASH_DOMAIN}}
+
+  open:ai:
+    desc: Open Cloudflare AI Crawl Control (configure AI bot access)
+    cmds:
+      - open "https://dash.cloudflare.com/{{.CF_ACCOUNT_ID}}/ubuntusoftware.net/ai"
+
+  # ===========================================================================
+  # Deprecated (kept for reference)
+  # ===========================================================================
+
+  login:
+    desc: "[DEPRECATED] Login to Cloudflare"
+    deps: [check:deps]
+    cmds:
+      - 'echo "DEPRECATED: This task is no longer needed with Git integration"'
+      - '{{.WRANGLER_CMD}} login'
+
+  init:
+    desc: "[DEPRECATED] Initialize Cloudflare Pages project"
+    deps: [check:deps]
+    cmds:
+      - 'echo "DEPRECATED: Project is configured via Cloudflare dashboard"'
+      - '{{.WRANGLER_CMD}} pages project create {{.PROJECT_NAME}} --production-branch=main'
+
+  deploy:
+    desc: "[DEPRECATED] Deploy to Cloudflare Pages - Use git push instead"
+    cmds:
+      - 'echo "DEPRECATED: Deployments happen automatically on git push"'
+      - 'echo "Just run: git push"'
+      - exit 1
+
+  delete:
+    desc: "[DANGEROUS] Delete Cloudflare Pages project"
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "========================================"
+        echo "DANGER: DELETE CLOUDFLARE PAGES PROJECT"
+        echo "========================================"
+        echo ""
+        echo "This will PERMANENTLY delete:"
+        echo "  Project: {{.PROJECT_NAME}}"
+        echo "  Production: {{.URL_PRODUCTION}}"
+        echo "  Preview: {{.URL_PREVIEW}}"
+        echo ""
+        echo "This action CANNOT be undone!"
+        echo ""
+        read -p "Type 'DELETE {{.PROJECT_NAME}}' to confirm: " CONFIRM
+        if [ "$CONFIRM" != "DELETE {{.PROJECT_NAME}}" ]; then
+          echo "Cancelled."
+          exit 1
+        fi
+      - '{{.WRANGLER_CMD}} pages project delete {{.PROJECT_NAME}}'

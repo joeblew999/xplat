@@ -1,0 +1,55 @@
+# Toolchain Tasks
+#
+# Parent module that includes all runtime toolchains (compilers, interpreters).
+# Provides unified check:deps and check:validate across all toolchains.
+#
+# Usage:
+#   task toolchain:check:deps     - Check all toolchains
+#   task toolchain:golang:check:deps  - Check specific toolchain
+#   task toolchain:rust:check:deps    - Check specific toolchain
+#
+# Adding a new toolchain:
+#   1. Create taskfiles/toolchain/Taskfile.<name>.yml
+#   2. Add include below
+#   3. Add to check:deps and check:validate tasks
+
+version: '3'
+
+includes:
+  golang: ./toolchain/Taskfile.golang.yml
+  rust: ./toolchain/Taskfile.rust.yml
+  bun: ./toolchain/Taskfile.bun.yml
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - unified toolchain diagnostics)
+  # ===========================================================================
+
+  check:deps:
+    desc: Check all required toolchains are installed
+    cmds:
+      - echo "Checking all toolchains..."
+      - task: golang:check:deps
+      - task: bun:check:deps
+      # Add more as needed:
+      # - task: rust:check:deps
+      # - task: node:check:deps
+      # - task: python:check:deps
+
+  check:validate:
+    desc: Validate all toolchains work
+    cmds:
+      - echo "Validating all toolchains..."
+      - task: golang:check:validate
+      - task: bun:check:validate
+      # Add more as needed:
+      # - task: rust:check:validate
+
+  check:health:
+    desc: Check all toolchain external dependencies (registries, proxies)
+    cmds:
+      - echo "Checking toolchain health..."
+      - task: golang:check:health
+      - task: bun:check:health
+      # Add more as needed:
+      # - task: rust:check:health

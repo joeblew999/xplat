@@ -1,0 +1,178 @@
+# xplat Cross-Platform Tests
+#
+# Runs on every push/PR to ensure xplat works on all platforms.
+# This catches Windows compatibility issues early.
+
+name: "[Core] xplat"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/xplat/**'
+      - '.github/workflows/core-xplat.yml'
+  pull_request:
+    paths:
+      - 'cmd/xplat/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    runs-on: ${{ matrix.os }}
+    name: Test (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build xplat
+        shell: bash
+        run: |
+          go build -o xplat${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/xplat
+          echo "Built xplat for ${{ matrix.name }}"
+
+      - name: Run Go tests
+        run: go test -v ./cmd/xplat/...
+
+      - name: Test xplat commands (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "=== xplat Test Suite (${{ matrix.name }}) ==="
+
+          echo "Testing: version"
+          ./xplat version
+
+          echo "Testing: which"
+          ./xplat which go
+
+          echo "Testing: glob"
+          COUNT=$(./xplat glob "cmd/**/*.go" | wc -l)
+          echo "  Found $COUNT Go files"
+          [ "$COUNT" -gt 0 ] || exit 1
+
+          echo "Testing: mkdir -p"
+          ./xplat mkdir -p /tmp/xplat-ci-test/nested/dir
+          [ -d /tmp/xplat-ci-test/nested/dir ] || exit 1
+
+          echo "Testing: touch"
+          ./xplat touch /tmp/xplat-ci-test/testfile.txt
+          [ -f /tmp/xplat-ci-test/testfile.txt ] || exit 1
+
+          echo "Testing: cat"
+          echo "test content" > /tmp/xplat-ci-test/testfile.txt
+          CONTENT=$(./xplat cat /tmp/xplat-ci-test/testfile.txt)
+          [ "$CONTENT" = "test content" ] || exit 1
+
+          echo "Testing: cp"
+          ./xplat cp /tmp/xplat-ci-test/testfile.txt /tmp/xplat-ci-test/copied.txt
+          [ -f /tmp/xplat-ci-test/copied.txt ] || exit 1
+
+          echo "Testing: cp -r"
+          ./xplat cp -r /tmp/xplat-ci-test/nested /tmp/xplat-ci-test/nested-copy
+          [ -d /tmp/xplat-ci-test/nested-copy/dir ] || exit 1
+
+          echo "Testing: mv (rename)"
+          ./xplat touch /tmp/xplat-ci-test/to-rename.txt
+          ./xplat mv /tmp/xplat-ci-test/to-rename.txt /tmp/xplat-ci-test/renamed.txt
+          [ -f /tmp/xplat-ci-test/renamed.txt ] || exit 1
+          [ ! -f /tmp/xplat-ci-test/to-rename.txt ] || exit 1
+
+          echo "Testing: mv (to directory)"
+          ./xplat mv /tmp/xplat-ci-test/renamed.txt /tmp/xplat-ci-test/nested/
+          [ -f /tmp/xplat-ci-test/nested/renamed.txt ] || exit 1
+
+          echo "Testing: env"
+          ./xplat env HOME
+
+          echo "Testing: env -d"
+          VAL=$(./xplat env NONEXISTENT -d "fallback")
+          [ "$VAL" = "fallback" ] || exit 1
+
+          echo "Testing: rm"
+          ./xplat rm /tmp/xplat-ci-test/copied.txt
+          [ ! -f /tmp/xplat-ci-test/copied.txt ] || exit 1
+
+          echo "Testing: rm -rf"
+          ./xplat rm -rf /tmp/xplat-ci-test
+          [ ! -d /tmp/xplat-ci-test ] || exit 1
+
+          echo "=== All tests passed (${{ matrix.name }}) ==="
+
+      - name: Test xplat commands (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Write-Host "=== xplat Test Suite (Windows) ===" -ForegroundColor Cyan
+
+          Write-Host "Testing: version"
+          .\xplat.exe version
+
+          Write-Host "Testing: which"
+          .\xplat.exe which powershell
+
+          Write-Host "Testing: glob"
+          $count = (.\xplat.exe glob "cmd/**/*.go" | Measure-Object -Line).Lines
+          Write-Host "  Found $count Go files"
+          if ($count -le 0) { exit 1 }
+
+          Write-Host "Testing: mkdir -p"
+          .\xplat.exe mkdir -p "$env:TEMP\xplat-ci-test\nested\dir"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested\dir")) { exit 1 }
+
+          Write-Host "Testing: touch"
+          .\xplat.exe touch "$env:TEMP\xplat-ci-test\testfile.txt"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\testfile.txt")) { exit 1 }
+
+          Write-Host "Testing: cat"
+          "test content" | Out-File -FilePath "$env:TEMP\xplat-ci-test\testfile.txt" -Encoding utf8 -NoNewline
+          $content = .\xplat.exe cat "$env:TEMP\xplat-ci-test\testfile.txt"
+          if ($content.Trim() -ne "test content") { Write-Host "Got: $content"; exit 1 }
+
+          Write-Host "Testing: cp"
+          .\xplat.exe cp "$env:TEMP\xplat-ci-test\testfile.txt" "$env:TEMP\xplat-ci-test\copied.txt"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\copied.txt")) { exit 1 }
+
+          Write-Host "Testing: cp -r"
+          .\xplat.exe cp -r "$env:TEMP\xplat-ci-test\nested" "$env:TEMP\xplat-ci-test\nested-copy"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested-copy\dir")) { exit 1 }
+
+          Write-Host "Testing: mv (rename)"
+          .\xplat.exe touch "$env:TEMP\xplat-ci-test\to-rename.txt"
+          .\xplat.exe mv "$env:TEMP\xplat-ci-test\to-rename.txt" "$env:TEMP\xplat-ci-test\renamed.txt"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\renamed.txt")) { exit 1 }
+          if (Test-Path "$env:TEMP\xplat-ci-test\to-rename.txt") { exit 1 }
+
+          Write-Host "Testing: mv (to directory)"
+          .\xplat.exe mv "$env:TEMP\xplat-ci-test\renamed.txt" "$env:TEMP\xplat-ci-test\nested\"
+          if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested\renamed.txt")) { exit 1 }
+
+          Write-Host "Testing: env"
+          .\xplat.exe env USERPROFILE
+
+          Write-Host "Testing: env -d"
+          $val = .\xplat.exe env NONEXISTENT -d "fallback"
+          if ($val -ne "fallback") { exit 1 }
+
+          Write-Host "Testing: rm"
+          .\xplat.exe rm "$env:TEMP\xplat-ci-test\copied.txt"
+          if (Test-Path "$env:TEMP\xplat-ci-test\copied.txt") { exit 1 }
+
+          Write-Host "Testing: rm -rf"
+          .\xplat.exe rm -rf "$env:TEMP\xplat-ci-test"
+          if (Test-Path "$env:TEMP\xplat-ci-test") { exit 1 }
+
+          Write-Host "=== All tests passed (Windows) ===" -ForegroundColor Cyan

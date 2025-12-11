@@ -1,0 +1,87 @@
+# Coder Tasks
+#
+# Coder CLI installation, server management, and workspace operations.
+# https://coder.com/docs
+#
+# Usage:
+#   task coder:install     - Install Coder CLI
+#   task coder:server      - Start Coder server
+#   task coder:workspaces  - List workspaces
+#
+# TODO: Implement tasks
+
+version: '3'
+
+vars:
+  # Archetype: external - we install Coder CLI from coder/coder, we don't build it
+  XPLAT_ARCHETYPE: external
+  # CODER_VERSION comes from xplat.env (loaded by root Taskfile dotenv)
+  CODER_VERSION: '{{.CODER_VERSION}}'
+  CODER_BIN: 'coder{{exeExt}}'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - lifecycle phase)
+  # ===========================================================================
+
+  check:deps:
+    desc: "[STUB] Ensure Coder CLI is available"
+    status:
+      - command -v coder >/dev/null 2>&1
+    cmds:
+      - 'echo "TODO: Install Coder CLI"'
+      - 'echo "  curl -fsSL https://coder.com/install.sh | sh"'
+      - exit 1
+
+  # ===========================================================================
+  # Installation
+  # ===========================================================================
+
+  install:
+    desc: "[STUB] Install Coder CLI"
+    cmds:
+      - 'echo "TODO: Install Coder CLI"'
+      - 'echo "  curl -fsSL https://coder.com/install.sh | sh"'
+
+  # ===========================================================================
+  # Server
+  # ===========================================================================
+
+  server:start:
+    desc: "[STUB] Start Coder server"
+    cmds:
+      - 'echo "TODO: Start Coder server"'
+
+  server:stop:
+    desc: "[STUB] Stop Coder server"
+    cmds:
+      - 'echo "TODO: Stop Coder server"'
+
+  server:status:
+    desc: "[STUB] Check Coder server status"
+    cmds:
+      - 'echo "TODO: Check Coder server status"'
+
+  # ===========================================================================
+  # Workspaces
+  # ===========================================================================
+
+  workspaces:
+    desc: "[STUB] List workspaces"
+    cmds:
+      - 'echo "TODO: coder list"'
+
+  workspace:create:
+    desc: "[STUB] Create a workspace"
+    cmds:
+      - 'echo "TODO: coder create"'
+
+  workspace:delete:
+    desc: "[STUB] Delete a workspace"
+    cmds:
+      - 'echo "TODO: coder delete"'
+
+  workspace:ssh:
+    desc: "[STUB] SSH into a workspace"
+    cmds:
+      - 'echo "TODO: coder ssh"'

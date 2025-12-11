@@ -1,0 +1,189 @@
+# MailerLite Tasks
+#
+# CLI tool for MailerLite subscriber management.
+# Uses xplat binary:install for cross-platform binary management.
+#
+# Usage:
+#   task mailerlite:subscribers:list                  - List all subscribers
+#   task mailerlite:subscribers:count                 - Count total subscribers
+#   task mailerlite:subscribers:add EMAIL=x@y.com     - Add subscriber
+#   task mailerlite:subscribers:delete EMAIL=x@y.com  - Delete subscriber
+#   task mailerlite:groups:list                       - List all groups
+#   task mailerlite:groups:create NAME="My Group"     - Create a group
+#   task mailerlite:groups:assign GROUP_ID=x EMAIL=y  - Assign subscriber to group
+#   task mailerlite:forms:list                        - List all forms
+#   task mailerlite:stats                             - Show account statistics
+#
+# Environment:
+#   MAILERLITE_API_KEY    API key (required, from .env)
+#
+# Get API key from: https://dashboard.mailerlite.com/integrations/api
+#
+# REQUIRES: xplat (for binary management)
+
+version: '3'
+
+vars:
+  # Version from xplat.env (loaded by root Taskfile dotenv)
+  MAILERLITE_VERSION: '{{.MAILERLITE_VERSION}}'
+  MAILERLITE_REPO: joeblew999/ubuntu-website
+  MAILERLITE_BIN: 'mailerlite{{exeExt}}'
+  MAILERLITE_CGO: '0'  # No CGO needed - can cross-compile
+  XPLAT_AFFINITY: cross  # Can cross-compile from any platform
+  MAILERLITE_CMD: '{{.BIN_INSTALL_DIR}}/{{.MAILERLITE_BIN}}'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - lifecycle phase)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure mailerlite binary is available (builds from source or downloads)
+    internal: true
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.MAILERLITE_BIN}}"
+    cmds:
+      - task: :tools:xplat:binary:install
+        vars:
+          CLI_ARGS: 'mailerlite {{.MAILERLITE_VERSION}} {{.MAILERLITE_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/mailerlite"'
+
+  # ===========================================================================
+  # Subscribers (subscribers:* - subscriber management)
+  # ===========================================================================
+
+  subscribers:list:
+    desc: List all subscribers
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} subscribers list'
+
+  subscribers:count:
+    desc: Count total subscribers
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} subscribers count'
+
+  subscribers:get:
+    desc: Get subscriber by email (EMAIL=user@example.com)
+    deps: [check:deps]
+    requires:
+      vars: [EMAIL]
+    cmds:
+      - '{{.MAILERLITE_CMD}} subscribers get {{.EMAIL}}'
+
+  subscribers:add:
+    desc: Add or update subscriber (EMAIL=user@example.com, NAME="John Doe" optional)
+    deps: [check:deps]
+    requires:
+      vars: [EMAIL]
+    cmds:
+      - '{{.MAILERLITE_CMD}} subscribers add {{.EMAIL}} {{.NAME | default ""}}'
+
+  subscribers:delete:
+    desc: Delete subscriber (EMAIL=user@example.com)
+    deps: [check:deps]
+    requires:
+      vars: [EMAIL]
+    cmds:
+      - '{{.MAILERLITE_CMD}} subscribers delete {{.EMAIL}}'
+
+  # ===========================================================================
+  # Groups (groups:* - group management)
+  # ===========================================================================
+
+  groups:list:
+    desc: List all groups
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} groups list'
+
+  groups:create:
+    desc: Create a new group (NAME="Newsletter Subscribers")
+    deps: [check:deps]
+    requires:
+      vars: [NAME]
+    cmds:
+      - '{{.MAILERLITE_CMD}} groups create {{.NAME}}'
+
+  groups:subscribers:
+    desc: List subscribers in a group (GROUP_ID=xxx)
+    deps: [check:deps]
+    requires:
+      vars: [GROUP_ID]
+    cmds:
+      - '{{.MAILERLITE_CMD}} groups subscribers {{.GROUP_ID}}'
+
+  groups:assign:
+    desc: Assign subscriber to group (GROUP_ID=xxx EMAIL=user@example.com)
+    deps: [check:deps]
+    requires:
+      vars: [GROUP_ID, EMAIL]
+    cmds:
+      - '{{.MAILERLITE_CMD}} groups assign {{.GROUP_ID}} {{.EMAIL}}'
+
+  groups:unassign:
+    desc: Remove subscriber from group (GROUP_ID=xxx EMAIL=user@example.com)
+    deps: [check:deps]
+    requires:
+      vars: [GROUP_ID, EMAIL]
+    cmds:
+      - '{{.MAILERLITE_CMD}} groups unassign {{.GROUP_ID}} {{.EMAIL}}'
+
+  # ===========================================================================
+  # Forms (forms:* - form management)
+  # ===========================================================================
+
+  forms:list:
+    desc: List all forms
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} forms list'
+
+  forms:subscribers:
+    desc: List subscribers for a form (FORM_ID=xxx)
+    deps: [check:deps]
+    requires:
+      vars: [FORM_ID]
+    cmds:
+      - '{{.MAILERLITE_CMD}} forms subscribers {{.FORM_ID}}'
+
+  # ===========================================================================
+  # Statistics (stats - account overview)
+  # ===========================================================================
+
+  stats:
+    desc: Show account statistics
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} stats'
+
+  # ===========================================================================
+  # CI Tasks (ci:* - for GitHub Actions)
+  # ===========================================================================
+
+  ci:report:
+    desc: '[Monitor] Generate subscriber report (markdown output)'
+    deps: [check:deps]
+    cmds:
+      - '{{.MAILERLITE_CMD}} -github-issue stats'
+
+  # ===========================================================================
+  # Release (release:* - build for distribution)
+  # ===========================================================================
+
+  release:build:
+    desc: Build mailerlite for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.MAILERLITE_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .MAILERLITE_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/mailerlite'
+          CGO: '{{.MAILERLITE_CGO}}'
+
+  release:test:
+    desc: Test built mailerlite release binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.MAILERLITE_BIN}}'

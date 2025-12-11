@@ -1,0 +1,134 @@
+# Genlogo Tasks
+#
+# Logo and branding asset generation via cmd/genlogo.
+# Uses xplat binary:install for cross-platform binary management.
+#
+# Lifecycle:
+#   task genlogo:check:deps       - Ensure binary is available
+#   task genlogo:generate:all     - Generate all branding assets
+#   task genlogo:generate:favicon - Generate favicon only
+#
+# REQUIRES: xplat (for binary management)
+
+version: '3'
+
+vars:
+  # Version from xplat.env (loaded by root Taskfile dotenv)
+  GENLOGO_VERSION: '{{.GENLOGO_VERSION}}'
+  GENLOGO_REPO: joeblew999/ubuntu-website
+  GENLOGO_BIN: 'genlogo{{exeExt}}'
+  GENLOGO_CGO: '0'  # No CGO needed - can cross-compile
+  XPLAT_AFFINITY: cross  # Can cross-compile from any platform
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - lifecycle phase)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure genlogo binary is available (builds from source or downloads)
+    # status: provides true idempotency - skips entirely if binary exists
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.GENLOGO_BIN}}"
+    cmds:
+      # toSlash converts backslashes to forward slashes for shell compatibility on Windows
+      - '{{.XPLAT_BIN}} binary install genlogo {{.GENLOGO_VERSION}} {{.GENLOGO_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/genlogo"'
+
+  # ===========================================================================
+  # Generate (generate:* - lifecycle phase)
+  # ===========================================================================
+  # Uses Task's sources/generates for idempotency - skips if unchanged
+
+  generate:all:
+    desc: Generate all branding assets (favicon, logos, og-image, email-logo, avatar, banner)
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/assets/images/favicon.png'
+      - '{{.ROOT_DIR}}/assets/images/logo.svg'
+      - '{{.ROOT_DIR}}/assets/images/logo-darkmode.svg'
+      - '{{.ROOT_DIR}}/static/images/og-image.png'
+      - '{{.ROOT_DIR}}/static/images/email-logo.png'
+      - '{{.ROOT_DIR}}/static/images/bluesky-avatar.png'
+      - '{{.ROOT_DIR}}/static/images/bluesky-banner.png'
+    cmds:
+      # toSlash converts backslashes to forward slashes for shell compatibility on Windows
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset all -dir "{{toSlash .ROOT_DIR}}"'
+      - echo ""
+      - 'echo "Assets generated. Next steps:"'
+      - echo "  1. Deploy website (git push) - updates Hugo site with new favicon, logos, og-image"
+      - 'echo "  2. Gmail signature - re-upload email-logo.png at https://mail.google.com/mail/u/0/#settings/general"'
+      - 'echo "  3. Bluesky profile - re-upload avatar & banner at https://bsky.app/profile/ubuntusoftware.net"'
+
+  generate:favicon:
+    desc: Generate favicon only
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/assets/images/favicon.png'
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset favicon -dir "{{toSlash .ROOT_DIR}}"'
+
+  generate:logo:
+    desc: Generate logo SVGs only
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/assets/images/logo.svg'
+      - '{{.ROOT_DIR}}/assets/images/logo-darkmode.svg'
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset logo-svg -dir "{{toSlash .ROOT_DIR}}"'
+
+  generate:og-image:
+    desc: Generate Open Graph image only
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/static/images/og-image.png'
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset og -dir "{{toSlash .ROOT_DIR}}"'
+
+  generate:avatar:
+    desc: Generate avatar only
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/static/images/bluesky-avatar.png'
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset avatar -dir "{{toSlash .ROOT_DIR}}"'
+
+  generate:banner:
+    desc: Generate banner only
+    deps: [check:deps]
+    sources:
+      - '{{.ROOT_DIR}}/cmd/genlogo/**/*.go'
+    generates:
+      - '{{.ROOT_DIR}}/static/images/bluesky-banner.png'
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/genlogo{{exeExt}} -asset banner -dir "{{toSlash .ROOT_DIR}}"'
+
+  # ===========================================================================
+  # Release (release:* - build for distribution)
+  # ===========================================================================
+
+  release:build:
+    desc: Build genlogo for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.GENLOGO_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .GENLOGO_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/genlogo'
+          CGO: '{{.GENLOGO_CGO}}'
+
+  release:test:
+    desc: Test built genlogo release binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.GENLOGO_BIN}}'

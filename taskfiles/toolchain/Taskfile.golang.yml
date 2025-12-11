@@ -1,0 +1,242 @@
+# Go Runtime Tasks
+#
+# Cross-platform Go installation and validation.
+# Works on macOS, Linux, Windows.
+#
+# Version Management:
+#   - GO_VERSION from xplat.env (loaded by root Taskfile dotenv)
+#   - GO_VERSION_STRICT controls flexible vs strict mode
+#   - Use `task toolchain:golang:bootstrap` to install exact version
+#
+# Build Tasks:
+#   - build:       Build binary for current/specified platform
+#   - build:all:   Build for all release platforms
+#   - build:test:  Test built binary
+#
+# Other modules that need Go should:
+#   1. Add `# REQUIRES: golang` to their header
+#   2. Call `task: :toolchain:golang:check:deps` before using Go
+#
+# Tool modules should call build tasks like:
+#   - task: :toolchain:golang:build
+#     vars: {BIN: '{{.MY_BIN}}', VERSION: '{{.MY_VERSION}}', SOURCE: '{{.ROOT_DIR}}/cmd/mytool'}
+
+version: '3'
+
+# REQUIRES: golang
+
+vars:
+  # Archetype: builder - Go is a compiler toolchain
+  XPLAT_ARCHETYPE: builder
+  # Build output directory - uses hidden .build folder to avoid accidental commits
+  # Can override via RELEASE_DIR env
+  GO_BUILD_DIR: '{{if env "RELEASE_DIR"}}{{env "RELEASE_DIR"}}{{else}}{{.ROOT_DIR}}/.build{{end}}'
+
+  # Release platforms (matches GitHub Actions matrix)
+  GO_BUILD_PLATFORMS: 'linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64'
+
+  # Build flags for release binaries
+  GO_BUILD_LDFLAGS: '-s -w'
+
+  # CGO setting - defaults to 0 for static binaries
+  GO_BUILD_CGO: '{{if env "RELEASE_CGO"}}{{env "RELEASE_CGO"}}{{else}}0{{end}}'
+
+  # Go workspace mode - defaults to off for reproducible builds
+  GO_BUILD_GOWORK: '{{if env "RELEASE_GOWORK"}}{{env "RELEASE_GOWORK"}}{{else}}off{{end}}'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure Go is installed at correct version (flexible mode warns, strict mode fails)
+    run: once
+    cmds:
+      - |
+        # GO_VERSION comes from xplat.env (loaded by root Taskfile dotenv)
+        EXPECTED="${GO_VERSION:-1.25}"
+        STRICT="${GO_VERSION_STRICT:-false}"
+
+        # Check if go exists
+        if ! command -v go >/dev/null 2>&1; then
+          # Detect CI environment
+          if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+            echo "ERROR: Go is not installed"
+            echo ""
+            echo "Add to your workflow before running tasks:"
+            echo ""
+            echo "    - name: Setup Go"
+            echo "      uses: actions/setup-go@v5"
+            echo "      with:"
+            echo "        go-version: '$EXPECTED'"
+            echo ""
+            exit 1
+          fi
+
+          # Local: provide install instructions
+          echo "ERROR: Go not found in PATH"
+          echo ""
+          echo "Install options:"
+          echo "  1. Official: https://go.dev/dl/"
+          echo "  2. macOS: brew install go"
+          echo "  3. Exact version: task toolchain:golang:bootstrap"
+          exit 1
+        fi
+
+        # Get installed version (e.g., "1.25" from "go version go1.25.5 darwin/arm64")
+        INSTALLED=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
+
+        if [ "$INSTALLED" = "$EXPECTED" ]; then
+          echo "OK: go $INSTALLED (matches expected)"
+          exit 0
+        fi
+
+        # Version mismatch
+        if [ "$STRICT" = "true" ]; then
+          echo "ERROR: Go version mismatch (strict mode)"
+          echo "  Expected: $EXPECTED"
+          echo "  Installed: $INSTALLED"
+          echo ""
+          echo "To install correct version:"
+          echo "  task toolchain:golang:bootstrap"
+          echo ""
+          echo "Or disable strict mode:"
+          echo "  Set GO_VERSION_STRICT=false in xplat.env"
+          exit 1
+        else
+          echo "WARN: Go version mismatch"
+          echo "  Expected: $EXPECTED (from xplat.env)"
+          echo "  Installed: $INSTALLED"
+          echo ""
+          echo "To enforce exact version, set GO_VERSION_STRICT=true in xplat.env"
+          echo "To install exact version: task toolchain:golang:bootstrap"
+        fi
+
+  check:validate:
+    desc: Smoke test Go works
+    cmds:
+      - |
+        echo "Validating Go..."
+        go version
+        echo "golang:check:validate passed"
+
+  check:health:
+    desc: Check Go module proxy is reachable
+    cmds:
+      - |
+        echo "Checking Go module proxy..."
+        go env GOPROXY
+        # Simple connectivity check
+        go list -m golang.org/x/tools@latest >/dev/null 2>&1 || true
+        echo "golang:check:health passed"
+
+  # ===========================================================================
+  # Bootstrap (install exact Go version)
+  # ===========================================================================
+
+  bootstrap:
+    desc: Install exact Go version from xplat.env using golang.org/dl
+    cmds:
+      - |
+        # GO_VERSION comes from xplat.env
+        EXPECTED="${GO_VERSION:-1.25}"
+
+        echo "========================================"
+        echo "Go Bootstrap"
+        echo "========================================"
+        echo ""
+        echo "Target version: $EXPECTED"
+        echo ""
+
+        # Need some Go to bootstrap
+        if ! command -v go >/dev/null 2>&1; then
+          echo "ERROR: Need Go to bootstrap Go"
+          echo ""
+          echo "Install any Go version first:"
+          echo "  macOS: brew install go"
+          echo "  Linux: apt-get install golang-go"
+          echo "  Other: https://go.dev/dl/"
+          exit 1
+        fi
+
+        CURRENT=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
+        echo "Current Go: $CURRENT"
+        echo ""
+
+        if [ "$CURRENT" = "$EXPECTED" ]; then
+          echo "Already at correct version. Nothing to do."
+          exit 0
+        fi
+
+        # Install version wrapper using official golang.org/dl method
+        echo "Installing Go $EXPECTED wrapper..."
+        go install golang.org/dl/go${EXPECTED}@latest
+
+        # Download SDK
+        echo ""
+        echo "Downloading Go $EXPECTED SDK..."
+        "$HOME/go/bin/go${EXPECTED}" download
+
+        echo ""
+        echo "========================================"
+        echo "Go $EXPECTED installed to ~/sdk/go${EXPECTED}"
+        echo ""
+        echo "To use this version:"
+        echo "  Option 1: Add alias to your shell config:"
+        echo "    alias go=go${EXPECTED}"
+        echo ""
+        echo "  Option 2: Run commands with version suffix:"
+        echo "    go${EXPECTED} build ./..."
+        echo ""
+        echo "  Option 3: Add ~/sdk/go${EXPECTED}/bin to PATH"
+        echo "========================================"
+
+  # ===========================================================================
+  # Build (build:* - compile Go binaries)
+  # ===========================================================================
+
+  build:
+    desc: Build Go binary for current or specified platform
+    # Caller must provide: BIN, VERSION, SOURCE
+    # Caller can optionally provide: CGO (defaults to env RELEASE_CGO or 0)
+    vars:
+      TARGET_OS: '{{if env "GOOS"}}{{env "GOOS"}}{{else}}{{OS}}{{end}}'
+      TARGET_ARCH: '{{if env "GOARCH"}}{{env "GOARCH"}}{{else}}{{ARCH}}{{end}}'
+      EXT: '{{if eq .TARGET_OS "windows"}}.exe{{end}}'
+      BIN_BASE: '{{trimSuffix ".exe" .BIN}}'
+      OUTPUT: '{{.GO_BUILD_DIR}}/{{.BIN_BASE}}-{{.TARGET_OS}}-{{.TARGET_ARCH}}{{.EXT}}'
+      # Use caller's CGO if provided, else env var, else default 0
+      BUILD_CGO: '{{.CGO | default .GO_BUILD_CGO}}'
+    cmds:
+      - mkdir -p "{{.GO_BUILD_DIR}}"
+      - |
+        echo "Building {{.BIN_BASE}} {{.VERSION}} for {{.TARGET_OS}}/{{.TARGET_ARCH}} (CGO={{.BUILD_CGO}})..."
+        CGO_ENABLED={{.BUILD_CGO}} GOWORK={{.GO_BUILD_GOWORK}} \
+        GOOS={{.TARGET_OS}} GOARCH={{.TARGET_ARCH}} \
+        go build -ldflags="{{.GO_BUILD_LDFLAGS}} -X main.version={{.VERSION}}" \
+        -o "{{.OUTPUT}}" "{{.SOURCE}}"
+        echo "Output: {{.OUTPUT}}"
+
+  build:test:
+    desc: Test built Go binary
+    # Caller must provide: BIN
+    # Caller can optionally provide: VERSION_CMD (default: -version)
+    vars:
+      TARGET_OS: '{{if env "GOOS"}}{{env "GOOS"}}{{else}}{{OS}}{{end}}'
+      TARGET_ARCH: '{{if env "GOARCH"}}{{env "GOARCH"}}{{else}}{{ARCH}}{{end}}'
+      EXT: '{{if eq .TARGET_OS "windows"}}.exe{{end}}'
+      BIN_BASE: '{{trimSuffix ".exe" .BIN}}'
+      BINARY: '{{.GO_BUILD_DIR}}/{{.BIN_BASE}}-{{.TARGET_OS}}-{{.TARGET_ARCH}}{{.EXT}}'
+      # Default to -version, but tools can override (e.g., "version" for process-compose)
+      TEST_CMD: '{{.VERSION_CMD | default "-version"}}'
+    cmds:
+      - |
+        echo "Testing {{.BIN_BASE}}..."
+        if [ ! -f "{{.BINARY}}" ]; then
+          echo "ERROR: Binary not found: {{.BINARY}}"
+          exit 1
+        fi
+        chmod +x "{{.BINARY}}" 2>/dev/null || true
+        "{{.BINARY}}" {{.TEST_CMD}}
+        echo "OK: {{.BIN_BASE}} binary works"

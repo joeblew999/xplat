@@ -1,0 +1,232 @@
+# Translation Tasks
+#
+# Thin orchestration layer for the translate Go binary.
+# All logic (validation, prompts, idempotency) is handled by Go code.
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ COMMAND REFERENCE                                                           │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │ CONTENT TRACKING (what changed in English?)                                 │
+# │   content:status   → What English files changed since last translation?    │
+# │   content:diff     → Show diff for specific file (FILE=path)               │
+# │   content:changed  → Show detailed changes for all modified files          │
+# │   content:next     → Which file should I translate next? (shows progress)  │
+# │   content:done     → Mark translations complete (moves checkpoint)         │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │ CONTENT PROBLEMS (what's wrong in translations?)                            │
+# │   content:missing  → Files missing in target languages                      │
+# │   content:orphans  → Files with no English source (should delete)           │
+# │   content:stale    → Translations outdated (<50% of source size)            │
+# │   content:clean    → Delete orphaned files (prompts, or FORCE=true)         │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │ MENU MANAGEMENT (navigation menus per language)                             │
+# │   menu:check       → Validate menu files for broken links and sync issues  │
+# │   menu:sync        → Regenerate target menu files from English             │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │ LANGUAGE MANAGEMENT (add/remove languages)                                  │
+# │   lang:list        → Show configured languages, detect stray directories   │
+# │   lang:add         → Add language: Hugo config + content dir + menu file   │
+# │   lang:remove      → Remove language: Hugo config + content dir + menu     │
+# │   lang:init        → Create content directory for configured language      │
+# │   lang:validate    → Verify config matches Hugo languages.toml             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# Typical Workflow:
+#   1. task translate:content:status   → see what English files changed
+#   2. task translate:content:missing  → see what's missing in each language
+#   3. task translate:content:next     → get next file to translate
+#   4. Translate content (Claude Code: "Translate X to all languages")
+#   5. task translate:content:done     → update checkpoint tag
+#
+# CI Mode (add GITHUB_ISSUE=true → markdown output, exit 1 if issues):
+#   task translate:content:status GITHUB_ISSUE=true
+#   task translate:content:missing GITHUB_ISSUE=true
+#   task translate:content:orphans GITHUB_ISSUE=true
+#   task translate:content:stale GITHUB_ISSUE=true
+#   task translate:menu:check GITHUB_ISSUE=true
+#
+# Language Management Examples:
+#   task translate:lang:add CODE=fr NAME="Francais" DIRNAME=french
+#   task translate:lang:remove CODE=fr FORCE=true
+#   task translate:lang:init CODE=fr
+
+version: '3'
+
+vars:
+  # Version from xplat.env (loaded by root Taskfile dotenv)
+  TRANSLATE_VERSION: '{{.TRANSLATE_VERSION}}'
+  TRANSLATE_REPO: joeblew999/ubuntu-website
+  TRANSLATE_BIN: 'translate{{exeExt}}'
+  TRANSLATE_CGO: '0'  # No CGO needed - can cross-compile
+  XPLAT_AFFINITY: cross  # Can cross-compile from any platform
+  TRANSLATE_CMD: '{{.BIN_INSTALL_DIR}}/{{.TRANSLATE_BIN}}'
+
+tasks:
+  # ===========================================================================
+  # Dependency Management
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure translate binary is available (builds from source or downloads)
+    internal: true
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.TRANSLATE_BIN}}"
+    cmds:
+      - task: :tools:xplat:binary:install
+        vars:
+          CLI_ARGS: 'translate {{.TRANSLATE_VERSION}} {{.TRANSLATE_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/translate"'
+
+  # ===========================================================================
+  # Content Tracking - What changed in English source?
+  # ===========================================================================
+
+  content:status:
+    desc: Show what English files changed since last translation
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .GITHUB_ISSUE "true"}}-github-issue{{end}} content status'
+    vars:
+      GITHUB_ISSUE: '{{.GITHUB_ISSUE | default "false"}}'
+
+  content:next:
+    desc: Show next file to translate (with progress indicator)
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} content next'
+
+  content:diff:
+    desc: Show git diff for a specific English file since last translation
+    deps: [check:deps]
+    requires:
+      vars: [FILE]
+    cmds:
+      - '{{.TRANSLATE_CMD}} content diff {{.FILE}}'
+
+  content:changed:
+    desc: Show detailed changes for all English files since last translation
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} content changed'
+
+  content:done:
+    desc: Mark current translations as complete (update checkpoint tag)
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} content done'
+
+  # ===========================================================================
+  # Content Problems - What's wrong in translations?
+  # ===========================================================================
+
+  content:missing:
+    desc: Show which languages are missing content files
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .GITHUB_ISSUE "true"}}-github-issue{{end}} content missing'
+    vars:
+      GITHUB_ISSUE: '{{.GITHUB_ISSUE | default "false"}}'
+
+  content:orphans:
+    desc: Show files in target languages with no English source
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .GITHUB_ISSUE "true"}}-github-issue{{end}} content orphans'
+    vars:
+      GITHUB_ISSUE: '{{.GITHUB_ISSUE | default "false"}}'
+
+  content:stale:
+    desc: Show translations that may be outdated (target < 50% of source size)
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .GITHUB_ISSUE "true"}}-github-issue{{end}} content stale'
+    vars:
+      GITHUB_ISSUE: '{{.GITHUB_ISSUE | default "false"}}'
+
+  content:clean:
+    desc: Delete orphaned files (prompts unless FORCE=true)
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .FORCE "true"}}-force{{end}} content clean'
+    vars:
+      FORCE: '{{.FORCE | default "false"}}'
+
+  # ===========================================================================
+  # Menu Management - Navigation menus per language
+  # ===========================================================================
+
+  menu:check:
+    desc: Validate menu files for broken links and sync issues
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .GITHUB_ISSUE "true"}}-github-issue{{end}} menu check'
+    vars:
+      GITHUB_ISSUE: '{{.GITHUB_ISSUE | default "false"}}'
+
+  menu:sync:
+    desc: Generate translated menu files from English
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} menu sync'
+
+  # ===========================================================================
+  # Language Management - Add/remove languages
+  # ===========================================================================
+
+  lang:list:
+    desc: Show configured languages and detect stray directories
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} lang list'
+
+  lang:validate:
+    desc: Verify translator config matches Hugo config
+    deps: [check:deps]
+    cmds:
+      - '{{.TRANSLATE_CMD}} lang validate'
+
+  lang:add:
+    desc: Add a new target language
+    deps: [check:deps]
+    requires:
+      vars: [CODE, NAME, DIRNAME]
+    cmds:
+      - '{{.TRANSLATE_CMD}} lang add {{.CODE}} "{{.NAME}}" {{.DIRNAME}}'
+
+  lang:remove:
+    desc: Remove a target language (prompts unless FORCE=true)
+    deps: [check:deps]
+    requires:
+      vars: [CODE]
+    cmds:
+      - '{{.TRANSLATE_CMD}} {{if eq .FORCE "true"}}-force{{end}} lang remove {{.CODE}}'
+    vars:
+      FORCE: '{{.FORCE | default "false"}}'
+
+  lang:init:
+    desc: Initialize content directory for a configured language
+    deps: [check:deps]
+    requires:
+      vars: [CODE]
+    cmds:
+      - '{{.TRANSLATE_CMD}} lang init {{.CODE}}'
+
+  # ===========================================================================
+  # Release (release:* - build for distribution)
+  # ===========================================================================
+
+  release:build:
+    desc: Build translate for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.TRANSLATE_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .TRANSLATE_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/translate'
+          CGO: '{{.TRANSLATE_CGO}}'
+
+  release:test:
+    desc: Test built translate release binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.TRANSLATE_BIN}}'

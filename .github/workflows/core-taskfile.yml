@@ -1,0 +1,60 @@
+# Taskfile Cross-Platform Validation
+#
+# Validates Taskfile works on all major operating systems.
+# Tests includes mechanism and variable expansion.
+# Runs on push to main and PRs to catch issues early.
+
+name: "[Core] Taskfile"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Taskfile.yml'
+      - 'taskfiles/**'
+      - '.github/workflows/core-taskfile.yml'
+  pull_request:
+    paths:
+      - 'Taskfile.yml'
+      - 'taskfiles/**'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.45.5
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build xplat
+        shell: bash
+        run: go build -o xplat ./cmd/xplat
+
+      - name: Validate Taskfile syntax
+        shell: bash
+        run: task --list
+
+      - name: Lint Taskfiles
+        shell: bash
+        run: ./xplat lint
+
+      - name: Check Taskfile formatting
+        shell: bash
+        run: ./xplat fmt --check
+
+      - name: Run ci:taskfile task
+        shell: bash
+        run: task ci:taskfile

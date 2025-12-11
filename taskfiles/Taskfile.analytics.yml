@@ -1,0 +1,80 @@
+# Analytics Tasks
+#
+# Cloudflare Web Analytics reporting via cmd/analytics.
+# Uses xplat binary:install for cross-platform binary management.
+#
+# Usage:
+#   task analytics:report          - Run analytics report
+#   task analytics:report:verbose  - Verbose output
+#   task analytics:check:deps      - Ensure binary is available
+#
+# REQUIRES: xplat (for binary management)
+
+version: '3'
+
+vars:
+  # Version from xplat.env (loaded by root Taskfile dotenv)
+  ANALYTICS_VERSION: '{{.ANALYTICS_VERSION}}'
+  ANALYTICS_REPO: joeblew999/ubuntu-website
+  ANALYTICS_BIN: 'analytics{{exeExt}}'
+  ANALYTICS_CGO: '0'  # No CGO needed - can cross-compile
+  XPLAT_AFFINITY: cross  # Can cross-compile from any platform
+
+tasks:
+  # ===========================================================================
+  # Checks
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure analytics binary is available (builds from source or downloads)
+    # status: provides true idempotency - skips entirely if binary exists
+    status:
+      - test -f "{{.BIN_INSTALL_DIR}}/{{.ANALYTICS_BIN}}"
+    cmds:
+      # toSlash converts backslashes to forward slashes for shell compatibility on Windows
+      - task: :tools:xplat:binary:install
+        vars:
+          CLI_ARGS: 'analytics {{.ANALYTICS_VERSION}} {{.ANALYTICS_REPO}} --source "{{toSlash .ROOT_DIR}}/cmd/analytics"'
+
+  # ===========================================================================
+  # Reports
+  # ===========================================================================
+
+  report:
+    desc: Check analytics and report changes (>20% threshold)
+    deps: [check:deps]
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/analytics{{exeExt}}'
+
+  report:verbose:
+    desc: Check analytics with verbose output
+    deps: [check:deps]
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/analytics{{exeExt}} -v'
+
+  report:webhook:
+    desc: Post analytics changes to webhook (set ANALYTICS_WEBHOOK_URL)
+    deps: [check:deps]
+    cmds:
+      - '{{.BIN_INSTALL_DIR}}/analytics{{exeExt}} -webhook "$ANALYTICS_WEBHOOK_URL"'
+
+  # ===========================================================================
+  # Release (release:* - build for distribution)
+  # ===========================================================================
+
+  release:build:
+    desc: Build analytics for release (current platform, or set GOOS/GOARCH)
+    cmds:
+      - task: :toolchain:golang:build
+        vars:
+          BIN: '{{.ANALYTICS_BIN}}'
+          VERSION: '{{.RELEASE_VERSION | default .ANALYTICS_VERSION}}'
+          SOURCE: '{{.ROOT_DIR}}/cmd/analytics'
+          CGO: '{{.ANALYTICS_CGO}}'
+
+  release:test:
+    desc: Test built analytics release binary
+    cmds:
+      - task: :toolchain:golang:build:test
+        vars:
+          BIN: '{{.ANALYTICS_BIN}}'

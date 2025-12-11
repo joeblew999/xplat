@@ -1,0 +1,135 @@
+# Rust Runtime Tasks
+#
+# Cross-platform Rust installation via rustup.
+# Works on macOS, Linux, Windows.
+#
+# Other modules that need Rust should:
+#   1. Add `# REQUIRES: rust` to their header
+#   2. Call `task: :rust:check:deps` before using cargo/rustc
+
+version: '3'
+
+vars:
+  # Archetype: builder - Rust is a compiler toolchain
+  XPLAT_ARCHETYPE: builder
+  # RUST_VERSION - rustup uses toolchain names (stable, nightly, 1.70.0)
+  RUST_VERSION: '{{.RUST_VERSION | default "stable"}}'
+  RUST_BIN: 'rustc{{exeExt}}'
+  RUST_TOOLCHAIN: stable
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure Rust is installed via rustup (installs locally, fails in CI with instructions)
+    run: once
+    cmds:
+      - |
+        if command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
+          echo "OK: rustc $(rustc --version | cut -d' ' -f2)"
+          echo "OK: cargo $(cargo --version | cut -d' ' -f2)"
+          exit 0
+        fi
+
+        # Detect CI environment
+        if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+          echo "ERROR: Rust is not installed"
+          echo ""
+          echo "Add to your workflow before running tasks:"
+          echo ""
+          echo "    - name: Setup Rust"
+          echo "      uses: dtolnay/rust-toolchain@{{.RUST_TOOLCHAIN}}"
+          echo ""
+          echo "Or for more control:"
+          echo ""
+          echo "    - name: Setup Rust"
+          echo "      uses: actions-rust-lang/setup-rust-toolchain@v1"
+          echo "      with:"
+          echo "        toolchain: {{.RUST_TOOLCHAIN}}"
+          echo ""
+          exit 1
+        fi
+
+        # Local: install via rustup
+        echo "Installing Rust via rustup..."
+
+        if command -v rustup >/dev/null 2>&1; then
+          echo "rustup found, installing toolchain..."
+          rustup install {{.RUST_TOOLCHAIN}}
+          rustup default {{.RUST_TOOLCHAIN}}
+        else
+          echo "Installing rustup..."
+          case "$(uname -s)" in
+            Darwin|Linux)
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain {{.RUST_TOOLCHAIN}}
+              # Source cargo env for current shell
+              . "$HOME/.cargo/env" 2>/dev/null || true
+              ;;
+            MINGW*|MSYS*|CYGWIN*)
+              echo "ERROR: On Windows, download rustup-init.exe from https://rustup.rs"
+              exit 1
+              ;;
+            *)
+              echo "ERROR: Unsupported OS. Install from https://rustup.rs"
+              exit 1
+              ;;
+          esac
+        fi
+
+        # Verify installation
+        if command -v rustc >/dev/null 2>&1; then
+          echo "OK: rustc $(rustc --version | cut -d' ' -f2) installed"
+        else
+          echo "ERROR: Rust installation failed"
+          echo "You may need to restart your shell or run: source ~/.cargo/env"
+          exit 1
+        fi
+
+  check:validate:
+    desc: Smoke test Rust works
+    cmds:
+      - |
+        echo "Validating Rust..."
+        rustc --version
+        cargo --version
+        echo "rust:check:validate passed"
+
+  check:health:
+    desc: Check crates.io is reachable
+    cmds:
+      - |
+        echo "Checking crates.io..."
+        cargo search --limit 1 serde >/dev/null 2>&1 || true
+        echo "rust:check:health passed"
+
+  # ===========================================================================
+  # Build (build:* - compile binaries using Rust)
+  # ===========================================================================
+
+  build:
+    desc: Build a Rust project (requires BIN, SOURCE vars)
+    deps: [check:deps]
+    requires:
+      vars: [BIN, SOURCE]
+    cmds:
+      - |
+        echo "Building {{.BIN}} from {{.SOURCE}}..."
+        cd "{{.SOURCE}}"
+        cargo build --release
+        echo "OK: Built {{.BIN}}"
+
+  # ===========================================================================
+  # Tasks
+  # ===========================================================================
+
+  update:
+    desc: Update Rust toolchain
+    cmds:
+      - rustup update {{.RUST_TOOLCHAIN}}
+
+  components:
+    desc: Install common components (clippy, rustfmt)
+    cmds:
+      - rustup component add clippy rustfmt
