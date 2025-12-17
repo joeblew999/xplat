@@ -66,6 +66,14 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	// P7 (Taskfile testing)
 	rootCmd.AddCommand(cmd.TestCmd)
 
+	// P8 (Package management)
+	rootCmd.AddCommand(cmd.PkgCmd)
+
+	// P9 (Process orchestration)
+	rootCmd.AddCommand(cmd.ProcessCmd)
+	rootCmd.AddCommand(cmd.ProcessGenCmd)
+	rootCmd.AddCommand(cmd.DevCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
