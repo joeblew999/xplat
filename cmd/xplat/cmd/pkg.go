@@ -24,13 +24,18 @@ var PkgCmd = &cobra.Command{
 Each package can include:
 - A CLI binary (installed to ~/.local/bin)
 - A remote Taskfile include (added to your Taskfile.yml)
+- A process configuration (added to process-compose.yaml)
 
 The registry is hosted at https://www.ubuntusoftware.net/pkg/registry.json
+
+For local development/testing, set XPLAT_REGISTRY_URL:
+  export XPLAT_REGISTRY_URL=http://localhost:1313/pkg/registry.json
 
 Examples:
   xplat pkg list                    # List available packages
   xplat pkg info mailerlite         # Show package details
   xplat pkg install mailerlite      # Install binary + add taskfile
+  xplat pkg install mailerlite --with-process  # Also add to process-compose.yaml
   xplat pkg remove mailerlite       # Remove binary + taskfile include`,
 }
 

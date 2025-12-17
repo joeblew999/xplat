@@ -4,11 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
 // DefaultRegistryURL is the default URL for the package registry.
+// This will eventually move to pkg.ubuntusoftware.net when we set up
+// the dedicated subdomain per the domain layout plan.
 const DefaultRegistryURL = "https://www.ubuntusoftware.net/pkg/registry.json"
+
+// Environment variable to override registry URL (for local testing).
+const EnvRegistryURL = "XPLAT_REGISTRY_URL"
 
 // Client provides access to the package registry.
 type Client struct {
@@ -18,9 +24,15 @@ type Client struct {
 }
 
 // NewClient creates a new registry client.
+// Uses XPLAT_REGISTRY_URL environment variable if set, otherwise DefaultRegistryURL.
+// For local Hugo testing: XPLAT_REGISTRY_URL=http://localhost:1313/pkg/registry.json
 func NewClient() *Client {
+	url := DefaultRegistryURL
+	if envURL := os.Getenv(EnvRegistryURL); envURL != "" {
+		url = envURL
+	}
 	return &Client{
-		registryURL: DefaultRegistryURL,
+		registryURL: url,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
