@@ -1,0 +1,77 @@
+# GARAGE - Process Compose Configuration
+#
+# Orchestrates the tiered storage stack:
+#   - pocketbase-ha: Core API + SQLite + NATS (embedded)
+#
+# Usage:
+#   task garage:up       Start with TUI
+#   task garage:down     Stop all
+#
+# Future additions:
+#   - rclone sync worker (local <-> R2 <-> B2)
+#   - archive cron job
+
+version: "0.5"
+
+log_level: info
+log_length: 1000
+
+processes:
+  # ===========================================================================
+  # PocketBase-HA - Core API Server
+  # ===========================================================================
+  pocketbase-ha:
+    command: ./bin/pocketbase-ha serve --http=0.0.0.0:8090 --dir=./pb_data
+    working_dir: .
+    availability:
+      restart: on_failure
+      backoff_seconds: 5
+      max_restarts: 3
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8090
+        path: /api/health
+      initial_delay_seconds: 2
+      period_seconds: 5
+      timeout_seconds: 3
+      failure_threshold: 3
+    shutdown:
+      signal: SIGTERM
+      timeout_seconds: 10
+    environment:
+      # PocketBase-HA NATS configuration (embedded)
+      # Uncomment and configure for multi-node clustering:
+      # PB_NATS_PORT: "4222"
+      # PB_NATS_CLUSTER_NAME: "garage"
+      # PB_NATS_CLUSTER_PORT: "6222"
+      # PB_NATS_ROUTES: "nats://node2:6222,nats://node3:6222"
+
+      # Leader mode: "static" or "leaderless"
+      # PB_LEADER_MODE: "leaderless"
+
+      # For static leader:
+      # PB_LEADER_HOST: "node1:8090"
+      DUMMY: "placeholder"
+
+  # ===========================================================================
+  # Future: rclone Sync Worker
+  # ===========================================================================
+  # rclone-sync:
+  #   command: ./bin/rclone-worker --config=./rclone.conf
+  #   disabled: true
+  #   depends_on:
+  #     pocketbase-ha:
+  #       condition: process_healthy
+  #   availability:
+  #     restart: on_failure
+
+  # ===========================================================================
+  # Future: Archive Cron (R2 -> B2)
+  # ===========================================================================
+  # archive-cron:
+  #   command: ./bin/archive-worker --interval=24h
+  #   disabled: true
+  #   depends_on:
+  #     pocketbase-ha:
+  #       condition: process_healthy

@@ -1,40 +1,21 @@
-# Hugo
-public/
-resources/
-.hugo_build.lock
-hugo_stats.json
-
-# Node/Bun
-node_modules/
-bun.lockb
-package-lock.json
-
-# Go
-.build/
-go.sum
+# Build artifacts
+xplat
+xplat.exe
 *.test
 *.out
-
-# Environment
-.env
-.env.*
-
-# Logs
-logs/
 
 # Task (checksum cache)
 .task/
 
-# Testing
-.playwright-mcp/
+# Generated files (regenerate with: xplat docs all)
+*.generated.yml
+*.generated.yaml
 
-# Via framework
-.via/
-
-# Analytics & monitoring state
-.analytics-state.json
-.sitecheck-state.json
+# Environment (user-specific secrets)
+.env
+.env.local
 
 # IDE & OS
 .vscode/
+.idea/
 .DS_Store

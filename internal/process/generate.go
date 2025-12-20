@@ -33,7 +33,7 @@ type DepCfg struct {
 // ReadinessProbe represents health check configuration.
 type ReadinessProbe struct {
 	HTTPGet        *HTTPGet `yaml:"http_get,omitempty"`
-	InitialDelay   string   `yaml:"initial_delay_seconds,omitempty"`
+	InitialDelay   int      `yaml:"initial_delay_seconds,omitempty"`
 	PeriodSeconds  int      `yaml:"period_seconds,omitempty"`
 	TimeoutSeconds int      `yaml:"timeout_seconds,omitempty"`
 	FailureThresh  int      `yaml:"failure_threshold,omitempty"`
@@ -163,7 +163,7 @@ func (g *Generator) packageToProcess(pkg *registry.Package) Process {
 				Port:   pkg.Process.Port,
 				Path:   pkg.Process.HealthPath,
 			},
-			InitialDelay:   "5s",
+			InitialDelay:   5,
 			PeriodSeconds:  10,
 			TimeoutSeconds: 5,
 			FailureThresh:  3,

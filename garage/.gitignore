@@ -1,0 +1,18 @@
+# GARAGE - gitignore
+#
+# Ignore binaries and data (regenerated on setup)
+
+# Downloaded binaries
+bin/
+
+# PocketBase data directory
+pb_data/
+
+# Tiered storage local cache (Tier 0)
+cache/
+
+# Logs
+*.log
+
+# Environment variables (contains R2/B2 secrets)
+.env

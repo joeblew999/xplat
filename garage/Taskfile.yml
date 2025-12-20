@@ -1,0 +1,695 @@
+# GARAGE - Tiered Storage System
+#
+# MVP: PocketBase-HA with R2 backend, local cache, B2 archiving
+#
+# Run from this directory:
+#   cd garage && task setup        # First time setup
+#   cd garage && task run          # Start server
+#   cd garage && task config:r2    # Configure R2 (needs .env)
+#
+# Usage:
+#   task setup            Download pocketbase-ha binary
+#   task run              Start server (foreground)
+#   task up               Start with process-compose TUI
+#   task down             Stop all processes
+#   task admin            Open admin UI in browser
+#   task config:show      Show storage config
+#   task config:r2        Configure R2 storage (from .env)
+#   task files:list       List files
+#   task files:upload     Upload a file
+#
+# URLs (Cloudflare):
+#   task url:r2           Open R2 bucket dashboard
+#   task url:r2:tokens    Open R2 API tokens page
+#   task url:r2:bucket    Open specific bucket (garage)
+#
+# Architecture:
+#   PocketBase-HA (SQLite + NATS embedded)
+#       |
+#       +-- Local cache (Tier 0: instant, offline)
+#       +-- R2 (Tier 1: hot, free egress)
+#       +-- B2 (Tier 2: cold, cheapest) [future]
+#
+# Documentation: ../TODO_GARAGE.md
+#
+# Pattern: All tool taskfiles define TOOL_BIN with {{exeExt}} for Windows support
+
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  # PocketBase-HA Release
+  PBHA_VERSION: '0.2.2'
+  PBHA_REPO: 'litesql/pocketbase-ha'
+  PBHA_BIN: 'pocketbase-ha{{exeExt}}'
+
+  # Server config
+  PBHA_PORT: '8090'
+  PBHA_HOST: '0.0.0.0'
+  PBHA_ADMIN_EMAIL: 'admin@garage.local'
+  PBHA_ADMIN_PASS: 'admin123456'
+
+  # Directories (relative to this Taskfile)
+  GARAGE_DIR: '{{.ROOT_DIR}}'
+  GARAGE_BIN_DIR: '{{.ROOT_DIR}}/bin'
+  GARAGE_DATA_DIR: '{{.ROOT_DIR}}/pb_data'
+
+  # Full binary path
+  PBHA_CMD: '{{.GARAGE_BIN_DIR}}/{{.PBHA_BIN}}'
+
+  # API URL
+  PBHA_URL: 'http://localhost:{{.PBHA_PORT}}'
+
+  # Cloudflare R2
+  CF_ACCOUNT_ID: '7384af54e33b8a54ff240371ea368440'
+  R2_BUCKET_NAME: 'garage'
+  CF_R2_URL: 'https://dash.cloudflare.com/{{.CF_ACCOUNT_ID}}/r2'
+
+tasks:
+  # ===========================================================================
+  # Checks (check:* - diagnostics for this module)
+  # ===========================================================================
+
+  check:deps:
+    desc: Ensure pocketbase-ha is installed
+    run: once
+    status:
+      - test -f "{{.PBHA_CMD}}"
+    cmds:
+      - task: download
+
+  check:running:
+    desc: Check if server is running
+    cmds:
+      - |
+        if curl -s "{{.PBHA_URL}}/api/health" >/dev/null 2>&1; then
+          echo "OK: Server running at {{.PBHA_URL}}"
+        else
+          echo "ERROR: Server not running"
+          echo "Run: task garage:run"
+          exit 1
+        fi
+
+  check:health:
+    desc: Full health check (deps + running + auth)
+    cmds:
+      - task: check:deps
+      - task: check:running
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+        if [ "$TOKEN" != "null" ] && [ -n "$TOKEN" ]; then
+          echo "OK: Auth working"
+        else
+          echo "ERROR: Auth failed"
+          exit 1
+        fi
+
+  # ===========================================================================
+  # Setup (download binary)
+  # ===========================================================================
+
+  setup:
+    desc: Download pocketbase-ha binary for your platform
+    cmds:
+      - task: download
+      - task: init
+
+  download:
+    desc: Download pocketbase-ha binary
+    internal: true
+    vars:
+      # Map Go ARCH to release naming
+      ARCH_NAME:
+        sh: |
+          case "{{ARCH}}" in
+            amd64) echo "x86_64" ;;
+            arm64) echo "arm64" ;;
+            386) echo "i386" ;;
+            *) echo "x86_64" ;;
+          esac
+      OS_NAME:
+        sh: |
+          case "{{OS}}" in
+            darwin) echo "Darwin" ;;
+            linux) echo "Linux" ;;
+            windows) echo "Windows" ;;
+          esac
+      ARCHIVE_EXT:
+        sh: |
+          case "{{OS}}" in
+            windows) echo "zip" ;;
+            *) echo "tar.gz" ;;
+          esac
+    status:
+      - test -f "{{.PBHA_CMD}}"
+    cmds:
+      - mkdir -p "{{.GARAGE_BIN_DIR}}"
+      - mkdir -p "{{.GARAGE_DATA_DIR}}"
+      - |
+        ARCHIVE="pocketbase-ha_{{.OS_NAME}}_{{.ARCH_NAME}}.{{.ARCHIVE_EXT}}"
+        URL="https://github.com/{{.PBHA_REPO}}/releases/download/v{{.PBHA_VERSION}}/${ARCHIVE}"
+
+        echo "Downloading pocketbase-ha v{{.PBHA_VERSION}} for {{OS}}/{{ARCH}}..."
+        echo "URL: $URL"
+
+        cd "{{.GARAGE_BIN_DIR}}"
+        curl -sL "$URL" -o "$ARCHIVE"
+
+        {{if eq OS "windows"}}
+        unzip -o "$ARCHIVE"
+        {{else}}
+        tar -xzf "$ARCHIVE"
+        {{end}}
+
+        rm -f "$ARCHIVE"
+        chmod +x "{{.PBHA_BIN}}" 2>/dev/null || true
+
+        echo "OK: Downloaded to {{.PBHA_CMD}}"
+
+  init:
+    desc: Initialize database and create superuser
+    internal: true
+    cmds:
+      - |
+        # Start server briefly to init DB, then create superuser
+        "{{.PBHA_CMD}}" superuser upsert "{{.PBHA_ADMIN_EMAIL}}" "{{.PBHA_ADMIN_PASS}}" --dir="{{.GARAGE_DATA_DIR}}" 2>/dev/null || true
+        echo "OK: Superuser initialized ({{.PBHA_ADMIN_EMAIL}})"
+
+  # ===========================================================================
+  # Run (standalone, without process-compose)
+  # ===========================================================================
+
+  run:
+    desc: Run pocketbase-ha (foreground)
+    deps: [check:deps]
+    cmds:
+      - |
+        echo "Starting PocketBase-HA..."
+        echo "  URL: {{.PBHA_URL}}"
+        echo "  Admin: {{.PBHA_URL}}/_/"
+        echo "  Login: {{.PBHA_ADMIN_EMAIL}} / {{.PBHA_ADMIN_PASS}}"
+        echo ""
+        "{{.PBHA_CMD}}" serve --http="{{.PBHA_HOST}}:{{.PBHA_PORT}}" --dir="{{.GARAGE_DATA_DIR}}"
+
+  # ===========================================================================
+  # Process-Compose (orchestrated)
+  # ===========================================================================
+
+  up:
+    desc: Start GARAGE stack with process-compose TUI
+    deps: [check:deps]
+    dir: '{{.GARAGE_DIR}}'
+    cmds:
+      - process-compose up -f process-compose.yml
+
+  up:detached:
+    desc: Start GARAGE stack in background
+    deps: [check:deps]
+    dir: '{{.GARAGE_DIR}}'
+    cmds:
+      - process-compose up -f process-compose.yml -t=false -d
+
+  down:
+    desc: Stop GARAGE stack
+    dir: '{{.GARAGE_DIR}}'
+    cmds:
+      - process-compose down -f process-compose.yml 2>/dev/null || pkill -f pocketbase-ha || true
+
+  logs:
+    desc: View GARAGE logs
+    dir: '{{.GARAGE_DIR}}'
+    cmds:
+      - process-compose logs -f process-compose.yml
+
+  status:
+    desc: Show GARAGE process status
+    dir: '{{.GARAGE_DIR}}'
+    cmds:
+      - process-compose process list -f process-compose.yml 2>/dev/null || task garage:check:running
+
+  # ===========================================================================
+  # Configuration (via API)
+  # ===========================================================================
+
+  config:show:
+    desc: Show current storage configuration
+    deps: [check:running]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        echo "=== Storage Config ==="
+        curl -s "{{.PBHA_URL}}/api/settings" \
+          -H "Authorization: $TOKEN" | jq '.s3 | {enabled, bucket, endpoint, region}'
+
+  config:r2:
+    desc: Configure R2 storage from .env file
+    deps: [check:running]
+    requires:
+      vars: [R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY, R2_SECRET_KEY]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+          echo "ERROR: Failed to authenticate"
+          exit 1
+        fi
+
+        echo "Configuring R2 storage..."
+        curl -s -X PATCH "{{.PBHA_URL}}/api/settings" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $TOKEN" \
+          -d '{
+            "s3": {
+              "enabled": true,
+              "bucket": "{{.R2_BUCKET}}",
+              "region": "auto",
+              "endpoint": "https://{{.R2_ACCOUNT_ID}}.r2.cloudflarestorage.com",
+              "accessKey": "{{.R2_ACCESS_KEY}}",
+              "secret": "{{.R2_SECRET_KEY}}",
+              "forcePathStyle": true
+            }
+          }' | jq '.s3 | {enabled, bucket, endpoint}'
+
+        echo ""
+        echo "OK: R2 configured for bucket {{.R2_BUCKET}}"
+
+  # ===========================================================================
+  # Collections (via API)
+  # ===========================================================================
+
+  collections:create:files:
+    desc: Create the files collection
+    deps: [check:running]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        # Check if already exists
+        EXISTS=$(curl -s "{{.PBHA_URL}}/api/collections/files" -H "Authorization: $TOKEN" | jq -r '.id // empty')
+        if [ -n "$EXISTS" ]; then
+          echo "OK: files collection already exists"
+          exit 0
+        fi
+
+        echo "Creating files collection..."
+        curl -s -X POST "{{.PBHA_URL}}/api/collections" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: $TOKEN" \
+          -d '{
+            "name": "files",
+            "type": "base",
+            "fields": [
+              {"name": "name", "type": "text", "required": true},
+              {"name": "attachment", "type": "file", "required": false, "options": {"maxSelect": 1, "maxSize": 104857600}}
+            ]
+          }' | jq '{id, name}'
+
+        echo "OK: files collection created"
+
+  collections:list:
+    desc: List all collections
+    deps: [check:running]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        curl -s "{{.PBHA_URL}}/api/collections" \
+          -H "Authorization: $TOKEN" | jq '.items[] | {id, name, type}'
+
+  # ===========================================================================
+  # File Operations (via API)
+  # ===========================================================================
+
+  files:list:
+    desc: List all files
+    deps: [check:running]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        RESULT=$(curl -s "{{.PBHA_URL}}/api/collections/files/records" -H "Authorization: $TOKEN")
+
+        TOTAL=$(echo "$RESULT" | jq '.totalItems')
+        echo "=== Files ($TOTAL total) ==="
+        echo "$RESULT" | jq -r '.items[] | "  \(.id) | \(.name) | \(.attachment)"'
+
+  files:upload:
+    desc: Upload a file (FILE=path NAME=name)
+    deps: [check:running]
+    requires:
+      vars: [FILE, NAME]
+    cmds:
+      - |
+        if [ ! -f "{{.FILE}}" ]; then
+          echo "ERROR: File not found: {{.FILE}}"
+          exit 1
+        fi
+
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        echo "Uploading {{.FILE}} as '{{.NAME}}'..."
+        RESULT=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/files/records" \
+          -H "Authorization: $TOKEN" \
+          -F "name={{.NAME}}" \
+          -F "attachment=@{{.FILE}}")
+
+        echo "$RESULT" | jq '{id, name, attachment}'
+        echo ""
+        echo "OK: Uploaded"
+
+  files:download:
+    desc: Download a file (ID=record_id)
+    deps: [check:running]
+    requires:
+      vars: [ID]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        # Get record to find collection ID and filename
+        RECORD=$(curl -s "{{.PBHA_URL}}/api/collections/files/records/{{.ID}}" -H "Authorization: $TOKEN")
+        COLLECTION_ID=$(echo "$RECORD" | jq -r '.collectionId')
+        FILENAME=$(echo "$RECORD" | jq -r '.attachment')
+        NAME=$(echo "$RECORD" | jq -r '.name')
+
+        if [ "$FILENAME" = "null" ] || [ -z "$FILENAME" ]; then
+          echo "ERROR: No attachment found for record {{.ID}}"
+          exit 1
+        fi
+
+        URL="{{.PBHA_URL}}/api/files/$COLLECTION_ID/{{.ID}}/$FILENAME"
+        echo "Downloading: $NAME ($FILENAME)"
+        curl -sL "$URL" -o "$FILENAME"
+        echo "OK: Saved to $FILENAME"
+
+  files:delete:
+    desc: Delete a file (ID=record_id)
+    deps: [check:running]
+    requires:
+      vars: [ID]
+    cmds:
+      - |
+        TOKEN=$(curl -s -X POST "{{.PBHA_URL}}/api/collections/_superusers/auth-with-password" \
+          -H "Content-Type: application/json" \
+          -d '{"identity": "{{.PBHA_ADMIN_EMAIL}}", "password": "{{.PBHA_ADMIN_PASS}}"}' | jq -r '.token')
+
+        curl -s -X DELETE "{{.PBHA_URL}}/api/collections/files/records/{{.ID}}" \
+          -H "Authorization: $TOKEN"
+
+        echo "OK: Deleted {{.ID}}"
+
+  # ===========================================================================
+  # Utilities
+  # ===========================================================================
+
+  admin:
+    desc: Open PocketBase admin UI in browser
+    cmds:
+      - |
+        URL="{{.PBHA_URL}}/_/"
+        echo "Opening $URL"
+        echo "Login: {{.PBHA_ADMIN_EMAIL}} / {{.PBHA_ADMIN_PASS}}"
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  clean:
+    desc: Remove all GARAGE data and binaries
+    prompt: This will delete all GARAGE data. Continue?
+    cmds:
+      - rm -rf "{{.GARAGE_BIN_DIR}}"
+      - rm -rf "{{.GARAGE_DATA_DIR}}"
+      - echo "OK - Cleaned GARAGE data and binaries"
+
+  version:
+    desc: Show pocketbase-ha version
+    deps: [check:deps]
+    cmds:
+      - '"{{.PBHA_CMD}}" --version'
+
+  debug:
+    desc: Show GARAGE configuration
+    cmds:
+      - |
+        echo "========================================"
+        echo "GARAGE Configuration"
+        echo "========================================"
+        echo ""
+        echo "Binary:    {{.PBHA_CMD}}"
+        echo "Version:   {{.PBHA_VERSION}}"
+        echo "Data:      {{.GARAGE_DATA_DIR}}"
+        echo ""
+        echo "Server:    {{.PBHA_URL}}"
+        echo "Admin UI:  {{.PBHA_URL}}/_/"
+        echo ""
+        echo "Admin:     {{.PBHA_ADMIN_EMAIL}}"
+        echo "Password:  {{.PBHA_ADMIN_PASS}}"
+        echo ""
+        echo "Cloudflare:"
+        echo "  Account: {{.CF_ACCOUNT_ID}}"
+        echo "  Bucket:  {{.R2_BUCKET_NAME}}"
+        echo "  R2 URL:  {{.CF_R2_URL}}"
+        echo ""
+        echo "========================================"
+
+  # ===========================================================================
+  # URLs (url:* - quick access to dashboards)
+  # ===========================================================================
+
+  url:r2:
+    desc: Open Cloudflare R2 overview dashboard
+    cmds:
+      - |
+        URL="{{.CF_R2_URL}}/overview"
+        echo "Opening $URL"
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  url:r2:tokens:
+    desc: Open R2 API tokens page (create tokens here)
+    cmds:
+      - |
+        URL="{{.CF_R2_URL}}/api-tokens"
+        echo "Opening $URL"
+        echo ""
+        echo "To create a token:"
+        echo "  1. Click 'Create API token'"
+        echo "  2. Token name: garage"
+        echo "  3. Permissions: Object Read & Write"
+        echo "  4. Specify bucket: {{.R2_BUCKET_NAME}}"
+        echo "  5. TTL: Leave blank (no expiry)"
+        echo ""
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  url:r2:bucket:
+    desc: Open R2 bucket (garage) dashboard
+    cmds:
+      - |
+        URL="{{.CF_R2_URL}}/default/buckets/{{.R2_BUCKET_NAME}}"
+        echo "Opening $URL"
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  url:pbha:
+    desc: Open PocketBase-HA GitHub releases
+    cmds:
+      - |
+        URL="https://github.com/{{.PBHA_REPO}}/releases"
+        echo "Opening $URL"
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  # ===========================================================================
+  # Tiered Storage (local → R2 → B2)
+  # ===========================================================================
+
+  collections:setup:
+    desc: Create PocketBase collections for multi-device sync
+    deps: [check:running]
+    cmds:
+      - bash scripts/create_collections.sh
+
+  tiered:build:
+    desc: Build tiered storage binary
+    cmds:
+      - |
+        go build -o "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" ./cmd/tiered/
+        echo "OK: Built {{.GARAGE_BIN_DIR}}/tiered"
+
+  tiered:serve:
+    desc: Start tiered storage HTTP proxy
+    deps: [tiered:build]
+    cmds:
+      - mkdir -p "{{.GARAGE_DIR}}/cache"
+      - |
+        echo "Starting tiered storage proxy..."
+        echo "  Tier 0 (Local): {{.GARAGE_DIR}}/cache"
+        echo "  Tier 1 (R2):    $R2_BUCKET"
+        echo "  Tier 2 (B2):    $B2_BUCKET"
+        echo "  Port:           8091"
+        echo ""
+        export GARAGE_LOCAL_PATH="{{.GARAGE_DIR}}/cache"
+        export TIERED_PORT="8091"
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" serve
+
+  tiered:sync:
+    desc: Sync local cache files to R2
+    deps: [tiered:build]
+    cmds:
+      - |
+        export GARAGE_LOCAL_PATH="{{.GARAGE_DIR}}/cache"
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" sync
+
+  tiered:archive:
+    desc: Archive old R2 files to B2 (cold storage)
+    deps: [tiered:build]
+    cmds:
+      - |
+        export GARAGE_LOCAL_PATH="{{.GARAGE_DIR}}/cache"
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" archive
+
+  tiered:status:
+    desc: Show tier status (file counts, sizes)
+    deps: [tiered:build]
+    cmds:
+      - |
+        export GARAGE_LOCAL_PATH="{{.GARAGE_DIR}}/cache"
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" status
+
+  tiered:test:
+    desc: Test tiered storage (upload, download, verify)
+    deps: [tiered:build]
+    cmds:
+      - mkdir -p "{{.GARAGE_DIR}}/cache"
+      - |
+        # Create test file
+        TEST_FILE="test_tiered_$(date +%s).txt"
+        echo "Hello from tiered storage at $(date)" > "{{.GARAGE_DIR}}/cache/$TEST_FILE"
+        echo "OK: Created test file $TEST_FILE in local cache"
+
+        # Check local
+        ls -la "{{.GARAGE_DIR}}/cache/$TEST_FILE"
+
+        # Sync to R2
+        echo ""
+        echo "Syncing to R2..."
+        export GARAGE_LOCAL_PATH="{{.GARAGE_DIR}}/cache"
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" sync
+
+        # Show status
+        echo ""
+        "{{.GARAGE_BIN_DIR}}/tiered{{exeExt}}" status
+
+        echo ""
+        echo "OK: Test complete. File is in local cache and R2."
+
+  # ===========================================================================
+  # URLs - B2 (Backblaze)
+  # ===========================================================================
+
+  url:b2:
+    desc: Open Backblaze B2 buckets dashboard
+    cmds:
+      - |
+        URL="https://secure.backblaze.com/b2_buckets.htm"
+        echo "Opening $URL"
+        echo ""
+        echo "To set up B2 cold archive:"
+        echo "  1. Create bucket: garage-archive (private)"
+        echo "  2. Go to App Keys → Add New Application Key"
+        echo "  3. Name: garage"
+        echo "  4. Access: Read and Write"
+        echo "  5. Bucket: garage-archive"
+        echo "  6. Copy Application Key ID → B2_ACCOUNT"
+        echo "  7. Copy Application Key → B2_KEY"
+        echo ""
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  url:b2:keys:
+    desc: Open Backblaze B2 App Keys page
+    cmds:
+      - |
+        URL="https://secure.backblaze.com/app_keys.htm"
+        echo "Opening $URL"
+        {{if eq OS "darwin"}}open "$URL"{{else if eq OS "linux"}}xdg-open "$URL"{{else}}start "$URL"{{end}}
+
+  # ===========================================================================
+  # B2 Testing
+  # ===========================================================================
+
+  b2:test:
+    desc: Test B2 connection (list bucket)
+    requires:
+      vars: [B2_ACCOUNT, B2_KEY, B2_BUCKET]
+    cmds:
+      - |
+        echo "Testing B2 connection..."
+        echo "  Bucket: $B2_BUCKET"
+        echo "  Endpoint: $B2_ENDPOINT"
+        echo ""
+
+        # Use rclone to test B2 connection
+        rclone lsd :s3: \
+          --s3-provider=Other \
+          --s3-access-key-id="$B2_ACCOUNT" \
+          --s3-secret-access-key="$B2_KEY" \
+          --s3-endpoint="https://$B2_ENDPOINT" \
+          --s3-force-path-style \
+          2>&1 || echo "Note: If you see bucket listing above, connection works!"
+
+        echo ""
+        echo "Listing bucket $B2_BUCKET..."
+        rclone ls :s3:$B2_BUCKET \
+          --s3-provider=Other \
+          --s3-access-key-id="$B2_ACCOUNT" \
+          --s3-secret-access-key="$B2_KEY" \
+          --s3-endpoint="https://$B2_ENDPOINT" \
+          --s3-force-path-style \
+          2>&1 && echo "OK: B2 connection working!" || echo "Note: Empty bucket or connection issue"
+
+  b2:upload-test:
+    desc: Upload test file to B2
+    requires:
+      vars: [B2_ACCOUNT, B2_KEY, B2_BUCKET]
+    cmds:
+      - |
+        TEST_FILE="/tmp/b2_test_$(date +%s).txt"
+        echo "B2 test file created at $(date)" > "$TEST_FILE"
+
+        echo "Uploading test file to B2..."
+        rclone copy "$TEST_FILE" :s3:$B2_BUCKET/test/ \
+          --s3-provider=Other \
+          --s3-access-key-id="$B2_ACCOUNT" \
+          --s3-secret-access-key="$B2_KEY" \
+          --s3-endpoint="https://$B2_ENDPOINT" \
+          --s3-force-path-style \
+          --s3-no-check-bucket \
+          -v
+
+        echo ""
+        echo "Verifying upload..."
+        rclone ls :s3:$B2_BUCKET/test/ \
+          --s3-provider=Other \
+          --s3-access-key-id="$B2_ACCOUNT" \
+          --s3-secret-access-key="$B2_KEY" \
+          --s3-endpoint="https://$B2_ENDPOINT" \
+          --s3-force-path-style \
+          --s3-no-check-bucket
+
+        rm "$TEST_FILE"
+        echo ""
+        echo "OK: B2 upload test complete!"

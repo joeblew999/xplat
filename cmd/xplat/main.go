@@ -74,6 +74,9 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	rootCmd.AddCommand(cmd.ProcessGenCmd)
 	rootCmd.AddCommand(cmd.DevCmd)
 
+	// P10 (Documentation generation)
+	rootCmd.AddCommand(cmd.DocsCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
