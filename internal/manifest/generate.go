@@ -325,21 +325,16 @@ jobs:
           echo "$env:USERPROFILE\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
           & "$env:USERPROFILE\bin\xplat.exe" version
 
-      - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-
-      # All CI logic is in Taskfile - same commands work locally
-      # Taskfile can use xplat for cross-platform operations
+      # All CI logic is in Taskfile - xplat task runs embedded Task
+      # Same commands work locally: xplat task build
       - name: Build
-        run: task build
+        run: xplat task build
 
       - name: Test
-        run: task test
+        run: xplat task test
 
       - name: Lint
-        run: task lint
+        run: xplat task lint
         continue-on-error: true
 `
 
