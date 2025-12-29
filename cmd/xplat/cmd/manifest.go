@@ -535,127 +535,25 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	manifestPath := filepath.Join(path, "xplat.yaml")
-
-	// Check if manifest already exists
-	if _, err := os.Stat(manifestPath); err == nil && !manifestForce {
-		return fmt.Errorf("xplat.yaml already exists (use --force to overwrite)")
+	opts := manifest.InitOptions{
+		Force: manifestForce,
 	}
 
-	// Detect project info
-	name := filepath.Base(path)
-	if path == "." {
-		if wd, err := os.Getwd(); err == nil {
-			name = filepath.Base(wd)
-		}
-	}
-
-	// Build manifest content
-	var content string
-	content = "# xplat.yaml - Package manifest for xplat ecosystem\n"
-	content += "apiVersion: xplat/v1\n"
-	content += "kind: Package\n\n"
-	content += fmt.Sprintf("name: %s\n", name)
-	content += "version: main\n"
-	content += fmt.Sprintf("description: %s package\n", name)
-	content += "author: \n"
-	content += "license: MIT\n"
-
-	// Detect go.mod for binary config
-	goModPath := filepath.Join(path, "go.mod")
-	if _, err := os.Stat(goModPath); err == nil {
-		moduleName := detectGoModule(goModPath)
-		if moduleName != "" {
-			content += "\n# Binary (detected from go.mod)\n"
-			content += "binary:\n"
-			content += fmt.Sprintf("  name: %s\n", name)
-			content += "  source:\n"
-			content += fmt.Sprintf("    go: %s\n", moduleName)
-			fmt.Printf("  Detected go.mod: %s\n", moduleName)
-		}
-	}
-
-	// Detect Taskfile.yml
-	taskfilePath := filepath.Join(path, "Taskfile.yml")
-	if _, err := os.Stat(taskfilePath); err == nil {
-		content += "\n# Taskfile (detected)\n"
-		content += "taskfile:\n"
-		content += "  path: Taskfile.yml\n"
-		content += fmt.Sprintf("  namespace: %s\n", name)
-		fmt.Printf("  Detected Taskfile.yml\n")
-	}
-
-	// Check for taskfiles/ directory
-	taskfilesDir := filepath.Join(path, "taskfiles")
-	if info, err := os.Stat(taskfilesDir); err == nil && info.IsDir() {
-		// Look for Taskfile-*.yml pattern
-		files, _ := filepath.Glob(filepath.Join(taskfilesDir, "Taskfile-*.yml"))
-		if len(files) > 0 {
-			taskfileName := filepath.Base(files[0])
-			content += "\n# Taskfile (detected in taskfiles/)\n"
-			content += "taskfile:\n"
-			content += fmt.Sprintf("  path: taskfiles/%s\n", taskfileName)
-			content += fmt.Sprintf("  namespace: %s\n", name)
-			fmt.Printf("  Detected taskfiles/%s\n", taskfileName)
-		}
-	}
-
-	// Add placeholder sections
-	content += "\n# Uncomment to define processes for process-compose\n"
-	content += "# processes:\n"
-	content += "#   server:\n"
-	content += "#     command: task run\n"
-	content += "#     port: 8080\n"
-
-	content += "\n# Uncomment to define environment variables\n"
-	content += "# env:\n"
-	content += "#   required:\n"
-	content += "#     - name: API_KEY\n"
-	content += "#       description: API key for the service\n"
-
-	// Write the manifest
-	if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write manifest: %w", err)
-	}
-
-	fmt.Printf("Created %s\n", manifestPath)
-	return nil
-}
-
-// detectGoModule reads go.mod and extracts the module name.
-func detectGoModule(goModPath string) string {
-	data, err := os.ReadFile(goModPath)
+	result, err := manifest.Init(path, opts)
 	if err != nil {
-		return ""
+		return err
 	}
 
-	// Simple parsing - look for "module" line
-	for _, line := range splitLines(string(data)) {
-		if len(line) > 7 && line[:7] == "module " {
-			return line[7:]
-		}
+	// Print what was detected
+	if result.DetectedGo {
+		fmt.Printf("  Detected go.mod: %s\n", result.GoModule)
 	}
-	return ""
-}
+	if result.DetectedTask {
+		fmt.Printf("  Detected %s\n", result.TaskfilePath)
+	}
 
-// CheckResult holds the result of a manifest check.
-type CheckResult struct {
-	Name     string
-	Path     string
-	Errors   []string
-	Warnings []string
-}
-
-func (r *CheckResult) AddError(msg string) {
-	r.Errors = append(r.Errors, msg)
-}
-
-func (r *CheckResult) AddWarning(msg string) {
-	r.Warnings = append(r.Warnings, msg)
-}
-
-func (r *CheckResult) IsValid() bool {
-	return len(r.Errors) == 0
+	fmt.Printf("Created %s\n", result.Path)
+	return nil
 }
 
 func runManifestCheck(cmd *cobra.Command, args []string) error {
@@ -673,33 +571,19 @@ func runManifestCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	loader := manifest.NewLoader()
-	var results []CheckResult
+	var results []manifest.CheckResult
 
 	if checkAll {
-		// Discover and check all plat-* repos
-		manifests, err := loader.DiscoverPlat(path)
+		// Use internal CheckAll
+		var err error
+		results, err = manifest.CheckAll(loader, path)
 		if err != nil {
 			return err
 		}
 
-		if len(manifests) == 0 {
+		if len(results) == 0 {
 			fmt.Println("No manifests found in plat-* directories")
 			return nil
-		}
-
-		// We need to find the actual paths for each manifest
-		entries, _ := os.ReadDir(path)
-		for _, entry := range entries {
-			if !entry.IsDir() || !hasPrefix(entry.Name(), "plat-") {
-				continue
-			}
-			repoPath := filepath.Join(path, entry.Name())
-			m, err := loader.LoadDir(repoPath)
-			if err != nil {
-				continue
-			}
-			result := checkManifest(m, repoPath)
-			results = append(results, result)
 		}
 	} else {
 		// Check single path
@@ -722,7 +606,7 @@ func runManifestCheck(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		result := checkManifest(m, repoPath)
+		result := manifest.Check(m, repoPath)
 		results = append(results, result)
 	}
 
@@ -751,75 +635,4 @@ func runManifestCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("validation failed")
 	}
 	return nil
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func checkManifest(m *manifest.Manifest, repoPath string) CheckResult {
-	result := CheckResult{
-		Name: m.Name,
-		Path: repoPath,
-	}
-
-	// Check taskfile.path exists
-	if m.Taskfile != nil && m.Taskfile.Path != "" {
-		taskfilePath := filepath.Join(repoPath, m.Taskfile.Path)
-		if _, err := os.Stat(taskfilePath); os.IsNotExist(err) {
-			result.AddError(fmt.Sprintf("taskfile.path '%s' does not exist", m.Taskfile.Path))
-		}
-	}
-
-	// Check binary.source.go has go.mod
-	if m.Binary != nil && m.Binary.Source != nil && m.Binary.Source.Go != "" {
-		goModPath := filepath.Join(repoPath, "go.mod")
-		if _, err := os.Stat(goModPath); os.IsNotExist(err) {
-			result.AddError("binary.source.go is set but go.mod does not exist")
-		}
-	}
-
-	// Check processes reference task commands (warning only)
-	if len(m.Processes) > 0 {
-		// Check if Taskfile exists for task commands
-		hasTaskfile := false
-		if m.Taskfile != nil && m.Taskfile.Path != "" {
-			taskfilePath := filepath.Join(repoPath, m.Taskfile.Path)
-			if _, err := os.Stat(taskfilePath); err == nil {
-				hasTaskfile = true
-			}
-		} else {
-			// Check for root Taskfile.yml
-			if _, err := os.Stat(filepath.Join(repoPath, "Taskfile.yml")); err == nil {
-				hasTaskfile = true
-			}
-		}
-
-		for name, proc := range m.Processes {
-			if hasPrefix(proc.Command, "task ") && !hasTaskfile {
-				result.AddWarning(fmt.Sprintf("process '%s' uses task command but no Taskfile found", name))
-			}
-		}
-	}
-
-	// Check required env vars have descriptions
-	if m.Env != nil {
-		for _, v := range m.Env.Required {
-			if v.Description == "" {
-				result.AddWarning(fmt.Sprintf("required env var '%s' has no description", v.Name))
-			}
-		}
-	}
-
-	// Warn if no description
-	if m.Description == "" {
-		result.AddWarning("missing description")
-	}
-
-	// Warn if no author
-	if m.Author == "" {
-		result.AddWarning("missing author")
-	}
-
-	return result
 }
