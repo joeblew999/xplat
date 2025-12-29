@@ -237,6 +237,20 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		}
 	}
 
+	// Inject PLAT_* environment variables for plat-* directory convention
+	// This gives all plat-* projects automatic access to standard paths
+	// without requiring any Taskfile includes
+	workDir := dir
+	if workDir == "" {
+		workDir, _ = os.Getwd()
+	}
+	if workDir != "" {
+		os.Setenv("PLAT_SRC", filepath.Join(workDir, ".src"))
+		os.Setenv("PLAT_BIN", filepath.Join(workDir, ".bin"))
+		os.Setenv("PLAT_DATA", filepath.Join(workDir, ".data"))
+		os.Setenv("PLAT_DIST", filepath.Join(workDir, ".dist"))
+	}
+
 	// Create and configure the Executor
 	// Note: We can't use flags.WithFlags() since it's in an internal package,
 	// so we set the Executor fields directly after creation.

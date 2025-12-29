@@ -141,25 +141,34 @@ plat-example/
 
 ### Features
 
+- **Automatic env vars**: `xplat task` injects `PLAT_SRC`, `PLAT_BIN`, `PLAT_DATA`, `PLAT_DIST`
 - **Automatic gitignore**: `xplat manifest gen-gitignore` includes `**/.src/`, `**/.bin/`, `**/.data/`
-- **Shared Taskfile**: Include `Taskfile.plat.yml` for standard tasks and variables
 - **Manifest support**: Add project-specific gitignore patterns via `xplat.yaml`
 
 ### Usage in plat-* repos
 
-```yaml
-# Taskfile.yml - include standard plat conventions
-includes:
-  plat:
-    taskfile: https://github.com/joeblew999/xplat.git//taskfiles/Taskfile.plat.yml
-    optional: true
+When running tasks via `xplat task`, these environment variables are automatically available:
 
-# Use standard variables in subsystem Taskfiles
-vars:
-  NATS_SRC: '{{.PLAT_SRC}}'   # → .src/
-  NATS_BIN: '{{.PLAT_BIN}}'   # → .bin/
-  NATS_DATA: '{{.PLAT_DATA}}' # → .data/
+```yaml
+# Taskfile.yml - just use the env vars directly!
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - mkdir -p $PLAT_BIN
+      - go build -o $PLAT_BIN/mybinary ./cmd/main
+
+  clone:
+    cmds:
+      - git clone https://github.com/example/repo $PLAT_SRC
+
+  run:
+    cmds:
+      - $PLAT_BIN/mybinary --data-dir $PLAT_DATA
 ```
+
+No Taskfile includes needed - `xplat task` provides these automatically.
 
 ### Manifest gitignore
 
