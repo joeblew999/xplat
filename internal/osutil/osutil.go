@@ -1,12 +1,20 @@
-// Package osutil provides cross-platform file system utilities.
+// Package osutil provides cross-platform file system utilities for CLI commands.
 //
-// These utilities work identically on macOS, Linux, and Windows,
-// handling platform-specific edge cases like path separators,
-// permissions, and missing Unix commands on Windows.
+// IMPORTANT: This package is designed ONLY for use by CLI commands in cmd/xplat/cmd/.
+// These commands are called from Taskfiles to provide Unix-like utilities on Windows
+// where commands like "mkdir -p", "rm -rf", "touch", etc. don't exist natively.
 //
-// CLI commands in cmd/xplat/cmd/ are thin wrappers around these functions.
-// Internal packages should use these functions instead of raw os.* calls
-// when cross-platform consistency is important.
+// DO NOT use this package in other internal packages! Go's standard library (os.Stat,
+// os.MkdirAll, os.Remove, etc.) already works cross-platform. This package exists
+// solely to provide shell-command-like behavior for Taskfile compatibility.
+//
+// Example Taskfile usage:
+//
+//	tasks:
+//	  clean:
+//	    cmds:
+//	      - xplat rm -rf dist/    # Works on Windows, macOS, Linux
+//	      - xplat mkdir -p build/ # Works on Windows, macOS, Linux
 package osutil
 
 import (
