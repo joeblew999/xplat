@@ -58,9 +58,30 @@ These packages currently live in ubuntu-website and should move to plat-* repos:
 - [ ] google-mcp-server → (already separate repo)
 - [ ] cli → plat-cli (shared CLI framework)
 
+## Next Up
+
+### 1. `xplat manifest init` (DONE)
+- [x] Interactive scaffolding for new xplat.yaml
+- [x] Detect existing Taskfile.yml and suggest taskfile config
+- [x] Detect go.mod and suggest binary config
+- [x] Generate minimal valid manifest
+
+### 2. GARAGE Project (plat-garage)
+- [ ] Create plat-garage repo
+- [ ] PocketBase-HA (hot tier)
+- [ ] R2 integration (warm tier)
+- [ ] B2 integration (cold tier)
+- [ ] Tiered storage policies
+- [ ] Add xplat.yaml manifest
+
+### 3. Clean Up ubuntu-website
+- [ ] mailerlite → plat-mailerlite
+- [ ] google → plat-google
+- [ ] cli → plat-cli (shared CLI framework)
+- [ ] Remove deprecated Hugo registry code
+
 ## Future Enhancements
 
-- [ ] `xplat manifest init` - scaffold new xplat.yaml
 - [ ] Caching for GitHub discovery (avoid rate limits)
 - [ ] Support for private repos (GitHub token)
 - [ ] Dependency resolution between packages
