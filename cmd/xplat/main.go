@@ -45,6 +45,7 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	rootCmd.AddCommand(cmd.EnvCmd)
 	rootCmd.AddCommand(cmd.JqCmd)
 	rootCmd.AddCommand(cmd.VersionFileCmd)
+	rootCmd.AddCommand(cmd.GitCmd)
 
 	// P3 (binary management)
 	rootCmd.AddCommand(cmd.BinaryCmd)

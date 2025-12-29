@@ -219,6 +219,31 @@ xplat version-file -f VERSION -s 2.0  # Write 2.0 to VERSION file
 
 ---
 
+### 1b. Git Operations (no git binary required) → OS Utility
+
+**STATUS: DONE**
+
+Added `os_git.go` with git operations using go-git - no git binary needed on the system.
+
+```bash
+xplat git clone https://github.com/user/repo .src        # Clone (shallow)
+xplat git clone https://github.com/user/repo .src v1.0.0 # Clone at tag
+xplat git pull .src                                      # Pull updates
+xplat git checkout .src v2.0.0                           # Checkout ref
+xplat git hash .src                                      # Get commit hash
+xplat git hash --full .src                               # Get full hash
+xplat git tags .src                                      # List tags
+xplat git branch .src                                    # Get branch name
+xplat git is-repo .src                                   # Check if git repo
+```
+
+- [x] Create `internal/gitops` package (ported from plat-telemetry/sync-git)
+- [x] Create `os_git.go` command with clone, pull, fetch, checkout, hash, tags, branch, is-repo
+- [x] Uses go-git library - pure Go, no external git dependency
+- [x] Works cross-platform (Windows, macOS, Linux) without git installed
+
+---
+
 ### 2. sync-* Folders & internal/env for Cloudflare/GitHub Ops
 
 **STATUS: KEEP SEPARATE**

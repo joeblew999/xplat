@@ -260,6 +260,7 @@ tasks:
 
 // GenerateWorkflow generates a unified GitHub Actions CI workflow.
 // This creates a minimal workflow that delegates to Taskfile.
+// Runs on Linux, macOS, and Windows for cross-platform verification.
 func (g *Generator) GenerateWorkflow(outputPath string) error {
 	const workflowTmpl = `# Unified CI/CD workflow for plat-* repositories
 #
@@ -268,6 +269,7 @@ func (g *Generator) GenerateWorkflow(outputPath string) error {
 #
 # This workflow delegates everything to Taskfile for maximum portability.
 # The same commands work locally and in CI.
+# Runs on Linux, macOS, and Windows for cross-platform verification.
 
 name: CI
 
@@ -282,7 +284,17 @@ env:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    runs-on: ${{ matrix.os }}
+    name: CI (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
         with:
@@ -304,7 +316,13 @@ jobs:
       - name: Test
         run: task test
 
-      - name: Lint
+      - name: Lint (Unix)
+        if: runner.os != 'Windows'
+        run: task lint
+        continue-on-error: true
+
+      - name: Lint (Windows)
+        if: runner.os == 'Windows'
         run: task lint
         continue-on-error: true
 `
