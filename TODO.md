@@ -41,8 +41,8 @@ xplat manifest install-all -d /path/to/workspace
 - [x] plat-rush - Push notifications (gorush wrapper)
 - [x] plat-telemetry - Telemetry stack (NATS, Liftbridge, sync services)
 - [x] plat-kronk - WebRTC codec experiments
-- [ ] plat-speech - Speech recognition
-- [ ] plat-bvlos - Drone operations
+- [x] plat-speech - Speech recognition
+- [x] plat-bvlos - Drone operations
 
 ## Hugo Registry (DEPRECATED)
 
