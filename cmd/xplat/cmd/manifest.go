@@ -85,6 +85,20 @@ var manifestGenAllCmd = &cobra.Command{
 	RunE:  runManifestGenAll,
 }
 
+var manifestGenWorkflowCmd = &cobra.Command{
+	Use:   "gen-workflow",
+	Short: "Generate unified GitHub Actions CI workflow",
+	Long: `Generate a minimal CI workflow that delegates to Taskfile.
+
+This creates .github/workflows/ci.yml with:
+- Go setup
+- Task installation
+- Calls to: task build, task test, task lint
+
+The same commands work locally and in CI.`,
+	RunE: runManifestGenWorkflow,
+}
+
 var manifestInstallCmd = &cobra.Command{
 	Use:   "install [path]",
 	Short: "Install binary from manifest",
@@ -145,6 +159,30 @@ Examples:
 	RunE: runManifestInit,
 }
 
+var manifestBootstrapCmd = &cobra.Command{
+	Use:   "bootstrap [path]",
+	Short: "Bootstrap a plat-* repository with standard files",
+	Long: `Ensure a directory has all standard plat-* files.
+
+Creates or updates:
+- xplat.yaml      - Package manifest
+- Taskfile.yml    - Standard build/test/lint tasks
+- .gitignore      - Go project ignores
+- .github/workflows/ci.yml - Unified CI workflow
+- README.md       - Basic documentation
+- .env.example    - Environment template (if env vars defined)
+
+Examples:
+  xplat manifest bootstrap                  # Bootstrap current directory
+  xplat manifest bootstrap /path/to/repo    # Bootstrap specific path
+  xplat manifest bootstrap --force          # Overwrite existing files
+  xplat manifest bootstrap --check          # Just check conformity`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runManifestBootstrap,
+}
+
+var manifestBootstrapCheck bool
+
 func init() {
 	// Flags for discover/gen commands
 	ManifestCmd.PersistentFlags().StringVarP(&manifestDir, "dir", "d", ".", "Directory to search for manifests")
@@ -163,6 +201,7 @@ func init() {
 	ManifestCmd.AddCommand(manifestGenProcessCmd)
 	ManifestCmd.AddCommand(manifestGenTaskfileCmd)
 	ManifestCmd.AddCommand(manifestGenAllCmd)
+	ManifestCmd.AddCommand(manifestGenWorkflowCmd)
 
 	// Install commands
 	manifestInstallCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Force reinstall")
@@ -179,6 +218,11 @@ func init() {
 
 	// Check command
 	ManifestCmd.AddCommand(manifestCheckCmd)
+
+	// Bootstrap command
+	manifestBootstrapCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Overwrite existing files")
+	manifestBootstrapCmd.Flags().BoolVar(&manifestBootstrapCheck, "check", false, "Just check conformity, don't create files")
+	ManifestCmd.AddCommand(manifestBootstrapCmd)
 }
 
 func runManifestValidate(cmd *cobra.Command, args []string) error {
@@ -454,6 +498,22 @@ func runManifestGenAll(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runManifestGenWorkflow(cmd *cobra.Command, args []string) error {
+	// Use current directory or specified output
+	baseDir := manifestOutput
+	if baseDir == "" {
+		baseDir = "."
+	}
+
+	gen := manifest.NewGenerator(nil) // No manifests needed for workflow generation
+	if err := gen.GenerateWorkflowDir(baseDir); err != nil {
+		return fmt.Errorf("failed to generate workflow: %w", err)
+	}
+
+	fmt.Printf("Generated %s/.github/workflows/ci.yml\n", baseDir)
+	return nil
+}
+
 func runManifestInstall(cmd *cobra.Command, args []string) error {
 	path := "."
 	if len(args) > 0 {
@@ -634,5 +694,80 @@ func runManifestCheck(cmd *cobra.Command, args []string) error {
 	if hasErrors {
 		return fmt.Errorf("validation failed")
 	}
+	return nil
+}
+
+func runManifestBootstrap(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	// Check-only mode
+	if manifestBootstrapCheck {
+		result, err := manifest.CheckConformity(path)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("=== Conformity Check ===")
+		for _, msg := range result.Skipped {
+			fmt.Printf("  %s\n", msg)
+		}
+		for _, msg := range result.Errors {
+			fmt.Printf("  %s\n", msg)
+		}
+
+		if len(result.Errors) > 0 {
+			fmt.Printf("\nRun 'xplat manifest bootstrap' to fix missing files.\n")
+			return fmt.Errorf("%d issues found", len(result.Errors))
+		}
+
+		fmt.Println("\nAll standard files present.")
+		return nil
+	}
+
+	// Bootstrap mode
+	opts := manifest.BootstrapOptions{
+		Force:   manifestForce,
+		Verbose: manifestVerbose,
+	}
+
+	result, err := manifest.Bootstrap(path, opts)
+	if err != nil {
+		return err
+	}
+
+	// Print summary
+	if len(result.Created) > 0 {
+		fmt.Println("Created:")
+		for _, f := range result.Created {
+			fmt.Printf("  + %s\n", f)
+		}
+	}
+
+	if len(result.Updated) > 0 {
+		fmt.Println("Updated:")
+		for _, f := range result.Updated {
+			fmt.Printf("  ~ %s\n", f)
+		}
+	}
+
+	if len(result.Skipped) > 0 && manifestVerbose {
+		fmt.Println("Skipped:")
+		for _, f := range result.Skipped {
+			fmt.Printf("  - %s\n", f)
+		}
+	}
+
+	if len(result.Errors) > 0 {
+		fmt.Println("Errors:")
+		for _, e := range result.Errors {
+			fmt.Printf("  ! %s\n", e)
+		}
+		return fmt.Errorf("%d errors during bootstrap", len(result.Errors))
+	}
+
+	fmt.Printf("\nBootstrap complete for %s\n", path)
 	return nil
 }
