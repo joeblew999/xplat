@@ -110,6 +110,24 @@ var manifestInstallAllCmd = &cobra.Command{
 	RunE:  runManifestInstallAll,
 }
 
+var manifestCheckCmd = &cobra.Command{
+	Use:   "check [path]",
+	Short: "Deep validation of manifest against filesystem",
+	Long: `Validate that manifest references match actual files.
+
+Checks:
+- taskfile.path exists in the repo
+- binary.source.go has a go.mod
+- processes reference valid task commands
+
+Examples:
+  xplat manifest check                    # Check current directory
+  xplat manifest check /path/to/project   # Check specific path
+  xplat manifest check -d /workspace      # Check all plat-* repos`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runManifestCheck,
+}
+
 var manifestInitCmd = &cobra.Command{
 	Use:   "init [path]",
 	Short: "Initialize a new xplat.yaml manifest",
@@ -158,6 +176,9 @@ func init() {
 	// Init command
 	manifestInitCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Overwrite existing manifest")
 	ManifestCmd.AddCommand(manifestInitCmd)
+
+	// Check command
+	ManifestCmd.AddCommand(manifestCheckCmd)
 }
 
 func runManifestValidate(cmd *cobra.Command, args []string) error {
@@ -615,4 +636,190 @@ func detectGoModule(goModPath string) string {
 		}
 	}
 	return ""
+}
+
+// CheckResult holds the result of a manifest check.
+type CheckResult struct {
+	Name     string
+	Path     string
+	Errors   []string
+	Warnings []string
+}
+
+func (r *CheckResult) AddError(msg string) {
+	r.Errors = append(r.Errors, msg)
+}
+
+func (r *CheckResult) AddWarning(msg string) {
+	r.Warnings = append(r.Warnings, msg)
+}
+
+func (r *CheckResult) IsValid() bool {
+	return len(r.Errors) == 0
+}
+
+func runManifestCheck(cmd *cobra.Command, args []string) error {
+	// Check if we should check all plat-* repos or a single path
+	checkAll := false
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	// If -d flag is set and path is ".", check all plat-* repos
+	if manifestDir != "." && path == "." {
+		checkAll = true
+		path = manifestDir
+	}
+
+	loader := manifest.NewLoader()
+	var results []CheckResult
+
+	if checkAll {
+		// Discover and check all plat-* repos
+		manifests, err := loader.DiscoverPlat(path)
+		if err != nil {
+			return err
+		}
+
+		if len(manifests) == 0 {
+			fmt.Println("No manifests found in plat-* directories")
+			return nil
+		}
+
+		// We need to find the actual paths for each manifest
+		entries, _ := os.ReadDir(path)
+		for _, entry := range entries {
+			if !entry.IsDir() || !hasPrefix(entry.Name(), "plat-") {
+				continue
+			}
+			repoPath := filepath.Join(path, entry.Name())
+			m, err := loader.LoadDir(repoPath)
+			if err != nil {
+				continue
+			}
+			result := checkManifest(m, repoPath)
+			results = append(results, result)
+		}
+	} else {
+		// Check single path
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("failed to stat path: %w", err)
+		}
+
+		var m *manifest.Manifest
+		var repoPath string
+		if info.IsDir() {
+			m, err = loader.LoadDir(path)
+			repoPath = path
+		} else {
+			m, err = loader.LoadFile(path)
+			repoPath = filepath.Dir(path)
+		}
+
+		if err != nil {
+			return err
+		}
+
+		result := checkManifest(m, repoPath)
+		results = append(results, result)
+	}
+
+	// Print results
+	var hasErrors bool
+	for _, r := range results {
+		if r.IsValid() && len(r.Warnings) == 0 {
+			fmt.Printf("✓ %s (%s)\n", r.Name, r.Path)
+		} else {
+			if !r.IsValid() {
+				hasErrors = true
+				fmt.Printf("✗ %s (%s)\n", r.Name, r.Path)
+				for _, e := range r.Errors {
+					fmt.Printf("  ERROR: %s\n", e)
+				}
+			} else {
+				fmt.Printf("⚠ %s (%s)\n", r.Name, r.Path)
+			}
+			for _, w := range r.Warnings {
+				fmt.Printf("  WARN: %s\n", w)
+			}
+		}
+	}
+
+	if hasErrors {
+		return fmt.Errorf("validation failed")
+	}
+	return nil
+}
+
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func checkManifest(m *manifest.Manifest, repoPath string) CheckResult {
+	result := CheckResult{
+		Name: m.Name,
+		Path: repoPath,
+	}
+
+	// Check taskfile.path exists
+	if m.Taskfile != nil && m.Taskfile.Path != "" {
+		taskfilePath := filepath.Join(repoPath, m.Taskfile.Path)
+		if _, err := os.Stat(taskfilePath); os.IsNotExist(err) {
+			result.AddError(fmt.Sprintf("taskfile.path '%s' does not exist", m.Taskfile.Path))
+		}
+	}
+
+	// Check binary.source.go has go.mod
+	if m.Binary != nil && m.Binary.Source != nil && m.Binary.Source.Go != "" {
+		goModPath := filepath.Join(repoPath, "go.mod")
+		if _, err := os.Stat(goModPath); os.IsNotExist(err) {
+			result.AddError("binary.source.go is set but go.mod does not exist")
+		}
+	}
+
+	// Check processes reference task commands (warning only)
+	if len(m.Processes) > 0 {
+		// Check if Taskfile exists for task commands
+		hasTaskfile := false
+		if m.Taskfile != nil && m.Taskfile.Path != "" {
+			taskfilePath := filepath.Join(repoPath, m.Taskfile.Path)
+			if _, err := os.Stat(taskfilePath); err == nil {
+				hasTaskfile = true
+			}
+		} else {
+			// Check for root Taskfile.yml
+			if _, err := os.Stat(filepath.Join(repoPath, "Taskfile.yml")); err == nil {
+				hasTaskfile = true
+			}
+		}
+
+		for name, proc := range m.Processes {
+			if hasPrefix(proc.Command, "task ") && !hasTaskfile {
+				result.AddWarning(fmt.Sprintf("process '%s' uses task command but no Taskfile found", name))
+			}
+		}
+	}
+
+	// Check required env vars have descriptions
+	if m.Env != nil {
+		for _, v := range m.Env.Required {
+			if v.Description == "" {
+				result.AddWarning(fmt.Sprintf("required env var '%s' has no description", v.Name))
+			}
+		}
+	}
+
+	// Warn if no description
+	if m.Description == "" {
+		result.AddWarning("missing description")
+	}
+
+	// Warn if no author
+	if m.Author == "" {
+		result.AddWarning("missing author")
+	}
+
+	return result
 }
