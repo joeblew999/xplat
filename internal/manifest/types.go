@@ -17,6 +17,8 @@ type Manifest struct {
 	Processes    map[string]ProcessConfig `yaml:"processes,omitempty"`
 	Env          *EnvConfig               `yaml:"env,omitempty"`
 	Dependencies *DependenciesConfig      `yaml:"dependencies,omitempty"`
+	Gitignore    *GitignoreConfig         `yaml:"gitignore,omitempty"`
+	Core         bool                     `yaml:"core,omitempty"` // Core infrastructure package
 }
 
 // RepoName returns the GitHub repo name (Repo field or falls back to Name).
@@ -100,6 +102,12 @@ type DependenciesConfig struct {
 	Build   []string `yaml:"build,omitempty"`   // Must be installed
 }
 
+// GitignoreConfig defines custom gitignore patterns.
+type GitignoreConfig struct {
+	// Extra patterns to add to .gitignore (in addition to base patterns)
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
 // HasBinary returns true if the manifest defines a binary.
 func (m *Manifest) HasBinary() bool {
 	return m.Binary != nil && m.Binary.Name != ""
@@ -113,6 +121,11 @@ func (m *Manifest) HasProcesses() bool {
 // HasEnv returns true if the manifest defines environment variables.
 func (m *Manifest) HasEnv() bool {
 	return m.Env != nil && (len(m.Env.Required) > 0 || len(m.Env.Optional) > 0)
+}
+
+// HasGitignore returns true if the manifest defines custom gitignore patterns.
+func (m *Manifest) HasGitignore() bool {
+	return m.Gitignore != nil && len(m.Gitignore.Patterns) > 0
 }
 
 // AllEnvVars returns all environment variables (required + optional).

@@ -97,7 +97,11 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 	// 3. Generate .gitignore
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	if err := generateIfNeeded(gitignorePath, opts, result, func() error {
-		return taskfile.GenerateGitignore(gitignorePath, binaryName)
+		gitOpts := taskfile.GitignoreOptions{BinaryName: binaryName}
+		if m.HasGitignore() {
+			gitOpts.Patterns = m.Gitignore.Patterns
+		}
+		return taskfile.GenerateGitignoreWithOptions(gitignorePath, gitOpts)
 	}); err != nil {
 		result.Errors = append(result.Errors, fmt.Sprintf(".gitignore: %v", err))
 	}

@@ -38,6 +38,11 @@ xplat manifest install-all -d /path/to/workspace
 
 ### Repos with Manifests
 
+**Core Infrastructure** (required by all plat-* systems):
+- [x] plat-caddy - Custom Caddy build with Cloudflare DNS
+- [x] plat-garage - Tiered storage (Local → R2 → B2)
+
+**Applications**:
 - [x] plat-rush - Push notifications (gorush wrapper)
 - [x] plat-telemetry - Telemetry stack (NATS, Liftbridge, sync services)
 - [x] plat-kronk - WebRTC codec experiments
@@ -66,13 +71,23 @@ These packages currently live in ubuntu-website and should move to plat-* repos:
 - [x] Detect go.mod and suggest binary config
 - [x] Generate minimal valid manifest
 
-### 2. GARAGE Project (plat-garage)
-- [ ] Create plat-garage repo
-- [ ] PocketBase-HA (hot tier)
-- [ ] R2 integration (warm tier)
-- [ ] B2 integration (cold tier)
-- [ ] Tiered storage policies
-- [ ] Add xplat.yaml manifest
+### 2. GARAGE Project (plat-garage) - DONE
+
+- [x] Create plat-garage repo
+- [x] PocketBase-HA (hot tier)
+- [x] R2 integration (warm tier)
+- [x] B2 integration (cold tier)
+- [x] Tiered storage policies
+- [x] Add xplat.yaml manifest
+- [x] Add unified CI workflow (.github/workflows/ci.yml)
+
+### 2.5. Caddy Project (plat-caddy) - DONE
+
+- [x] Create plat-caddy repo
+- [x] Custom Caddy build with caddy-dns/cloudflare module
+- [x] Add xplat.yaml manifest
+- [x] Add unified CI workflow
+- [x] Taskfile for build/test/lint
 
 ### 3. Clean Up ubuntu-website
 - [ ] mailerlite → plat-mailerlite
@@ -93,9 +108,81 @@ These packages currently live in ubuntu-website and should move to plat-* repos:
 - [x] Cross-platform (macOS LaunchAgent, Linux systemd, Windows service)
 - [x] Per-project naming (xplat-<dirname>) or custom --name
 
+### 5. Core Packages Concept
+
+- [ ] Add `core: true` field to xplat.yaml for infrastructure packages
+- [ ] `xplat setup` command to install all core packages (caddy, garage)
+- [ ] Dependency resolution: apps depend on core packages
+- [ ] `xplat manifest gen-workflow` - Generate unified CI workflow from template
+
+### 6. Workflow Generation
+
+The manifest system should support generating GitHub Actions workflows:
+
+```bash
+xplat manifest gen-workflow    # → .github/workflows/ci.yml
+```
+
+Template pattern: Minimal workflow that delegates to Taskfile.
+Same commands work locally and in CI.
+
+## plat-* Directory Convention (IMPLEMENTED)
+
+Standard directory structure for all plat-* repositories:
+
+```
+plat-example/
+├── .src/      # Cloned upstream source code (gitignored)
+├── .bin/      # Built or downloaded binaries (gitignored)
+├── .data/     # Runtime data - db, cache, logs (gitignored)
+├── xplat.yaml # Package manifest
+└── Taskfile.yml
+```
+
+### Features
+
+- **Automatic gitignore**: `xplat manifest gen-gitignore` includes `**/.src/`, `**/.bin/`, `**/.data/`
+- **Shared Taskfile**: Include `Taskfile.plat.yml` for standard tasks and variables
+- **Manifest support**: Add project-specific gitignore patterns via `xplat.yaml`
+
+### Usage in plat-* repos
+
+```yaml
+# Taskfile.yml - include standard plat conventions
+includes:
+  plat:
+    taskfile: https://github.com/joeblew999/xplat.git//taskfiles/Taskfile.plat.yml
+    optional: true
+
+# Use standard variables in subsystem Taskfiles
+vars:
+  NATS_SRC: '{{.PLAT_SRC}}'   # → .src/
+  NATS_BIN: '{{.PLAT_BIN}}'   # → .bin/
+  NATS_DATA: '{{.PLAT_DATA}}' # → .data/
+```
+
+### Manifest gitignore
+
+```yaml
+# xplat.yaml - add project-specific patterns
+gitignore:
+  patterns:
+    - "pb_data/"      # PocketBase data
+    - "node_modules/" # Node dependencies
+    - "*.log"         # Log files
+```
+
+### Commands
+
+```bash
+xplat manifest gen-gitignore          # Generate .gitignore from manifest
+xplat manifest gen-gitignore --force  # Overwrite existing
+xplat manifest bootstrap              # Creates .gitignore + other files
+```
+
 ## Future Enhancements
 
 - [ ] Caching for GitHub discovery (avoid rate limits)
 - [ ] Support for private repos (GitHub token)
 - [ ] Dependency resolution between packages
-- [ ] Version pinning and lockfiles
+- [ ] Version pinning and lockfiles 

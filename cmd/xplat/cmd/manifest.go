@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/joeblew999/xplat/internal/manifest"
+	"github.com/joeblew999/xplat/internal/taskfile"
 	"github.com/spf13/cobra"
 )
 
@@ -97,6 +98,24 @@ This creates .github/workflows/ci.yml with:
 
 The same commands work locally and in CI.`,
 	RunE: runManifestGenWorkflow,
+}
+
+var manifestGenGitignoreCmd = &cobra.Command{
+	Use:   "gen-gitignore [path]",
+	Short: "Generate .gitignore from manifest",
+	Long: `Generate a .gitignore file based on the xplat.yaml manifest.
+
+Includes:
+- Base patterns (Go artifacts, IDE files, OS files)
+- Binary name from manifest (root level only)
+- Custom patterns from manifest gitignore.patterns
+
+Examples:
+  xplat manifest gen-gitignore                    # Generate in current directory
+  xplat manifest gen-gitignore /path/to/project   # Generate for specific project
+  xplat manifest gen-gitignore --force            # Overwrite existing .gitignore`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runManifestGenGitignore,
 }
 
 var manifestInstallCmd = &cobra.Command{
@@ -202,6 +221,10 @@ func init() {
 	ManifestCmd.AddCommand(manifestGenTaskfileCmd)
 	ManifestCmd.AddCommand(manifestGenAllCmd)
 	ManifestCmd.AddCommand(manifestGenWorkflowCmd)
+	ManifestCmd.AddCommand(manifestGenGitignoreCmd)
+
+	// Gen-gitignore flags
+	manifestGenGitignoreCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Overwrite existing .gitignore")
 
 	// Install commands
 	manifestInstallCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Force reinstall")
@@ -769,5 +792,59 @@ func runManifestBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\nBootstrap complete for %s\n", path)
+	return nil
+}
+
+func runManifestGenGitignore(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	// Load manifest
+	loader := manifest.NewLoader()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	var m *manifest.Manifest
+	var repoDir string
+	if info.IsDir() {
+		m, err = loader.LoadDir(path)
+		repoDir = path
+	} else {
+		m, err = loader.LoadFile(path)
+		repoDir = filepath.Dir(path)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// Check if .gitignore exists and --force not set
+	gitignorePath := filepath.Join(repoDir, ".gitignore")
+	if _, err := os.Stat(gitignorePath); err == nil && !manifestForce {
+		return fmt.Errorf(".gitignore already exists, use --force to overwrite")
+	}
+
+	// Get binary name
+	binaryName := m.Name
+	if m.Binary != nil && m.Binary.Name != "" {
+		binaryName = m.Binary.Name
+	}
+
+	// Build options
+	opts := taskfile.GitignoreOptions{BinaryName: binaryName}
+	if m.HasGitignore() {
+		opts.Patterns = m.Gitignore.Patterns
+	}
+
+	if err := taskfile.GenerateGitignoreWithOptions(gitignorePath, opts); err != nil {
+		return err
+	}
+
+	fmt.Printf("Generated %s\n", gitignorePath)
 	return nil
 }

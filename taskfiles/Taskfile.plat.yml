@@ -1,0 +1,161 @@
+# plat-* Standard Conventions
+#
+# This taskfile defines standard variables and tasks for all plat-* repositories.
+# Include it in your root Taskfile.yml to get standard directory conventions.
+#
+# Usage in plat-* repos:
+#   includes:
+#     plat:
+#       taskfile: https://github.com/joeblew999/xplat.git//taskfiles/Taskfile.plat.yml
+#       optional: true
+#
+# Or for subsystems within a plat-* repo:
+#   includes:
+#     plat: ../Taskfile.plat.yml  # Include from parent
+#
+# Standard Directory Convention:
+#   .src/  - Cloned source code (from upstream repos)
+#   .bin/  - Built or downloaded binaries
+#   .data/ - Runtime data (databases, caches, logs)
+#
+# These directories are:
+#   - Gitignored by default (xplat manifest gen-gitignore)
+#   - Relative to TASKFILE_DIR (subsystem-specific)
+#   - Not committed to version control
+
+version: '3'
+
+vars:
+  # === Standard plat-* Directory Variables ===
+  # Use these in subsystem Taskfiles for consistent paths
+  #
+  # Example in nats/Taskfile.yml:
+  #   vars:
+  #     NATS_SRC: '{{.PLAT_SRC}}'
+  #     NATS_BIN: '{{.PLAT_BIN}}'
+  #     NATS_DATA: '{{.PLAT_DATA}}'
+
+  # Source directory - for cloned upstream repos
+  PLAT_SRC: '{{.TASKFILE_DIR}}/.src'
+
+  # Binary directory - for built/downloaded binaries
+  PLAT_BIN: '{{.TASKFILE_DIR}}/.bin'
+
+  # Data directory - for runtime data (db, cache, logs)
+  PLAT_DATA: '{{.TASKFILE_DIR}}/.data'
+
+  # Dist directory - for release artifacts
+  PLAT_DIST: '{{.ROOT_DIR}}/.dist'
+
+tasks:
+  # === Directory Management ===
+
+  dirs:init:
+    desc: Create standard plat-* directories
+    cmds:
+      - mkdir -p "{{.PLAT_SRC}}"
+      - mkdir -p "{{.PLAT_BIN}}"
+      - mkdir -p "{{.PLAT_DATA}}"
+    status:
+      - test -d "{{.PLAT_SRC}}"
+      - test -d "{{.PLAT_BIN}}"
+      - test -d "{{.PLAT_DATA}}"
+
+  dirs:clean:
+    desc: Remove all plat-* directories (src, bin, data)
+    prompt: This will delete .src, .bin, and .data directories. Continue?
+    cmds:
+      - rm -rf "{{.PLAT_SRC}}"
+      - rm -rf "{{.PLAT_BIN}}"
+      - rm -rf "{{.PLAT_DATA}}"
+
+  dirs:clean:data:
+    desc: Remove only runtime data (preserves sources and binaries)
+    cmds:
+      - rm -rf "{{.PLAT_DATA}}"
+
+  dirs:clean:bin:
+    desc: Remove only binaries (preserves sources and data)
+    cmds:
+      - rm -rf "{{.PLAT_BIN}}"
+
+  # === Source Management ===
+  # These are templates - subsystems override with specific repos
+
+  src:clone:
+    desc: Clone upstream source (override in subsystem Taskfile)
+    vars:
+      UPSTREAM_REPO: '{{.UPSTREAM_REPO | default "https://github.com/example/repo"}}'
+      UPSTREAM_VERSION: '{{.UPSTREAM_VERSION | default "main"}}'
+    cmds:
+      - |
+        if [ -d "{{.PLAT_SRC}}" ]; then
+          echo "Source already exists at {{.PLAT_SRC}}"
+          echo "Run 'task src:update' to update, or 'task dirs:clean' to start fresh"
+          exit 0
+        fi
+        git clone --depth 1 --branch "{{.UPSTREAM_VERSION}}" "{{.UPSTREAM_REPO}}" "{{.PLAT_SRC}}"
+    status:
+      - test -d "{{.PLAT_SRC}}/.git"
+
+  src:update:
+    desc: Update upstream source to latest
+    cmds:
+      - |
+        if [ ! -d "{{.PLAT_SRC}}/.git" ]; then
+          echo "No source found. Run 'task src:clone' first."
+          exit 1
+        fi
+        cd "{{.PLAT_SRC}}" && git pull --ff-only
+
+  # === Binary Management ===
+
+  bin:build:
+    desc: Build binary from source (override in subsystem Taskfile)
+    deps: [src:clone]
+    cmds:
+      - mkdir -p "{{.PLAT_BIN}}"
+      - echo "Override bin:build in your subsystem Taskfile"
+
+  bin:download:
+    desc: Download pre-built binary (override in subsystem Taskfile)
+    cmds:
+      - mkdir -p "{{.PLAT_BIN}}"
+      - echo "Override bin:download in your subsystem Taskfile"
+
+  ensure:
+    desc: Ensure binary exists (download or build)
+    cmds:
+      - |
+        # Check if binary exists (subsystem should set BINARY_NAME)
+        BINARY="{{.BINARY_NAME | default "binary"}}"
+        if [ -x "{{.PLAT_BIN}}/$BINARY" ]; then
+          echo "$BINARY already exists"
+          exit 0
+        fi
+
+        # Try download first (faster), fall back to build
+        if task bin:download 2>/dev/null; then
+          echo "$BINARY downloaded"
+        else
+          echo "Download failed, building from source..."
+          task bin:build
+        fi
+
+  # === Info/Debug ===
+
+  info:
+    desc: Show plat-* directory paths
+    cmds:
+      - |
+        echo "=== plat-* Directory Convention ==="
+        echo ""
+        echo "PLAT_SRC:  {{.PLAT_SRC}}"
+        echo "PLAT_BIN:  {{.PLAT_BIN}}"
+        echo "PLAT_DATA: {{.PLAT_DATA}}"
+        echo "PLAT_DIST: {{.PLAT_DIST}}"
+        echo ""
+        echo "Status:"
+        [ -d "{{.PLAT_SRC}}" ] && echo "  .src/ exists" || echo "  .src/ missing"
+        [ -d "{{.PLAT_BIN}}" ] && echo "  .bin/ exists" || echo "  .bin/ missing"
+        [ -d "{{.PLAT_DATA}}" ] && echo "  .data/ exists" || echo "  .data/ missing"
