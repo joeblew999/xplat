@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ArchetypeCmd is the parent command for archetype operations
-var ArchetypeCmd = &cobra.Command{
-	Use:   "archetype",
-	Short: "Taskfile archetype operations",
-	Long: `Manage and inspect Taskfile archetypes.
+// TaskfileCmd is the parent command for Taskfile operations
+var TaskfileCmd = &cobra.Command{
+	Use:   "taskfile",
+	Short: "Taskfile validation and archetype detection",
+	Long: `Validate Taskfiles and detect their archetypes.
 
 Archetypes define the purpose and required structure of Taskfiles:
   - tool:        Binary we build and release (has _BIN, _VERSION, _REPO, _CGO)
@@ -24,37 +24,37 @@ Archetypes define the purpose and required structure of Taskfiles:
   - aggregation: Groups children via includes: section
   - bootstrap:   Self-bootstrapping tool (xplat itself)
 
-Use 'xplat archetype list' to see all archetypes and their requirements.
-Use 'xplat archetype detect <file>' to identify a file's archetype.`,
+Use 'xplat taskfile archetypes' to see all archetypes and their requirements.
+Use 'xplat taskfile detect <file>' to identify a file's archetype.`,
 }
 
-var archetypeListCmd = &cobra.Command{
-	Use:   "list",
+var taskfileArchetypesCmd = &cobra.Command{
+	Use:   "archetypes",
 	Short: "List all archetypes with their requirements",
-	RunE:  runArchetypeList,
+	RunE:  runTaskfileArchetypes,
 }
 
-var archetypeDetectCmd = &cobra.Command{
+var taskfileDetectCmd = &cobra.Command{
 	Use:   "detect <file|dir>",
 	Short: "Detect archetype for a Taskfile or directory",
 	Args:  cobra.MaximumNArgs(1),
-	RunE:  runArchetypeDetect,
+	RunE:  runTaskfileDetect,
 }
 
-var archetypeExplainCmd = &cobra.Command{
+var taskfileExplainCmd = &cobra.Command{
 	Use:   "explain <archetype>",
 	Short: "Explain a specific archetype in detail",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runArchetypeExplain,
+	RunE:  runTaskfileExplain,
 }
 
 func init() {
-	ArchetypeCmd.AddCommand(archetypeListCmd)
-	ArchetypeCmd.AddCommand(archetypeDetectCmd)
-	ArchetypeCmd.AddCommand(archetypeExplainCmd)
+	TaskfileCmd.AddCommand(taskfileArchetypesCmd)
+	TaskfileCmd.AddCommand(taskfileDetectCmd)
+	TaskfileCmd.AddCommand(taskfileExplainCmd)
 }
 
-func runArchetypeList(cmd *cobra.Command, args []string) error {
+func runTaskfileArchetypes(cmd *cobra.Command, args []string) error {
 	fmt.Println("Taskfile Archetypes")
 	fmt.Println("===================")
 	fmt.Println()
@@ -142,7 +142,7 @@ func runArchetypeList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runArchetypeDetect(cmd *cobra.Command, args []string) error {
+func runTaskfileDetect(cmd *cobra.Command, args []string) error {
 	path := "."
 	if len(args) > 0 {
 		path = args[0]
@@ -220,7 +220,7 @@ func runArchetypeDetect(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runArchetypeExplain(cmd *cobra.Command, args []string) error {
+func runTaskfileExplain(cmd *cobra.Command, args []string) error {
 	archetype := strings.ToLower(args[0])
 
 	switch archetype {

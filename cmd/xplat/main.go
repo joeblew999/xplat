@@ -61,7 +61,7 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	// P6 (Taskfile validation)
 	rootCmd.AddCommand(cmd.FmtCmd)
 	rootCmd.AddCommand(cmd.LintCmd)
-	rootCmd.AddCommand(cmd.ArchetypeCmd)
+	rootCmd.AddCommand(cmd.TaskfileCmd)
 
 	// P7 (Taskfile testing)
 	rootCmd.AddCommand(cmd.TestCmd)
