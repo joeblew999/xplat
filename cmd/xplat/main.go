@@ -77,6 +77,9 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	// P10 (Documentation generation)
 	rootCmd.AddCommand(cmd.DocsCmd)
 
+	// P11 (Manifest management)
+	rootCmd.AddCommand(cmd.ManifestCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
