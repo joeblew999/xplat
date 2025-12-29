@@ -235,7 +235,7 @@ tasks:
 
 		// Build URL: https://github.com/owner/repo.git//path?ref=version
 		url := fmt.Sprintf("%s/%s.git//%s?ref=%s",
-			repoBaseURL, m.Name, m.Taskfile.Path, m.Version)
+			repoBaseURL, m.RepoName(), m.Taskfile.Path, m.Version)
 
 		includes = append(includes, include{Namespace: ns, URL: url})
 	}

@@ -10,12 +10,21 @@ type Manifest struct {
 	Description string `yaml:"description"`
 	Author      string `yaml:"author"`
 	License     string `yaml:"license"`
+	Repo        string `yaml:"repo,omitempty"` // GitHub repo name (e.g., "plat-rush"), defaults to name
 
 	Binary       *BinaryConfig            `yaml:"binary,omitempty"`
 	Taskfile     *TaskfileConfig          `yaml:"taskfile,omitempty"`
 	Processes    map[string]ProcessConfig `yaml:"processes,omitempty"`
 	Env          *EnvConfig               `yaml:"env,omitempty"`
 	Dependencies *DependenciesConfig      `yaml:"dependencies,omitempty"`
+}
+
+// RepoName returns the GitHub repo name (Repo field or falls back to Name).
+func (m *Manifest) RepoName() string {
+	if m.Repo != "" {
+		return m.Repo
+	}
+	return m.Name
 }
 
 // BinaryConfig defines how to install the package binary.
