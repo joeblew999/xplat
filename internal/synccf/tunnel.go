@@ -3,10 +3,15 @@ package synccf
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -192,28 +197,226 @@ func RunQuickTunnel(ctx context.Context, localPort int) (string, *Tunnel, error)
 	return tunnel.URL(), tunnel, nil
 }
 
-// CheckCloudflared verifies cloudflared is installed
+// CloudflaredInfo contains version and path information
+type CloudflaredInfo struct {
+	Version string
+	Path    string
+}
+
+// CheckCloudflared verifies cloudflared is installed and returns version info
 func CheckCloudflared() error {
-	cmd := exec.Command("cloudflared", "version")
-	output, err := cmd.Output()
+	info, err := GetCloudflaredInfo()
 	if err != nil {
-		return fmt.Errorf("cloudflared not found: %w (install from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation)", err)
+		return err
 	}
-	log.Printf("sync-cf: found cloudflared %s", strings.TrimSpace(string(output)))
+	log.Printf("sync-cf: found cloudflared %s at %s", info.Version, info.Path)
 	return nil
 }
 
-// InstallCloudflared attempts to install cloudflared
-func InstallCloudflared() error {
-	switch {
-	case fileExists("/opt/homebrew/bin/brew") || fileExists("/usr/local/bin/brew"):
-		cmd := exec.Command("brew", "install", "cloudflared")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	default:
-		return fmt.Errorf("automatic installation not supported for this OS, please install manually from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation")
+// GetCloudflaredInfo returns detailed cloudflared installation info
+func GetCloudflaredInfo() (*CloudflaredInfo, error) {
+	// Check standard PATH first
+	path, err := exec.LookPath("cloudflared")
+	if err != nil {
+		// Check common install locations
+		candidates := []string{
+			filepath.Join(os.Getenv("HOME"), ".local", "bin", "cloudflared"),
+			"/usr/local/bin/cloudflared",
+			"/opt/homebrew/bin/cloudflared",
+		}
+		if runtime.GOOS == "windows" {
+			candidates = append(candidates,
+				filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cloudflared", "cloudflared.exe"),
+				filepath.Join(os.Getenv("ProgramFiles"), "cloudflared", "cloudflared.exe"),
+			)
+		}
+		for _, c := range candidates {
+			if fileExists(c) {
+				path = c
+				break
+			}
+		}
+		if path == "" {
+			return nil, fmt.Errorf("cloudflared not found (run: xplat sync-cf install)")
+		}
 	}
+
+	cmd := exec.Command(path, "version")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("cloudflared found but failed to get version: %w", err)
+	}
+
+	version := strings.TrimSpace(string(output))
+	return &CloudflaredInfo{Version: version, Path: path}, nil
+}
+
+// GetLatestCloudflaredVersion fetches the latest release version from GitHub
+func GetLatestCloudflaredVersion() (string, error) {
+	resp, err := http.Get("https://api.github.com/repos/cloudflare/cloudflared/releases/latest")
+	if err != nil {
+		return "", fmt.Errorf("failed to check latest version: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("failed to parse release info: %w", err)
+	}
+
+	return release.TagName, nil
+}
+
+// InstallCloudflared downloads and installs cloudflared from GitHub releases
+func InstallCloudflared() error {
+	version, err := GetLatestCloudflaredVersion()
+	if err != nil {
+		return err
+	}
+
+	url, filename := getCloudflaredDownloadURL(version)
+	if url == "" {
+		return fmt.Errorf("unsupported platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	log.Printf("sync-cf: downloading cloudflared %s for %s/%s", version, runtime.GOOS, runtime.GOARCH)
+
+	// Download to temp file
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download cloudflared: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download cloudflared: HTTP %d", resp.StatusCode)
+	}
+
+	// Determine install location
+	installDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
+	if runtime.GOOS == "windows" {
+		installDir = filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cloudflared")
+	}
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return fmt.Errorf("failed to create install directory: %w", err)
+	}
+
+	binaryName := "cloudflared"
+	if runtime.GOOS == "windows" {
+		binaryName = "cloudflared.exe"
+	}
+	installPath := filepath.Join(installDir, binaryName)
+
+	// Handle different download formats
+	if strings.HasSuffix(filename, ".tgz") {
+		// Extract from tarball (macOS)
+		if err := extractCloudflaredTgz(resp.Body, installPath); err != nil {
+			return err
+		}
+	} else {
+		// Direct binary (Linux, Windows)
+		out, err := os.OpenFile(installPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create binary: %w", err)
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, resp.Body); err != nil {
+			return fmt.Errorf("failed to write binary: %w", err)
+		}
+	}
+
+	log.Printf("sync-cf: installed cloudflared to %s", installPath)
+	log.Printf("sync-cf: add to PATH: export PATH=\"%s:$PATH\"", installDir)
+
+	return nil
+}
+
+func getCloudflaredDownloadURL(version string) (url, filename string) {
+	base := fmt.Sprintf("https://github.com/cloudflare/cloudflared/releases/download/%s", version)
+
+	switch runtime.GOOS {
+	case "darwin":
+		switch runtime.GOARCH {
+		case "amd64":
+			filename = "cloudflared-darwin-amd64.tgz"
+		case "arm64":
+			filename = "cloudflared-darwin-arm64.tgz"
+		}
+	case "linux":
+		switch runtime.GOARCH {
+		case "amd64":
+			filename = "cloudflared-linux-amd64"
+		case "arm64":
+			filename = "cloudflared-linux-arm64"
+		case "arm":
+			filename = "cloudflared-linux-arm"
+		}
+	case "windows":
+		switch runtime.GOARCH {
+		case "amd64":
+			filename = "cloudflared-windows-amd64.exe"
+		case "386":
+			filename = "cloudflared-windows-386.exe"
+		}
+	}
+
+	if filename == "" {
+		return "", ""
+	}
+	return base + "/" + filename, filename
+}
+
+func extractCloudflaredTgz(r io.Reader, destPath string) error {
+	// Use xplat's extract functionality or shell out to tar
+	// For simplicity, use tar command (available on macOS/Linux)
+	tmpDir, err := os.MkdirTemp("", "cloudflared-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpFile := filepath.Join(tmpDir, "cloudflared.tgz")
+	out, err := os.Create(tmpFile)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	if _, err := io.Copy(out, r); err != nil {
+		out.Close()
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	out.Close()
+
+	// Extract with tar
+	cmd := exec.Command("tar", "-xzf", tmpFile, "-C", tmpDir)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to extract tarball: %w", err)
+	}
+
+	// Find and move the binary
+	extracted := filepath.Join(tmpDir, "cloudflared")
+	if !fileExists(extracted) {
+		return fmt.Errorf("cloudflared binary not found in tarball")
+	}
+
+	// Copy to destination
+	src, err := os.Open(extracted)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 func fileExists(path string) bool {
