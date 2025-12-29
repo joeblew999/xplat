@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/joeblew999/xplat/internal/paths"
 )
 
 // TunnelConfig holds configuration for cloudflared tunnel
@@ -218,9 +220,13 @@ func GetCloudflaredInfo() (*CloudflaredInfo, error) {
 	// Check standard PATH first
 	path, err := exec.LookPath("cloudflared")
 	if err != nil {
-		// Check common install locations
+		// Check common install locations - xplat bin first
+		binaryName := "cloudflared"
+		if runtime.GOOS == "windows" {
+			binaryName = "cloudflared.exe"
+		}
 		candidates := []string{
-			filepath.Join(os.Getenv("HOME"), ".local", "bin", "cloudflared"),
+			filepath.Join(paths.XplatBin(), binaryName),
 			"/usr/local/bin/cloudflared",
 			"/opt/homebrew/bin/cloudflared",
 		}
@@ -294,11 +300,8 @@ func InstallCloudflared() error {
 		return fmt.Errorf("failed to download cloudflared: HTTP %d", resp.StatusCode)
 	}
 
-	// Determine install location
-	installDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
-	if runtime.GOOS == "windows" {
-		installDir = filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cloudflared")
-	}
+	// Determine install location - use xplat's global bin directory
+	installDir := paths.XplatBin()
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return fmt.Errorf("failed to create install directory: %w", err)
 	}
