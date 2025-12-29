@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -193,6 +194,60 @@ func (l *Loader) DiscoverPlat(root string) ([]*Manifest, error) {
 		m, err := l.LoadFile(manifestPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to load %s: %v\n", manifestPath, err)
+			continue
+		}
+
+		manifests = append(manifests, m)
+	}
+
+	return manifests, nil
+}
+
+// DiscoverGitHub finds manifests from GitHub repos matching a pattern.
+// owner: GitHub username or org (e.g., "joeblew999")
+// prefix: repo name prefix to match (e.g., "plat-")
+func (l *Loader) DiscoverGitHub(owner, prefix string) ([]*Manifest, error) {
+	// Fetch list of repos from GitHub API
+	url := fmt.Sprintf("https://api.github.com/users/%s/repos?per_page=100", owner)
+
+	resp, err := l.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch repos: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+	}
+
+	var repos []struct {
+		Name          string `json:"name"`
+		DefaultBranch string `json:"default_branch"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		return nil, fmt.Errorf("failed to parse repos: %w", err)
+	}
+
+	var manifests []*Manifest
+
+	for _, repo := range repos {
+		if !strings.HasPrefix(repo.Name, prefix) {
+			continue
+		}
+
+		// Try to fetch xplat.yaml from this repo
+		branch := repo.DefaultBranch
+		if branch == "" {
+			branch = "main"
+		}
+
+		manifestURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s",
+			owner, repo.Name, branch, ManifestFileName)
+
+		m, err := l.LoadURL(manifestURL)
+		if err != nil {
+			// Silently skip repos without manifests
 			continue
 		}
 

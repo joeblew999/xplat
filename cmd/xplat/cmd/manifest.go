@@ -1,0 +1,488 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/joeblew999/xplat/internal/manifest"
+	"github.com/spf13/cobra"
+)
+
+var (
+	manifestDir          string
+	manifestOutput       string
+	manifestRepoURL      string
+	manifestForce        bool
+	manifestVerbose      bool
+	manifestGitHubOwner  string
+	manifestGitHubPrefix string
+)
+
+// ManifestCmd is the parent command for manifest operations.
+var ManifestCmd = &cobra.Command{
+	Use:   "manifest",
+	Short: "Work with xplat.yaml manifests",
+	Long:  `Load, validate, and generate files from xplat.yaml package manifests.`,
+}
+
+var manifestValidateCmd = &cobra.Command{
+	Use:   "validate [path]",
+	Short: "Validate an xplat.yaml manifest",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runManifestValidate,
+}
+
+var manifestShowCmd = &cobra.Command{
+	Use:   "show [path]",
+	Short: "Show manifest details",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runManifestShow,
+}
+
+var manifestDiscoverCmd = &cobra.Command{
+	Use:   "discover",
+	Short: "Discover manifests in plat-* directories",
+	RunE:  runManifestDiscover,
+}
+
+var manifestDiscoverGitHubCmd = &cobra.Command{
+	Use:   "discover-github",
+	Short: "Discover manifests from GitHub plat-* repos",
+	Long: `Fetch xplat.yaml manifests from GitHub repositories.
+
+Scans all repos matching the pattern (default: plat-*) and fetches
+their xplat.yaml manifests.
+
+Examples:
+  xplat manifest discover-github                         # From joeblew999/plat-*
+  xplat manifest discover-github --owner=myorg           # From myorg/plat-*
+  xplat manifest discover-github --owner=myorg --prefix=my-  # From myorg/my-*`,
+	RunE: runManifestDiscoverGitHub,
+}
+
+var manifestGenEnvCmd = &cobra.Command{
+	Use:   "gen-env",
+	Short: "Generate .env.example from manifests",
+	RunE:  runManifestGenEnv,
+}
+
+var manifestGenProcessCmd = &cobra.Command{
+	Use:   "gen-process",
+	Short: "Generate process-compose.yaml from manifests",
+	RunE:  runManifestGenProcess,
+}
+
+var manifestGenTaskfileCmd = &cobra.Command{
+	Use:   "gen-taskfile",
+	Short: "Generate Taskfile.yml with remote includes",
+	RunE:  runManifestGenTaskfile,
+}
+
+var manifestGenAllCmd = &cobra.Command{
+	Use:   "gen-all",
+	Short: "Generate all files from manifests",
+	RunE:  runManifestGenAll,
+}
+
+var manifestInstallCmd = &cobra.Command{
+	Use:   "install [path]",
+	Short: "Install binary from manifest",
+	Long: `Install the binary defined in an xplat.yaml manifest.
+
+Supports multiple installation sources:
+- go: Uses 'go install' (e.g., go: github.com/user/repo/cmd/tool)
+- github: Downloads from GitHub releases
+- npm: Uses npm/bun global install
+- url: Direct download from URL
+
+Examples:
+  xplat manifest install                    # Install from ./xplat.yaml
+  xplat manifest install /path/to/project   # Install from specific path
+  xplat manifest install --force            # Force reinstall`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runManifestInstall,
+}
+
+var manifestInstallAllCmd = &cobra.Command{
+	Use:   "install-all",
+	Short: "Install binaries from all discovered manifests",
+	RunE:  runManifestInstallAll,
+}
+
+func init() {
+	// Flags for discover/gen commands
+	ManifestCmd.PersistentFlags().StringVarP(&manifestDir, "dir", "d", ".", "Directory to search for manifests")
+	ManifestCmd.PersistentFlags().StringVarP(&manifestOutput, "output", "o", ".", "Output directory for generated files")
+	ManifestCmd.PersistentFlags().StringVar(&manifestRepoURL, "repo-url", "https://github.com/joeblew999", "Base URL for GitHub repos")
+
+	// GitHub discovery flags
+	manifestDiscoverGitHubCmd.Flags().StringVar(&manifestGitHubOwner, "owner", "joeblew999", "GitHub owner/org")
+	manifestDiscoverGitHubCmd.Flags().StringVar(&manifestGitHubPrefix, "prefix", "plat-", "Repo name prefix to match")
+
+	ManifestCmd.AddCommand(manifestValidateCmd)
+	ManifestCmd.AddCommand(manifestShowCmd)
+	ManifestCmd.AddCommand(manifestDiscoverCmd)
+	ManifestCmd.AddCommand(manifestDiscoverGitHubCmd)
+	ManifestCmd.AddCommand(manifestGenEnvCmd)
+	ManifestCmd.AddCommand(manifestGenProcessCmd)
+	ManifestCmd.AddCommand(manifestGenTaskfileCmd)
+	ManifestCmd.AddCommand(manifestGenAllCmd)
+
+	// Install commands
+	manifestInstallCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Force reinstall")
+	manifestInstallCmd.Flags().BoolVarP(&manifestVerbose, "verbose", "v", false, "Verbose output")
+	manifestInstallAllCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Force reinstall")
+	manifestInstallAllCmd.Flags().BoolVarP(&manifestVerbose, "verbose", "v", false, "Verbose output")
+
+	ManifestCmd.AddCommand(manifestInstallCmd)
+	ManifestCmd.AddCommand(manifestInstallAllCmd)
+}
+
+func runManifestValidate(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	loader := manifest.NewLoader()
+
+	// Check if path is a file or directory
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	var m *manifest.Manifest
+	if info.IsDir() {
+		m, err = loader.LoadDir(path)
+	} else {
+		m, err = loader.LoadFile(path)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ Valid manifest: %s v%s\n", m.Name, m.Version)
+	return nil
+}
+
+func runManifestShow(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	loader := manifest.NewLoader()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	var m *manifest.Manifest
+	if info.IsDir() {
+		m, err = loader.LoadDir(path)
+	} else {
+		m, err = loader.LoadFile(path)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Name:        %s\n", m.Name)
+	fmt.Printf("Version:     %s\n", m.Version)
+	fmt.Printf("Description: %s\n", m.Description)
+	fmt.Printf("Author:      %s\n", m.Author)
+	fmt.Printf("License:     %s\n", m.License)
+
+	if m.HasBinary() {
+		fmt.Printf("\nBinary:\n")
+		fmt.Printf("  Name: %s\n", m.Binary.Name)
+		if m.Binary.Source != nil {
+			if m.Binary.Source.Go != "" {
+				fmt.Printf("  Source: go install %s\n", m.Binary.Source.Go)
+			}
+		}
+	}
+
+	if m.Taskfile != nil {
+		fmt.Printf("\nTaskfile:\n")
+		fmt.Printf("  Path: %s\n", m.Taskfile.Path)
+		fmt.Printf("  Namespace: %s\n", m.Taskfile.Namespace)
+	}
+
+	if m.HasProcesses() {
+		fmt.Printf("\nProcesses:\n")
+		for name, p := range m.Processes {
+			fmt.Printf("  %s:\n", name)
+			fmt.Printf("    Command: %s\n", p.Command)
+			if p.Port > 0 {
+				fmt.Printf("    Port: %d\n", p.Port)
+			}
+			if len(p.DependsOn) > 0 {
+				fmt.Printf("    Depends: %v\n", p.DependsOn)
+			}
+		}
+	}
+
+	if m.HasEnv() {
+		fmt.Printf("\nEnvironment Variables:\n")
+		fmt.Printf("  Required: %d\n", len(m.Env.Required))
+		for _, v := range m.Env.Required {
+			fmt.Printf("    - %s\n", v.Name)
+		}
+		fmt.Printf("  Optional: %d\n", len(m.Env.Optional))
+		for _, v := range m.Env.Optional {
+			fmt.Printf("    - %s\n", v.Name)
+		}
+	}
+
+	if m.Dependencies != nil {
+		if len(m.Dependencies.Build) > 0 {
+			fmt.Printf("\nBuild Dependencies: %v\n", m.Dependencies.Build)
+		}
+		if len(m.Dependencies.Runtime) > 0 {
+			fmt.Printf("Runtime Dependencies: %v\n", m.Dependencies.Runtime)
+		}
+	}
+
+	return nil
+}
+
+func runManifestDiscover(cmd *cobra.Command, args []string) error {
+	loader := manifest.NewLoader()
+
+	manifests, err := loader.DiscoverPlat(manifestDir)
+	if err != nil {
+		return err
+	}
+
+	if len(manifests) == 0 {
+		fmt.Println("No manifests found in plat-* directories")
+		return nil
+	}
+
+	fmt.Printf("Found %d manifests:\n\n", len(manifests))
+	for _, m := range manifests {
+		fmt.Printf("  %s v%s\n", m.Name, m.Version)
+		if m.Description != "" {
+			fmt.Printf("    %s\n", m.Description)
+		}
+	}
+
+	return nil
+}
+
+func runManifestDiscoverGitHub(cmd *cobra.Command, args []string) error {
+	loader := manifest.NewLoader()
+
+	fmt.Printf("Discovering manifests from github.com/%s/%s*...\n\n", manifestGitHubOwner, manifestGitHubPrefix)
+
+	manifests, err := loader.DiscoverGitHub(manifestGitHubOwner, manifestGitHubPrefix)
+	if err != nil {
+		return err
+	}
+
+	if len(manifests) == 0 {
+		fmt.Printf("No manifests found in %s/%s* repos\n", manifestGitHubOwner, manifestGitHubPrefix)
+		return nil
+	}
+
+	fmt.Printf("Found %d manifests:\n\n", len(manifests))
+	for _, m := range manifests {
+		fmt.Printf("  %s v%s\n", m.Name, m.Version)
+		if m.Description != "" {
+			fmt.Printf("    %s\n", m.Description)
+		}
+		if m.HasBinary() {
+			fmt.Printf("    Binary: %s\n", m.Binary.Name)
+		}
+		if m.HasProcesses() {
+			fmt.Printf("    Processes: %d\n", len(m.Processes))
+		}
+	}
+
+	return nil
+}
+
+func loadManifestsForGen() ([]*manifest.Manifest, error) {
+	loader := manifest.NewLoader()
+
+	// First try to load from current directory
+	if m, err := loader.LoadDir(manifestDir); err == nil {
+		return []*manifest.Manifest{m}, nil
+	}
+
+	// Otherwise discover from plat-* directories
+	manifests, err := loader.DiscoverPlat(manifestDir)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(manifests) == 0 {
+		return nil, fmt.Errorf("no manifests found")
+	}
+
+	return manifests, nil
+}
+
+func runManifestGenEnv(cmd *cobra.Command, args []string) error {
+	manifests, err := loadManifestsForGen()
+	if err != nil {
+		return err
+	}
+
+	gen := manifest.NewGenerator(manifests)
+	outputPath := filepath.Join(manifestOutput, ".env.example")
+
+	if err := gen.GenerateEnvExample(outputPath); err != nil {
+		return err
+	}
+
+	fmt.Printf("Generated %s\n", outputPath)
+	return nil
+}
+
+func runManifestGenProcess(cmd *cobra.Command, args []string) error {
+	manifests, err := loadManifestsForGen()
+	if err != nil {
+		return err
+	}
+
+	gen := manifest.NewGenerator(manifests)
+	outputPath := filepath.Join(manifestOutput, "process-compose.generated.yaml")
+
+	if err := gen.GenerateProcessCompose(outputPath); err != nil {
+		return err
+	}
+
+	fmt.Printf("Generated %s\n", outputPath)
+	return nil
+}
+
+func runManifestGenTaskfile(cmd *cobra.Command, args []string) error {
+	manifests, err := loadManifestsForGen()
+	if err != nil {
+		return err
+	}
+
+	gen := manifest.NewGenerator(manifests)
+	outputPath := filepath.Join(manifestOutput, "Taskfile.generated.yml")
+
+	if err := gen.GenerateTaskfile(outputPath, manifestRepoURL); err != nil {
+		return err
+	}
+
+	fmt.Printf("Generated %s\n", outputPath)
+	return nil
+}
+
+func runManifestGenAll(cmd *cobra.Command, args []string) error {
+	manifests, err := loadManifestsForGen()
+	if err != nil {
+		return err
+	}
+
+	gen := manifest.NewGenerator(manifests)
+
+	// Generate .env.example
+	envPath := filepath.Join(manifestOutput, ".env.example")
+	if err := gen.GenerateEnvExample(envPath); err != nil {
+		return fmt.Errorf("failed to generate .env.example: %w", err)
+	}
+	fmt.Printf("Generated %s\n", envPath)
+
+	// Generate process-compose.yaml
+	processPath := filepath.Join(manifestOutput, "process-compose.generated.yaml")
+	if err := gen.GenerateProcessCompose(processPath); err != nil {
+		return fmt.Errorf("failed to generate process-compose: %w", err)
+	}
+	fmt.Printf("Generated %s\n", processPath)
+
+	// Generate Taskfile
+	taskfilePath := filepath.Join(manifestOutput, "Taskfile.generated.yml")
+	if err := gen.GenerateTaskfile(taskfilePath, manifestRepoURL); err != nil {
+		return fmt.Errorf("failed to generate Taskfile: %w", err)
+	}
+	fmt.Printf("Generated %s\n", taskfilePath)
+
+	return nil
+}
+
+func runManifestInstall(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	loader := manifest.NewLoader()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	var m *manifest.Manifest
+	if info.IsDir() {
+		m, err = loader.LoadDir(path)
+	} else {
+		m, err = loader.LoadFile(path)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if !m.HasBinary() {
+		return fmt.Errorf("manifest %s has no binary defined", m.Name)
+	}
+
+	installer := manifest.NewInstaller().
+		WithForce(manifestForce).
+		WithVerbose(manifestVerbose)
+
+	return installer.Install(m)
+}
+
+func runManifestInstallAll(cmd *cobra.Command, args []string) error {
+	loader := manifest.NewLoader()
+
+	manifests, err := loader.DiscoverPlat(manifestDir)
+	if err != nil {
+		return err
+	}
+
+	if len(manifests) == 0 {
+		fmt.Println("No manifests found in plat-* directories")
+		return nil
+	}
+
+	installer := manifest.NewInstaller().
+		WithForce(manifestForce).
+		WithVerbose(manifestVerbose)
+
+	var installed, skipped, failed int
+
+	for _, m := range manifests {
+		if !m.HasBinary() {
+			skipped++
+			continue
+		}
+
+		fmt.Printf("Installing %s...\n", m.Name)
+		if err := installer.Install(m); err != nil {
+			fmt.Printf("  Failed: %v\n", err)
+			failed++
+		} else {
+			installed++
+		}
+	}
+
+	fmt.Printf("\nSummary: %d installed, %d skipped (no binary), %d failed\n",
+		installed, skipped, failed)
+
+	return nil
+}
