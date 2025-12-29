@@ -4,11 +4,14 @@ go 1.25.4
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.9.1
+	github.com/cbrgm/githubevents/v2 v2.11.0
 	github.com/f1bonacc1/process-compose v1.85.0
 	github.com/fatih/color v1.18.0
+	github.com/go-git/go-git/v5 v5.16.0
 	github.com/go-task/task/v3 v3.43.3
 	github.com/go-via/via v0.1.0
 	github.com/go-via/via-plugin-picocss v0.1.0
+	github.com/google/go-github/v67 v67.0.0
 	github.com/itchyny/gojq v0.12.18
 	github.com/kardianos/service v1.2.4
 	github.com/mholt/archives v0.1.5
@@ -63,7 +66,6 @@ require (
 	github.com/gin-gonic/gin v1.11.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
-	github.com/go-git/go-git/v5 v5.16.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.3 // indirect
 	github.com/go-openapi/jsonreference v0.21.3 // indirect
@@ -83,6 +85,8 @@ require (
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
+	github.com/google/go-github/v80 v80.0.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -151,7 +155,7 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

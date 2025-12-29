@@ -85,6 +85,10 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	// P12 (Service management)
 	rootCmd.AddCommand(cmd.ServiceCmd)
 
+	// P13 (Sync operations - run as service or CLI)
+	rootCmd.AddCommand(cmd.SyncGHCmd)
+	rootCmd.AddCommand(cmd.SyncCFCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
