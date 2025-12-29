@@ -80,6 +80,9 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	// P11 (Manifest management)
 	rootCmd.AddCommand(cmd.ManifestCmd)
 
+	// P12 (Service management)
+	rootCmd.AddCommand(cmd.ServiceCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

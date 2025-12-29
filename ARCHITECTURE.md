@@ -107,23 +107,71 @@ Handles Taskfile validation and archetypes:
 | `DetectArchetype()` | Detect Taskfile archetype |
 | `FindTaskfiles()` | Find Taskfiles in directory |
 
-## Future: Service Mode
+### internal/service
 
-xplat will eventually run as a long-running service for:
+System service management using kardianos/service:
+
+| Function | Description |
+|----------|-------------|
+| `DefaultConfig()` | Default service configuration |
+| `ConfigForProject()` | Config named after project directory |
+| `NewManager()` | Create a service manager |
+| `mgr.Install()` | Install as system service |
+| `mgr.Uninstall()` | Remove service |
+| `mgr.Start()` | Start the service |
+| `mgr.Stop()` | Stop the service |
+| `mgr.Status()` | Check service status |
+| `mgr.Run()` | Run the service (blocking) |
+
+## Service Mode
+
+xplat can run as a system service via `xplat service`:
+
+```bash
+xplat service install   # Install as LaunchAgent/systemd
+xplat service start     # Start the service
+xplat service status    # Check status
+xplat service stop      # Stop the service
+xplat service uninstall # Remove the service
+```
+
+### How It Works
+
+1. `xplat service install` registers xplat with the OS service manager
+2. The service runs `xplat dev` (process-compose) as a subprocess
+3. This keeps your development processes running in the background
+4. Survives reboots, auto-restarts on failure
+
+### Platform Support
+
+| Platform | Service Manager | Service Type |
+|----------|----------------|--------------|
+| macOS | launchd | LaunchAgent (user) |
+| Linux | systemd | User service |
+| Windows | SCM | Windows service |
+
+### Per-Project Services
+
+By default, service names include the project directory:
+
+```bash
+cd ~/projects/myapp
+xplat service install    # Creates "xplat-myapp" service
+
+cd ~/projects/another
+xplat service install    # Creates "xplat-another" service
+```
+
+Override with `--name`:
+```bash
+xplat service install --name my-custom-service
+```
+
+## Future Enhancements
+
+The service mode will expand to include:
 - Health monitoring of processes
 - Scheduled task execution
 - File watching and hot reload
 - Centralized logging
-
-The service architecture will be:
-
-```
-internal/
-├── service/
-│   ├── server.go     # HTTP/gRPC server
-│   ├── scheduler.go  # Task scheduling
-│   ├── watcher.go    # File watching
-│   └── health.go     # Health checks
-```
-
-The service will reuse all existing internal packages.
+- HTTP API for status/control
