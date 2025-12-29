@@ -17,7 +17,7 @@ vars:
   # WRANGLER_VERSION comes from xplat.env (loaded by root Taskfile dotenv)
   WRANGLER_VERSION: '{{.WRANGLER_VERSION}}'
   # Binary name - npm/bun handles platform-specific shims (.cmd on Windows)
-  WRANGLER_BIN: 'wrangler'
+  WRANGLER_BIN: 'wrangler{{exeExt}}'
   # Bun global bin directory (consistent location)
   BUN_GLOBAL_BIN: '{{.HOME}}/.bun/bin'
 

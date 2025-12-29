@@ -100,7 +100,6 @@ func checkTaskfileExists(m *Manifest, repoPath string) bool {
 	if _, err := os.Stat(filepath.Join(repoPath, "Taskfile.yml")); err == nil {
 		return true
 	}
-
 	return false
 }
 

@@ -115,13 +115,13 @@ tasks:
     deps: [src:clone]
     cmds:
       - mkdir -p "{{.PLAT_BIN}}"
-      - echo "Override bin:build in your subsystem Taskfile"
+      - 'echo "Override bin:build in your subsystem Taskfile"'
 
   bin:download:
     desc: Download pre-built binary (override in subsystem Taskfile)
     cmds:
       - mkdir -p "{{.PLAT_BIN}}"
-      - echo "Override bin:download in your subsystem Taskfile"
+      - 'echo "Override bin:download in your subsystem Taskfile"'
 
   ensure:
     desc: Ensure binary exists (download or build)

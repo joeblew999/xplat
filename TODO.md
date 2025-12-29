@@ -244,16 +244,38 @@ xplat git is-repo .src                                   # Check if git repo
 
 ---
 
-### 2. sync-* Folders & internal/env for Cloudflare/GitHub Ops
+### 2. sync-* Services from plat-telemetry → Port to xplat
 
-**STATUS: KEEP SEPARATE**
+**STATUS: TODO**
 
-This is NOT an OS utility - it's xplat-specific ops functionality. Keep in `internal/env` or create `internal/ops`.
+Port the working sync-* services from plat-telemetry. These are sync/integration services with working code.
 
-- [ ] Review and consolidate `internal/env` package
-- [ ] Add `xplat ops sync` command for GitHub secrets sync
-- [ ] Add `xplat ops cloudflare` command for Cloudflare mutations
-- [ ] Document the sync-* folder pattern from plat-telemetry
+**From plat-telemetry/sync-git/** (DONE - already ported):
+- `xplat git clone/pull/fetch/checkout/hash/tags/branch/is-repo`
+
+**From plat-telemetry/sync-gh/** (TODO):
+```bash
+xplat github state [repo]         # Capture GitHub state (workflows, releases)
+xplat github check                # Check for upstream updates
+xplat github poll                 # Poll upstream repos
+xplat github webhook              # Start webhook server
+xplat github tunnel <smee-url>    # Forward webhooks via smee.io
+```
+
+**From plat-telemetry/sync-cf/** (TODO):
+```bash
+xplat cloudflare tunnel [port]    # Start cloudflared quick tunnel
+xplat cloudflare poll [interval]  # Poll CF audit logs
+xplat cloudflare webhook [port]   # Start CF webhook server
+xplat cloudflare check            # Check if cloudflared installed
+xplat cloudflare install          # Install cloudflared
+```
+
+- [ ] Port `sync-gh/pkg/*` to `internal/github/`
+- [ ] Port `sync-cf/pkg/*` to `internal/cloudflare/`
+- [ ] Add `xplat github` command
+- [ ] Add `xplat cloudflare` command
+- [ ] Uses env vars: GITHUB_TOKEN, CF_ACCOUNT_ID, CF_API_TOKEN
 
 ---
 
