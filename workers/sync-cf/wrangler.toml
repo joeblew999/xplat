@@ -1,0 +1,21 @@
+# Cloudflare Worker configuration for xplat sync-cf
+# See: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "xplat-sync-cf"
+main = "./.bin/worker.mjs"
+compatibility_date = "2024-01-01"
+
+# Account ID - set via CLOUDFLARE_ACCOUNT_ID env var or uncomment:
+# account_id = "your-account-id"
+
+# Environment variables (secrets should use wrangler secret put)
+[vars]
+# SYNC_ENDPOINT = "https://your-tunnel.example.com/cf/webhook"
+
+# Production environment
+[env.production]
+# SYNC_ENDPOINT = "https://sync.your-domain.com/cf/webhook"
+
+# Build configuration - uses xplat task for Go WASM build
+[build]
+command = "xplat task bin:build"

@@ -1,0 +1,177 @@
+# xplat sync-cf Worker Taskfile
+#
+# Cloudflare Worker that aggregates CF events and forwards to xplat sync service.
+# Built with TinyGo for WASM (fits in free tier <1MB).
+#
+# Deploy: xplat task deploy
+# Dev: xplat task run
+#
+# Uses xplat for cross-platform operations.
+
+version: '3'
+
+vars:
+  WORKER_NAME: xplat-sync-cf
+  WORKER_VERSION: '{{.WORKER_VERSION | default "0.1.0"}}'
+  WORKER_SRC: '{{.TASKFILE_DIR}}'
+  WORKER_BIN: '{{.TASKFILE_DIR}}/.bin'
+  WORKER_BIN_NAME: app.wasm
+  WORKER_BIN_PATH: '{{.WORKER_BIN}}/{{.WORKER_BIN_NAME}}'
+  WORKER_PORT: '{{.WORKER_PORT | default "8787"}}'
+  # Pin workers-assets-gen version for reproducibility
+  ASSETS_GEN_VERSION: v0.31.0
+
+env:
+  GOWORK: off
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Build tasks
+  bin:build:
+    desc: Build WASM binary with TinyGo (fits free tier <1MB)
+    dir: '{{.WORKER_SRC}}'
+    status:
+      - test -f {{.WORKER_BIN_PATH}}
+      - test -f {{.WORKER_BIN}}/worker.mjs
+    cmds:
+      - xplat mkdir -p {{.WORKER_BIN}}
+      - go run github.com/syumai/workers/cmd/workers-assets-gen@{{.ASSETS_GEN_VERSION}} -mode=tinygo -o={{.WORKER_BIN}}
+      - tinygo build -o {{.WORKER_BIN_PATH}} -target wasm -no-debug .
+      - |
+        {
+          echo "version: {{.WORKER_VERSION}}"
+          echo "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "checksum: $(shasum -a 256 {{.WORKER_BIN_PATH}} | awk '{print $1}')"
+          echo "size: $(du -h {{.WORKER_BIN_PATH}} | cut -f1)"
+          echo "compiler: tinygo"
+        } > {{.WORKER_BIN}}/.version
+    sources:
+      - '{{.WORKER_SRC}}/*.go'
+      - '{{.WORKER_SRC}}/go.mod'
+    generates:
+      - '{{.WORKER_BIN_PATH}}'
+      - '{{.WORKER_BIN}}/worker.mjs'
+
+  bin:build:go:
+    desc: Build WASM binary with standard Go (larger, requires paid tier)
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - xplat mkdir -p {{.WORKER_BIN}}
+      - go run github.com/syumai/workers/cmd/workers-assets-gen@{{.ASSETS_GEN_VERSION}} -mode=go -o={{.WORKER_BIN}}
+      - GOOS=js GOARCH=wasm go build -ldflags="-X main.version={{.WORKER_VERSION}}" -o {{.WORKER_BIN_PATH}} .
+      - |
+        {
+          echo "version: {{.WORKER_VERSION}}"
+          echo "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "checksum: $(shasum -a 256 {{.WORKER_BIN_PATH}} | awk '{print $1}')"
+          echo "size: $(du -h {{.WORKER_BIN_PATH}} | cut -f1)"
+          echo "compiler: go"
+        } > {{.WORKER_BIN}}/.version
+
+  build:
+    desc: Build the worker (alias for bin:build)
+    deps: [bin:build]
+
+  # Dev tasks
+  run:
+    desc: Run local development server
+    deps: [wrangler:ensure, bin:build]
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - PATH="$HOME/.bun/bin:$PATH" wrangler dev --local --port {{.WORKER_PORT}}
+
+  test:
+    desc: Test local worker endpoints
+    cmds:
+      - |
+        echo "Testing {{.WORKER_NAME}} at http://localhost:{{.WORKER_PORT}}"
+        echo ""
+        echo "GET /"
+        curl -sf http://localhost:{{.WORKER_PORT}}/ | xplat jq . 2>/dev/null || curl -s http://localhost:{{.WORKER_PORT}}/
+        echo ""
+        echo "GET /health"
+        curl -sf http://localhost:{{.WORKER_PORT}}/health && echo " OK" || echo "FAILED"
+        echo ""
+        echo "POST /webhook/pages (test payload)"
+        curl -sf -X POST -H "Content-Type: application/json" \
+          -d '{"project":"test","deployment_id":"123"}' \
+          http://localhost:{{.WORKER_PORT}}/webhook/pages && echo " OK" || echo "FAILED"
+        echo ""
+        echo "GET /metrics"
+        curl -sf http://localhost:{{.WORKER_PORT}}/metrics | xplat jq . 2>/dev/null || curl -s http://localhost:{{.WORKER_PORT}}/metrics
+
+  # Deploy tasks
+  deploy:
+    desc: Deploy to Cloudflare Workers
+    deps: [wrangler:ensure, bin:build]
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - PATH="$HOME/.bun/bin:$PATH" wrangler deploy
+
+  deploy:production:
+    desc: Deploy to production environment
+    deps: [wrangler:ensure, bin:build]
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - PATH="$HOME/.bun/bin:$PATH" wrangler deploy --env production
+
+  # Utility tasks
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - xplat rm -rf {{.WORKER_BIN}}
+      - xplat rm -rf {{.WORKER_SRC}}/node_modules
+      - xplat rm -rf {{.WORKER_SRC}}/.wrangler
+
+  deps:
+    desc: Download Go dependencies
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  health:
+    desc: Check if local worker is healthy
+    cmds:
+      - curl -sf http://localhost:{{.WORKER_PORT}}/health > /dev/null
+
+  version:
+    desc: Show version
+    cmds:
+      - echo "{{.WORKER_VERSION}}"
+    silent: true
+
+  # Wrangler tasks
+  wrangler:ensure:
+    desc: Ensure wrangler CLI is installed
+    status:
+      - command -v wrangler || test -f ~/.bun/bin/wrangler
+    cmds:
+      - task: wrangler:install
+
+  wrangler:install:
+    desc: Install wrangler CLI
+    cmds:
+      - |
+        if command -v bun >/dev/null 2>&1; then
+          bun install -g wrangler
+          echo "Add bun to PATH: export PATH=\"\$HOME/.bun/bin:\$PATH\""
+        elif command -v npm >/dev/null 2>&1; then
+          npm install -g wrangler
+        else
+          echo "ERROR: Neither bun nor npm found. Install one first."
+          exit 1
+        fi
+
+  wrangler:secret:set:
+    desc: Set a secret in Cloudflare Workers
+    deps: [wrangler:ensure]
+    dir: '{{.WORKER_SRC}}'
+    cmds:
+      - PATH="$HOME/.bun/bin:$PATH" wrangler secret put {{.NAME}}
+    requires:
+      vars: [NAME]

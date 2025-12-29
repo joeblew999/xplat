@@ -28,6 +28,7 @@ Commands:
   webhook    Start CF webhook server
   check      Check if cloudflared is installed
   install    Install cloudflared
+  worker     Deploy sync-cf worker to Cloudflare edge
 
 Environment:
   CF_ACCOUNT_ID       Cloudflare account ID
@@ -38,7 +39,8 @@ Examples:
   xplat sync-cf check
   xplat sync-cf tunnel 8080
   xplat sync-cf poll --interval=1m
-  xplat sync-cf webhook --port=9090`,
+  xplat sync-cf webhook --port=9090
+  xplat sync-cf worker deploy`,
 }
 
 var syncCFTunnelCmd = &cobra.Command{
@@ -185,6 +187,57 @@ var syncCFInstallCmd = &cobra.Command{
 	},
 }
 
+var syncCFWorkerCmd = &cobra.Command{
+	Use:   "worker",
+	Short: "Manage sync-cf Cloudflare Worker",
+	Long: `Manage the sync-cf Cloudflare Worker.
+
+The worker runs on Cloudflare's edge and aggregates events from
+Pages deploys, Notifications, and Logpush, forwarding them to
+your xplat sync service.
+
+Commands:
+  xplat sync-cf worker build     Build WASM binary
+  xplat sync-cf worker run       Run local dev server
+  xplat sync-cf worker deploy    Deploy to Cloudflare
+  xplat sync-cf worker test      Test worker endpoints
+
+The worker source is in workers/sync-cf/`,
+}
+
+var syncCFWorkerBuildCmd = &cobra.Command{
+	Use:   "build",
+	Short: "Build worker WASM binary",
+	Run: func(cmd *cobra.Command, args []string) {
+		log.Printf("Building sync-cf worker...")
+		log.Printf("  cd workers/sync-cf && xplat task build")
+		log.Printf("")
+		log.Printf("Requires TinyGo for WASM compilation (fits free tier)")
+	},
+}
+
+var syncCFWorkerDeployCmd = &cobra.Command{
+	Use:   "deploy",
+	Short: "Deploy worker to Cloudflare",
+	Run: func(cmd *cobra.Command, args []string) {
+		log.Printf("Deploying sync-cf worker...")
+		log.Printf("  cd workers/sync-cf && xplat task deploy")
+		log.Printf("")
+		log.Printf("Requires wrangler CLI and CLOUDFLARE_API_TOKEN")
+	},
+}
+
+var syncCFWorkerRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run local development server",
+	Run: func(cmd *cobra.Command, args []string) {
+		log.Printf("Running sync-cf worker locally...")
+		log.Printf("  cd workers/sync-cf && xplat task run")
+		log.Printf("")
+		log.Printf("Access at http://localhost:8787")
+	},
+}
+
 func init() {
 	syncCFPollCmd.Flags().StringVar(&syncCFPollInterval, "interval", "1m", "Poll interval")
 	syncCFWebhookCmd.Flags().StringVar(&syncCFWebhookPort, "port", "9090", "Webhook server port")
@@ -194,4 +247,10 @@ func init() {
 	SyncCFCmd.AddCommand(syncCFWebhookCmd)
 	SyncCFCmd.AddCommand(syncCFCheckCmd)
 	SyncCFCmd.AddCommand(syncCFInstallCmd)
+
+	// Worker subcommands
+	syncCFWorkerCmd.AddCommand(syncCFWorkerBuildCmd)
+	syncCFWorkerCmd.AddCommand(syncCFWorkerDeployCmd)
+	syncCFWorkerCmd.AddCommand(syncCFWorkerRunCmd)
+	SyncCFCmd.AddCommand(syncCFWorkerCmd)
 }
