@@ -44,6 +44,10 @@ jobs:
             goos: windows
             goarch: amd64
             ext: '.exe'
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+            ext: '.exe'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -317,6 +321,12 @@ jobs:
 
           ### Installation
 
+          **Recommended:** Use self-update (if xplat is already installed):
+          ```bash
+          xplat update
+          ```
+
+          **Manual install:**
           ```bash
           # macOS (Apple Silicon)
           curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-darwin-arm64 -o /usr/local/bin/xplat
@@ -333,6 +343,9 @@ jobs:
           # Linux (ARM64)
           curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-linux-arm64 -o ~/.local/bin/xplat
           chmod +x ~/.local/bin/xplat
+
+          # Windows (PowerShell)
+          Invoke-WebRequest -Uri https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-windows-amd64.exe -OutFile $env:LOCALAPPDATA\xplat\xplat.exe
           ```
 
           ### Commands

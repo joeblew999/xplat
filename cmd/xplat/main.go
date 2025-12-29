@@ -29,6 +29,7 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 
 	// Add subcommands - P0 (core)
 	rootCmd.AddCommand(cmd.VersionCmd)
+	rootCmd.AddCommand(cmd.UpdateCmd)
 	rootCmd.AddCommand(cmd.WhichCmd)
 	rootCmd.AddCommand(cmd.RunCmd)
 	rootCmd.AddCommand(cmd.GlobCmd)
