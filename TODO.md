@@ -80,25 +80,18 @@ These packages currently live in ubuntu-website and should move to plat-* repos:
 - [ ] cli → plat-cli (shared CLI framework)
 - [ ] Remove deprecated Hugo registry code
 
-### 4. Service Mode (`xplat service`)
+### 4. Service Mode (`xplat service`) - DONE
 
-Port kardianos service runner from plat-telemetry/service/main.go to xplat.
-
-Reference: `/Users/apple/workspace/go/src/github.com/joeblew999/plat-telemetry/service/main.go`
-
-Features:
-- [ ] `xplat service install` - Install as system service (LaunchAgent/systemd)
-- [ ] `xplat service uninstall` - Remove system service
-- [ ] `xplat service start` - Start the service
-- [ ] `xplat service stop` - Stop the service
-- [ ] `xplat service status` - Check service status
-- [ ] Runs `xplat dev` (process-compose) as subprocess
-- [ ] Works as user service (not root)
-- [ ] Cross-platform (macOS LaunchAgent, Linux systemd, Windows service)
-
-Architecture:
-- `internal/service/` - kardianos wrapper, service config
-- `cmd/xplat/cmd/service.go` - CLI commands
+- [x] `xplat service install` - Install as system service (LaunchAgent/systemd)
+- [x] `xplat service uninstall` - Remove system service
+- [x] `xplat service start` - Start the service
+- [x] `xplat service stop` - Stop the service
+- [x] `xplat service status` - Check service status
+- [x] `xplat service restart` - Restart the service
+- [x] Runs `xplat dev` (process-compose) as subprocess
+- [x] Works as user service (not root)
+- [x] Cross-platform (macOS LaunchAgent, Linux systemd, Windows service)
+- [x] Per-project naming (xplat-<dirname>) or custom --name
 
 ## Future Enhancements
 
