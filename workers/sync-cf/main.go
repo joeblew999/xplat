@@ -15,7 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/syumai/workers"
@@ -37,12 +37,33 @@ type Event struct {
 
 // Usage tracks request counts for billing visibility
 type Usage struct {
-	TotalRequests   int64 `json:"total_requests"`
-	WebhookPages    int64 `json:"webhook_pages"`
-	WebhookAlert    int64 `json:"webhook_alert"`
-	Logpush         int64 `json:"logpush"`
-	ForwardSuccess  int64 `json:"forward_success"`
-	ForwardFailures int64 `json:"forward_failures"`
+	mu              sync.Mutex
+	TotalRequests   int64
+	WebhookPages    int64
+	WebhookAlert    int64
+	Logpush         int64
+	ForwardSuccess  int64
+	ForwardFailures int64
+}
+
+func (u *Usage) incTotal()          { u.mu.Lock(); u.TotalRequests++; u.mu.Unlock() }
+func (u *Usage) incPages()          { u.mu.Lock(); u.WebhookPages++; u.mu.Unlock() }
+func (u *Usage) incAlert()          { u.mu.Lock(); u.WebhookAlert++; u.mu.Unlock() }
+func (u *Usage) incLogpush()        { u.mu.Lock(); u.Logpush++; u.mu.Unlock() }
+func (u *Usage) incForwardSuccess() { u.mu.Lock(); u.ForwardSuccess++; u.mu.Unlock() }
+func (u *Usage) incForwardFailure() { u.mu.Lock(); u.ForwardFailures++; u.mu.Unlock() }
+
+func (u *Usage) snapshot() map[string]int64 {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return map[string]int64{
+		"total_requests":   u.TotalRequests,
+		"webhook_pages":    u.WebhookPages,
+		"webhook_alert":    u.WebhookAlert,
+		"logpush":          u.Logpush,
+		"forward_success":  u.ForwardSuccess,
+		"forward_failures": u.ForwardFailures,
+	}
 }
 
 // Version set by ldflags at build time
@@ -105,14 +126,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := map[string]interface{}{
 		"worker":  workerName,
 		"version": version,
-		"usage": map[string]int64{
-			"total_requests":   atomic.LoadInt64(&usage.TotalRequests),
-			"webhook_pages":    atomic.LoadInt64(&usage.WebhookPages),
-			"webhook_alert":    atomic.LoadInt64(&usage.WebhookAlert),
-			"logpush":          atomic.LoadInt64(&usage.Logpush),
-			"forward_success":  atomic.LoadInt64(&usage.ForwardSuccess),
-			"forward_failures": atomic.LoadInt64(&usage.ForwardFailures),
-		},
+		"usage":   usage.snapshot(),
 		"config": map[string]interface{}{
 			"sync_endpoint_configured": syncEndpoint != "",
 		},
@@ -124,8 +138,8 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 // handlePagesWebhook handles Cloudflare Pages deploy hooks
 func handlePagesWebhook(w http.ResponseWriter, r *http.Request) {
-	atomic.AddInt64(&usage.TotalRequests, 1)
-	atomic.AddInt64(&usage.WebhookPages, 1)
+	usage.incTotal()
+	usage.incPages()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -165,8 +179,8 @@ func handlePagesWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleAlertWebhook handles Cloudflare Notifications webhooks
 func handleAlertWebhook(w http.ResponseWriter, r *http.Request) {
-	atomic.AddInt64(&usage.TotalRequests, 1)
-	atomic.AddInt64(&usage.WebhookAlert, 1)
+	usage.incTotal()
+	usage.incAlert()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -220,8 +234,8 @@ func handleAlertWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleLogpush handles Cloudflare Logpush HTTP destination
 func handleLogpush(w http.ResponseWriter, r *http.Request) {
-	atomic.AddInt64(&usage.TotalRequests, 1)
-	atomic.AddInt64(&usage.Logpush, 1)
+	usage.incTotal()
+	usage.incLogpush()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -289,14 +303,14 @@ func forwardEvent(ctx context.Context, event Event) error {
 
 	body, err := json.Marshal(event)
 	if err != nil {
-		atomic.AddInt64(&usage.ForwardFailures, 1)
+		usage.incForwardFailure()
 		return fmt.Errorf("marshal event: %w", err)
 	}
 
 	cli := fetch.NewClient()
 	req, err := fetch.NewRequest(ctx, http.MethodPost, syncEndpoint, bytes.NewReader(body))
 	if err != nil {
-		atomic.AddInt64(&usage.ForwardFailures, 1)
+		usage.incForwardFailure()
 		return fmt.Errorf("create request: %w", err)
 	}
 
@@ -307,17 +321,17 @@ func forwardEvent(ctx context.Context, event Event) error {
 
 	resp, err := cli.Do(req, nil)
 	if err != nil {
-		atomic.AddInt64(&usage.ForwardFailures, 1)
+		usage.incForwardFailure()
 		return fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		atomic.AddInt64(&usage.ForwardFailures, 1)
+		usage.incForwardFailure()
 		return fmt.Errorf("sync service returned %d", resp.StatusCode)
 	}
 
-	atomic.AddInt64(&usage.ForwardSuccess, 1)
+	usage.incForwardSuccess()
 	log.Printf("forwarded event: %s/%s", event.Type, event.Action)
 	return nil
 }

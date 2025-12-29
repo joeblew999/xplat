@@ -19,3 +19,8 @@
 .vscode/
 .idea/
 .DS_Store
+
+# Worker build artifacts
+workers/**/.bin/
+workers/**/.wrangler/
+workers/**/node_modules/
