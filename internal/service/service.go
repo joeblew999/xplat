@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/joeblew999/xplat/internal/paths"
 	"github.com/kardianos/service"
 )
 
@@ -65,10 +66,8 @@ func (p *program) run() {
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr
 
-	// Ensure PATH includes common binary locations
-	p.cmd.Env = append(os.Environ(),
-		"PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"+os.Getenv("PATH"),
-	)
+	// Use xplat paths environment: PLAT_* vars + PLAT_BIN/XPLAT_BIN in PATH
+	p.cmd.Env = paths.FullEnv(p.workDir)
 
 	if err := p.cmd.Run(); err != nil {
 		log.Printf("xplat dev exited: %v", err)

@@ -71,6 +71,7 @@ import (
 	"github.com/go-task/task/v3/args"
 	"github.com/go-task/task/v3/errors"
 	"github.com/go-task/task/v3/taskfile/ast"
+	"github.com/joeblew999/xplat/internal/paths"
 )
 
 // TaskCmd embeds the Task runner into xplat.
@@ -245,10 +246,9 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		workDir, _ = os.Getwd()
 	}
 	if workDir != "" {
-		os.Setenv("PLAT_SRC", filepath.Join(workDir, ".src"))
-		os.Setenv("PLAT_BIN", filepath.Join(workDir, ".bin"))
-		os.Setenv("PLAT_DATA", filepath.Join(workDir, ".data"))
-		os.Setenv("PLAT_DIST", filepath.Join(workDir, ".dist"))
+		paths.SetPlatEnv(workDir)
+		// Also update PATH to include PLAT_BIN and XPLAT_BIN
+		os.Setenv("PATH", paths.PathWithPlatBin(workDir))
 	}
 
 	// Create and configure the Executor
