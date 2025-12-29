@@ -3,10 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 
-	"github.com/bmatcuk/doublestar/v4"
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -37,33 +35,13 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		pattern := args[0]
 
-		// Build options - case insensitive on Windows
-		var opts []doublestar.GlobOption
-		if runtime.GOOS == "windows" {
-			opts = append(opts, doublestar.WithNoFollow())
+		matches, err := osutil.Glob(pattern)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
 		}
-
-		// Check if pattern is absolute
-		if filepath.IsAbs(pattern) {
-			// For absolute paths, use FilepathGlob which works with the real filesystem
-			matches, err := doublestar.FilepathGlob(pattern, opts...)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
-			}
-			for _, match := range matches {
-				fmt.Println(match)
-			}
-		} else {
-			// For relative paths, use DirFS rooted at current directory
-			matches, err := doublestar.Glob(os.DirFS("."), pattern, opts...)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
-			}
-			for _, match := range matches {
-				fmt.Println(match)
-			}
+		for _, match := range matches {
+			fmt.Println(match)
 		}
 	},
 }

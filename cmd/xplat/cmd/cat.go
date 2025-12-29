@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"os"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -25,17 +25,7 @@ Examples:
 		hasError := false
 
 		for _, path := range args {
-			f, err := os.Open(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cat: %s: %v\n", path, err)
-				hasError = true
-				continue
-			}
-
-			_, err = io.Copy(os.Stdout, f)
-			f.Close()
-
-			if err != nil {
+			if err := osutil.CatToWriter(path, os.Stdout); err != nil {
 				fmt.Fprintf(os.Stderr, "cat: %s: %v\n", path, err)
 				hasError = true
 			}

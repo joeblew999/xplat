@@ -195,3 +195,16 @@ xplat manifest bootstrap              # Creates .gitignore + other files
 - [ ] Support for private repos (GitHub token)
 - [ ] Dependency resolution between packages
 - [ ] Version pinning and lockfiles 
+
+
+---
+
+IDEAS i need you to review !!!
+
+also in the plat-telemetry proejct we have managed to rmeove the need for git at the OS level, and have a nice .version system.  This can be part of the os utils ? 
+
+we also have special sync-* folders that are needed for xplat to work well in terms of doing mutations to github and cloudflare, and for getting back hooks !!  We also have xplat/internal/env with stuff related to cloudflare too, but its kind of old but useful. The idea of course is to make sure xplat can handle ops things. 
+
+---
+
+dont forget about the jq cmd ?? i consider it an OS util because its just so useful.. 

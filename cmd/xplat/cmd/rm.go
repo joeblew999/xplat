@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -33,27 +34,7 @@ Examples:
 		hasError := false
 
 		for _, path := range args {
-			info, err := os.Stat(path)
-			if err != nil {
-				if os.IsNotExist(err) {
-					if !rmForce {
-						fmt.Fprintf(os.Stderr, "rm: %s: No such file or directory\n", path)
-						hasError = true
-					}
-					continue
-				}
-				fmt.Fprintf(os.Stderr, "rm: %s: %v\n", path, err)
-				hasError = true
-				continue
-			}
-
-			if info.IsDir() && !rmRecursive {
-				fmt.Fprintf(os.Stderr, "rm: %s: is a directory (use -r to remove)\n", path)
-				hasError = true
-				continue
-			}
-
-			if err := os.RemoveAll(path); err != nil {
+			if err := osutil.Remove(path, rmRecursive, rmForce); err != nil {
 				fmt.Fprintf(os.Stderr, "rm: %s: %v\n", path, err)
 				hasError = true
 			}

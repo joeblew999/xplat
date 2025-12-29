@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -29,18 +30,7 @@ Examples:
 		hasError := false
 
 		for _, path := range args {
-			var err error
-			if mkdirParents {
-				err = os.MkdirAll(path, 0755)
-			} else {
-				err = os.Mkdir(path, 0755)
-			}
-
-			if err != nil {
-				if os.IsExist(err) && mkdirParents {
-					// -p flag: no error if directory exists
-					continue
-				}
+			if err := osutil.Mkdir(path, mkdirParents); err != nil {
 				fmt.Fprintf(os.Stderr, "mkdir: %s: %v\n", path, err)
 				hasError = true
 			}

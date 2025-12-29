@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -25,24 +26,7 @@ Examples:
 		src := args[0]
 		dst := args[1]
 
-		// Check source exists
-		srcInfo, err := os.Stat(src)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mv: %s: %v\n", src, err)
-			os.Exit(1)
-		}
-
-		// If destination is a directory, move into it
-		dstInfo, err := os.Stat(dst)
-		if err == nil && dstInfo.IsDir() {
-			// Move source into destination directory
-			dst = dst + string(os.PathSeparator) + srcInfo.Name()
-		}
-
-		// Try os.Rename first (fast, same filesystem)
-		if err := os.Rename(src, dst); err != nil {
-			// If rename fails (cross-filesystem), fall back to copy+delete
-			// This handles the case where src and dst are on different mounts
+		if err := osutil.Move(src, dst); err != nil {
 			fmt.Fprintf(os.Stderr, "mv: %s: %v\n", src, err)
 			os.Exit(1)
 		}

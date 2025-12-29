@@ -3,9 +3,22 @@
 # Downloads and installs the xplat binary from GitHub Releases.
 # This module has no REQUIRES as it bootstraps itself.
 #
-# Other modules can use xplat for cross-platform operations:
-#   xplat which <binary>   - Find binary in PATH
-#   xplat glob <pattern>   - Expand glob pattern (supports **)
+# Cross-Platform Shell Commands (use these instead of raw Unix commands):
+#   xplat mkdir -p <dir>     - Create directories (replaces mkdir -p)
+#   xplat rm -rf <path>      - Remove files/dirs (replaces rm -rf)
+#   xplat cp [-r] <src> <dst> - Copy files/dirs (replaces cp)
+#   xplat mv <src> <dst>     - Move/rename (replaces mv)
+#   xplat cat <file>         - Print file contents (replaces cat)
+#   xplat touch <file>       - Create/update timestamp (replaces touch)
+#   xplat glob <pattern>     - Expand glob pattern (supports **)
+#   xplat which <binary>     - Find binary in PATH (replaces which)
+#   xplat env <var> [-d val] - Get env variable (cross-platform)
+#   xplat jq <query> [file]  - JSON processing (replaces jq)
+#   xplat extract <archive>  - Extract archives (tar.gz, zip, 7z, etc.)
+#   xplat fetch <url> [-x]   - Download files with optional extraction
+#
+# Why: Windows lacks these commands or they behave differently.
+# All plat-* repos should use xplat utilities for Windows compatibility.
 #
 # Pattern: All tool taskfiles define TOOL_BIN with {{exeExt}} for Windows support
 

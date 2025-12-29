@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"time"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -24,24 +24,11 @@ Examples:
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		hasError := false
-		now := time.Now()
 
 		for _, path := range args {
-			// Try to update timestamp first
-			if err := os.Chtimes(path, now, now); err != nil {
-				if os.IsNotExist(err) {
-					// Create the file
-					f, createErr := os.Create(path)
-					if createErr != nil {
-						fmt.Fprintf(os.Stderr, "touch: %s: %v\n", path, createErr)
-						hasError = true
-						continue
-					}
-					f.Close()
-				} else {
-					fmt.Fprintf(os.Stderr, "touch: %s: %v\n", path, err)
-					hasError = true
-				}
+			if err := osutil.Touch(path); err != nil {
+				fmt.Fprintf(os.Stderr, "touch: %s: %v\n", path, err)
+				hasError = true
 			}
 		}
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -28,9 +29,8 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		key := args[0]
-		value, exists := os.LookupEnv(key)
 
-		if !exists {
+		if !osutil.EnvExists(key) {
 			if envDefault != "" {
 				fmt.Println(envDefault)
 				return
@@ -38,7 +38,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		fmt.Println(value)
+		fmt.Println(osutil.Env(key))
 	},
 }
 

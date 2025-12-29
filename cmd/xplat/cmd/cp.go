@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/otiai10/copy"
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/spf13/cobra"
 )
 
@@ -31,32 +31,7 @@ Examples:
 		src := args[0]
 		dst := args[1]
 
-		info, err := os.Stat(src)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cp: %s: %v\n", src, err)
-			os.Exit(1)
-		}
-
-		if info.IsDir() && !cpRecursive {
-			fmt.Fprintf(os.Stderr, "cp: %s: is a directory (use -r to copy)\n", src)
-			os.Exit(1)
-		}
-
-		// Use otiai10/copy for robust cross-platform copying
-		opts := copy.Options{
-			// Follow symlinks (copy the target, not the link)
-			OnSymlink: func(src string) copy.SymlinkAction {
-				return copy.Shallow
-			},
-			// Preserve permissions
-			PermissionControl: copy.PerservePermission,
-			// Merge directories (don't fail if dst exists)
-			OnDirExists: func(src, dst string) copy.DirExistsAction {
-				return copy.Merge
-			},
-		}
-
-		if err := copy.Copy(src, dst, opts); err != nil {
+		if err := osutil.Copy(src, dst, cpRecursive); err != nil {
 			fmt.Fprintf(os.Stderr, "cp: %v\n", err)
 			os.Exit(1)
 		}
