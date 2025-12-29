@@ -246,36 +246,45 @@ xplat git is-repo .src                                   # Check if git repo
 
 ### 2. sync-* Services from plat-telemetry → Port to xplat
 
-**STATUS: TODO**
+**STATUS: DONE**
 
-Port the working sync-* services from plat-telemetry. These are sync/integration services with working code.
+Ported the working sync-* services from plat-telemetry.
 
-**From plat-telemetry/sync-git/** (DONE - already ported):
+**From plat-telemetry/sync-git/** (DONE):
 - `xplat git clone/pull/fetch/checkout/hash/tags/branch/is-repo`
 
-**From plat-telemetry/sync-gh/** (TODO):
+**From plat-telemetry/sync-gh/** (DONE):
 ```bash
-xplat github state [repo]         # Capture GitHub state (workflows, releases)
-xplat github check                # Check for upstream updates
-xplat github poll                 # Poll upstream repos
-xplat github webhook              # Start webhook server
-xplat github tunnel <smee-url>    # Forward webhooks via smee.io
+xplat sync-gh state [repo]        # Capture GitHub state (workflows, releases)
+xplat sync-gh release [repo]      # Get latest release tag
+xplat sync-gh poll                # Poll upstream repos continuously
+xplat sync-gh webhook             # Start webhook server
+xplat sync-gh tunnel <smee-url>   # Forward webhooks via smee.io
+xplat sync-gh tunnel-setup        # Create smee channel and configure webhook
 ```
 
-**From plat-telemetry/sync-cf/** (TODO):
+**From plat-telemetry/sync-cf/** (DONE):
 ```bash
-xplat cloudflare tunnel [port]    # Start cloudflared quick tunnel
-xplat cloudflare poll [interval]  # Poll CF audit logs
-xplat cloudflare webhook [port]   # Start CF webhook server
-xplat cloudflare check            # Check if cloudflared installed
-xplat cloudflare install          # Install cloudflared
+xplat sync-cf tunnel [port]       # Start cloudflared quick tunnel
+xplat sync-cf poll --interval=1m  # Poll CF audit logs continuously
+xplat sync-cf webhook --port=9090 # Start CF webhook server
+xplat sync-cf check               # Check if cloudflared installed
+xplat sync-cf install             # Install cloudflared from GitHub releases
+xplat sync-cf worker build/deploy/run  # Manage CF Worker
 ```
 
-- [ ] Port `sync-gh/pkg/*` to `internal/github/`
-- [ ] Port `sync-cf/pkg/*` to `internal/cloudflare/`
-- [ ] Add `xplat github` command
-- [ ] Add `xplat cloudflare` command
-- [ ] Uses env vars: GITHUB_TOKEN, CF_ACCOUNT_ID, CF_API_TOKEN
+**From plat-telemetry/sync-cf-worker/** (DONE):
+- Cloudflare Worker in `workers/sync-cf/` for edge event aggregation
+- Compiles to WASM with TinyGo (fits free tier <1MB)
+
+- [x] Port `sync-gh/pkg/*` to `internal/syncgh/`
+- [x] Port `sync-cf/pkg/*` to `internal/synccf/`
+- [x] Port `sync-cf-worker/` to `workers/sync-cf/`
+- [x] Add `xplat sync-gh` command
+- [x] Add `xplat sync-cf` command
+- [x] Install cloudflared from GitHub releases (cross-platform)
+- [x] Uses env vars: GITHUB_TOKEN, CF_ACCOUNT_ID, CF_API_TOKEN
+- [x] Added `.env.example` template
 
 ---
 
