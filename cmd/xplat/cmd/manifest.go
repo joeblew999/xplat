@@ -110,6 +110,23 @@ var manifestInstallAllCmd = &cobra.Command{
 	RunE:  runManifestInstallAll,
 }
 
+var manifestInitCmd = &cobra.Command{
+	Use:   "init [path]",
+	Short: "Initialize a new xplat.yaml manifest",
+	Long: `Scaffold a new xplat.yaml manifest for a project.
+
+Detects existing files and suggests configuration:
+- go.mod → binary config with go install source
+- Taskfile.yml → taskfile config for remote includes
+
+Examples:
+  xplat manifest init                    # Initialize in current directory
+  xplat manifest init /path/to/project   # Initialize in specific path
+  xplat manifest init --force            # Overwrite existing manifest`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runManifestInit,
+}
+
 func init() {
 	// Flags for discover/gen commands
 	ManifestCmd.PersistentFlags().StringVarP(&manifestDir, "dir", "d", ".", "Directory to search for manifests")
@@ -137,6 +154,10 @@ func init() {
 
 	ManifestCmd.AddCommand(manifestInstallCmd)
 	ManifestCmd.AddCommand(manifestInstallAllCmd)
+
+	// Init command
+	manifestInitCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Overwrite existing manifest")
+	ManifestCmd.AddCommand(manifestInitCmd)
 }
 
 func runManifestValidate(cmd *cobra.Command, args []string) error {
@@ -485,4 +506,113 @@ func runManifestInstallAll(cmd *cobra.Command, args []string) error {
 		installed, skipped, failed)
 
 	return nil
+}
+
+func runManifestInit(cmd *cobra.Command, args []string) error {
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	manifestPath := filepath.Join(path, "xplat.yaml")
+
+	// Check if manifest already exists
+	if _, err := os.Stat(manifestPath); err == nil && !manifestForce {
+		return fmt.Errorf("xplat.yaml already exists (use --force to overwrite)")
+	}
+
+	// Detect project info
+	name := filepath.Base(path)
+	if path == "." {
+		if wd, err := os.Getwd(); err == nil {
+			name = filepath.Base(wd)
+		}
+	}
+
+	// Build manifest content
+	var content string
+	content = "# xplat.yaml - Package manifest for xplat ecosystem\n"
+	content += "apiVersion: xplat/v1\n"
+	content += "kind: Package\n\n"
+	content += fmt.Sprintf("name: %s\n", name)
+	content += "version: main\n"
+	content += fmt.Sprintf("description: %s package\n", name)
+	content += "author: \n"
+	content += "license: MIT\n"
+
+	// Detect go.mod for binary config
+	goModPath := filepath.Join(path, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		moduleName := detectGoModule(goModPath)
+		if moduleName != "" {
+			content += "\n# Binary (detected from go.mod)\n"
+			content += "binary:\n"
+			content += fmt.Sprintf("  name: %s\n", name)
+			content += "  source:\n"
+			content += fmt.Sprintf("    go: %s\n", moduleName)
+			fmt.Printf("  Detected go.mod: %s\n", moduleName)
+		}
+	}
+
+	// Detect Taskfile.yml
+	taskfilePath := filepath.Join(path, "Taskfile.yml")
+	if _, err := os.Stat(taskfilePath); err == nil {
+		content += "\n# Taskfile (detected)\n"
+		content += "taskfile:\n"
+		content += "  path: Taskfile.yml\n"
+		content += fmt.Sprintf("  namespace: %s\n", name)
+		fmt.Printf("  Detected Taskfile.yml\n")
+	}
+
+	// Check for taskfiles/ directory
+	taskfilesDir := filepath.Join(path, "taskfiles")
+	if info, err := os.Stat(taskfilesDir); err == nil && info.IsDir() {
+		// Look for Taskfile-*.yml pattern
+		files, _ := filepath.Glob(filepath.Join(taskfilesDir, "Taskfile-*.yml"))
+		if len(files) > 0 {
+			taskfileName := filepath.Base(files[0])
+			content += "\n# Taskfile (detected in taskfiles/)\n"
+			content += "taskfile:\n"
+			content += fmt.Sprintf("  path: taskfiles/%s\n", taskfileName)
+			content += fmt.Sprintf("  namespace: %s\n", name)
+			fmt.Printf("  Detected taskfiles/%s\n", taskfileName)
+		}
+	}
+
+	// Add placeholder sections
+	content += "\n# Uncomment to define processes for process-compose\n"
+	content += "# processes:\n"
+	content += "#   server:\n"
+	content += "#     command: task run\n"
+	content += "#     port: 8080\n"
+
+	content += "\n# Uncomment to define environment variables\n"
+	content += "# env:\n"
+	content += "#   required:\n"
+	content += "#     - name: API_KEY\n"
+	content += "#       description: API key for the service\n"
+
+	// Write the manifest
+	if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write manifest: %w", err)
+	}
+
+	fmt.Printf("Created %s\n", manifestPath)
+	return nil
+}
+
+// detectGoModule reads go.mod and extracts the module name.
+func detectGoModule(goModPath string) string {
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return ""
+	}
+
+	// Simple parsing - look for "module" line
+	for _, line := range splitLines(string(data)) {
+		if len(line) > 7 && line[:7] == "module " {
+			return line[7:]
+		}
+	}
+	return ""
 }

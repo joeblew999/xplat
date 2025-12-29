@@ -1,6 +1,6 @@
 # Build artifacts
-xplat
-xplat.exe
+/xplat
+/xplat.exe
 *.test
 *.out
 
