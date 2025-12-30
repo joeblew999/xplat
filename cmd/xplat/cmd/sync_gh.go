@@ -46,53 +46,20 @@ var syncGHStateCmd = &cobra.Command{
 	Use:   "state [owner/repo]",
 	Short: "Capture or display GitHub repository state",
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if syncGHShowOnly {
-			// Show existing state
 			state, err := syncgh.LoadState(syncGHStateDir)
 			if err != nil {
-				log.Fatalf("Failed to load state: %v", err)
+				return fmt.Errorf("failed to load state: %w", err)
 			}
 
 			if state.SyncedAt.IsZero() {
 				fmt.Println("No state found. Run 'xplat sync-gh state <repo>' to capture.")
-				os.Exit(1)
+				return nil
 			}
 
-			fmt.Println("=== GitHub State ===")
-			fmt.Printf("Last synced: %s\n\n", state.SyncedAt.Format("2006-01-02 15:04:05 UTC"))
-
-			fmt.Println("--- Workflow Runs ---")
-			if len(state.WorkflowRuns) == 0 {
-				fmt.Println("No data")
-			} else {
-				for _, run := range state.WorkflowRuns {
-					conclusion := run.Conclusion
-					if conclusion == "" {
-						conclusion = run.Status
-					}
-					fmt.Printf("%s | %s | %s\n", conclusion, run.Name, run.CreatedAt.Format("2006-01-02 15:04"))
-				}
-			}
-			fmt.Println()
-
-			fmt.Println("--- Pages Builds ---")
-			if len(state.PagesBuilds) == 0 {
-				fmt.Println("No data")
-			} else {
-				for _, build := range state.PagesBuilds {
-					fmt.Printf("%s | %s\n", build.Status, build.CreatedAt.Format("2006-01-02 15:04"))
-				}
-			}
-			fmt.Println()
-
-			fmt.Println("--- Latest Release ---")
-			if state.LatestRelease == nil {
-				fmt.Println("No data")
-			} else {
-				fmt.Printf("%s | %s\n", state.LatestRelease.TagName, state.LatestRelease.PublishedAt.Format("2006-01-02 15:04"))
-			}
-			return
+			fmt.Print(syncgh.FormatState(state))
+			return nil
 		}
 
 		// Capture state
@@ -104,24 +71,23 @@ var syncGHStateCmd = &cobra.Command{
 			repo = os.Getenv("GITHUB_REPOSITORY")
 		}
 		if repo == "" {
-			fmt.Println("Usage: xplat sync-gh state [owner/repo] [--show] [--dir=.github/state]")
-			os.Exit(1)
+			return fmt.Errorf("usage: xplat sync-gh state [owner/repo] [--show] [--dir=.github/state]")
 		}
 
 		parts := strings.Split(repo, "/")
 		if len(parts) != 2 {
-			log.Fatalf("Invalid repo format: %s (expected owner/repo)", repo)
+			return fmt.Errorf("invalid repo format: %s (expected owner/repo)", repo)
 		}
 
 		log.Printf("Capturing state for %s...", repo)
 
 		state, err := syncgh.CaptureState(parts[0], parts[1])
 		if err != nil {
-			log.Fatalf("Failed to capture state: %v", err)
+			return fmt.Errorf("failed to capture state: %w", err)
 		}
 
 		if err := syncgh.SaveState(state, syncGHStateDir); err != nil {
-			log.Fatalf("Failed to save state: %v", err)
+			return fmt.Errorf("failed to save state: %w", err)
 		}
 
 		log.Printf("State captured:")
@@ -132,6 +98,7 @@ var syncGHStateCmd = &cobra.Command{
 		} else {
 			log.Printf("  - Latest release: none")
 		}
+		return nil
 	},
 }
 
@@ -139,19 +106,20 @@ var syncGHReleaseCmd = &cobra.Command{
 	Use:   "release <owner/repo>",
 	Short: "Get latest release tag for a repository",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		repo := args[0]
 		parts := strings.Split(repo, "/")
 		if len(parts) != 2 {
-			log.Fatalf("Invalid repo format: %s (expected owner/repo)", repo)
+			return fmt.Errorf("invalid repo format: %s (expected owner/repo)", repo)
 		}
 
 		tag, err := syncgh.GetLatestRelease(parts[0], parts[1])
 		if err != nil {
-			log.Fatalf("Failed to get release: %v", err)
+			return err
 		}
 
 		fmt.Println(tag)
+		return nil
 	},
 }
 
@@ -166,10 +134,10 @@ This is typically started automatically when xplat runs as a service.
 Can also be run manually for testing.
 
 Repos to poll are configured via xplat.yaml or command line.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		interval, err := time.ParseDuration(syncGHPollInterval)
 		if err != nil {
-			log.Fatalf("Invalid interval: %v", err)
+			return fmt.Errorf("invalid interval: %w", err)
 		}
 
 		// Default repos to poll (can be overridden by config)
@@ -185,12 +153,9 @@ Repos to poll are configured via xplat.yaml or command line.`,
 		poller := syncgh.NewPoller(interval, repos)
 		poller.OnUpdate(func(subsystem, oldVersion, newVersion string) {
 			log.Printf("Update detected: %s -> %s", subsystem, newVersion)
-			// TODO: trigger rebuild or other action
 		})
 
-		if err := poller.Start(); err != nil {
-			log.Fatal(err)
-		}
+		return poller.Start()
 	},
 }
 
@@ -230,20 +195,21 @@ var syncGHTunnelSetupCmd = &cobra.Command{
 	Use:   "tunnel-setup <owner/repo>",
 	Short: "Create smee channel and configure GitHub webhook",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		repo := args[0]
 
 		smeeURL := syncgh.GenerateSmeeChannel()
 		log.Printf("Created smee channel: %s", smeeURL)
 
 		if err := syncgh.ConfigureGitHubWebhook(repo, smeeURL, syncGHTunnelSetupEvents); err != nil {
-			log.Fatalf("Failed to configure webhook: %v", err)
+			return fmt.Errorf("failed to configure webhook: %w", err)
 		}
 
 		log.Printf("Webhook configured for %s", repo)
 		log.Printf("")
 		log.Printf("To start receiving webhooks:")
 		log.Printf("  xplat sync-gh tunnel %s", smeeURL)
+		return nil
 	},
 }
 

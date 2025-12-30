@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v67/github"
@@ -174,3 +175,45 @@ func writeJSON(path string, v any) error {
 	}
 	return os.WriteFile(path, data, 0644)
 }
+
+// FormatState returns a human-readable string representation of the state
+func FormatState(state *State) string {
+	var sb strings.Builder
+
+	sb.WriteString("=== GitHub State ===\n")
+	sb.WriteString(fmt.Sprintf("Last synced: %s\n\n", state.SyncedAt.Format("2006-01-02 15:04:05 UTC")))
+
+	sb.WriteString("--- Workflow Runs ---\n")
+	if len(state.WorkflowRuns) == 0 {
+		sb.WriteString("No data\n")
+	} else {
+		for _, run := range state.WorkflowRuns {
+			conclusion := run.Conclusion
+			if conclusion == "" {
+				conclusion = run.Status
+			}
+			sb.WriteString(fmt.Sprintf("%s | %s | %s\n", conclusion, run.Name, run.CreatedAt.Format("2006-01-02 15:04")))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("--- Pages Builds ---\n")
+	if len(state.PagesBuilds) == 0 {
+		sb.WriteString("No data\n")
+	} else {
+		for _, build := range state.PagesBuilds {
+			sb.WriteString(fmt.Sprintf("%s | %s\n", build.Status, build.CreatedAt.Format("2006-01-02 15:04")))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("--- Latest Release ---\n")
+	if state.LatestRelease == nil {
+		sb.WriteString("No data\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("%s | %s\n", state.LatestRelease.TagName, state.LatestRelease.PublishedAt.Format("2006-01-02 15:04")))
+	}
+
+	return sb.String()
+}
+

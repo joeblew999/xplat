@@ -196,3 +196,36 @@ func (c *Client) StartAuditPolling(ctx context.Context, interval time.Duration) 
 	go poller.Start(ctx)
 	return poller
 }
+
+// RunPoll is the high-level API for running audit log polling.
+// This is the main entry point for the CLI command.
+func RunPoll(ctx context.Context, accountID, apiToken string, interval time.Duration) error {
+	if accountID == "" || apiToken == "" {
+		return fmt.Errorf("CF_ACCOUNT_ID and CF_API_TOKEN environment variables required")
+	}
+
+	client, err := NewClient(Config{
+		APIToken:     apiToken,
+		AccountID:    accountID,
+		PollInterval: interval,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create CF client: %w", err)
+	}
+
+	client.OnAny(func(ctx context.Context, event Event) error {
+		log.Printf("EVENT: [%s] %s on %s by %s",
+			event.Type, event.Action, event.Resource, event.Actor)
+		return nil
+	})
+
+	log.Printf("Starting CF audit log polling (interval: %s)", interval)
+	log.Printf("  Account: %s", accountID)
+	log.Printf("")
+	log.Printf("Press Ctrl+C to stop")
+
+	poller := NewAuditPoller(client, interval)
+	poller.Start(ctx)
+
+	return nil
+}

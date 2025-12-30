@@ -426,3 +426,39 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// RunTunnel is the high-level API for running a cloudflared quick tunnel.
+// It handles cloudflared installation, signal handling, and graceful shutdown.
+// This is the main entry point for the CLI command.
+func RunTunnel(ctx context.Context, port int) error {
+	// Ensure cloudflared is installed
+	if err := CheckCloudflared(); err != nil {
+		log.Printf("cloudflared not found, attempting install...")
+		if err := InstallCloudflared(); err != nil {
+			return fmt.Errorf("cloudflared not available: %w", err)
+		}
+	}
+
+	tunnel := NewTunnel(TunnelConfig{
+		LocalPort: port,
+	})
+
+	log.Printf("Starting cloudflared quick tunnel for localhost:%d...", port)
+
+	if err := tunnel.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start tunnel: %w", err)
+	}
+
+	log.Printf("Tunnel URL: %s", tunnel.URL())
+	log.Printf("   Webhook endpoint: %s/webhook", tunnel.URL())
+	log.Printf("   CF webhook endpoint: %s/cf/webhook", tunnel.URL())
+	log.Printf("")
+	log.Printf("Press Ctrl+C to stop the tunnel")
+
+	// Wait for context cancellation
+	<-ctx.Done()
+	tunnel.Stop()
+	log.Printf("Tunnel stopped")
+
+	return nil
+}
