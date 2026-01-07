@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/go-via/via"
@@ -216,6 +217,44 @@ func viaTaskListPage(c *via.Context, tasks []TaskInfo, cfg ViaConfig) {
 	})
 }
 
+// groupTasksByNamespace organizes tasks by their prefix (namespace)
+func groupTasksByNamespace(tasks []TaskInfo) map[string][]TaskInfo {
+	groups := make(map[string][]TaskInfo)
+	for _, t := range tasks {
+		// Extract namespace from task name (e.g., "check:deps" -> "check")
+		namespace := ""
+		if idx := strings.Index(t.Name, ":"); idx > 0 {
+			namespace = t.Name[:idx]
+		}
+		groups[namespace] = append(groups[namespace], t)
+	}
+	return groups
+}
+
+// getNamespaceOrder returns namespaces sorted, with "" (root) first
+func getNamespaceOrder(groups map[string][]TaskInfo) []string {
+	var namespaces []string
+	for ns := range groups {
+		namespaces = append(namespaces, ns)
+	}
+	// Sort namespaces alphabetically
+	for i := 0; i < len(namespaces)-1; i++ {
+		for j := i + 1; j < len(namespaces); j++ {
+			if namespaces[i] > namespaces[j] {
+				namespaces[i], namespaces[j] = namespaces[j], namespaces[i]
+			}
+		}
+	}
+	// Move "" (root tasks) to front
+	for i, ns := range namespaces {
+		if ns == "" {
+			namespaces = append([]string{""}, append(namespaces[:i], namespaces[i+1:]...)...)
+			break
+		}
+	}
+	return namespaces
+}
+
 // viaTaskExecutionPage renders the task execution page with terminal output
 func viaTaskExecutionPage(c *via.Context, taskName, taskDesc string, tasks []TaskInfo, cfg ViaConfig) {
 	// Signals for state management
@@ -267,21 +306,65 @@ func viaTaskExecutionPage(c *via.Context, taskName, taskDesc string, tasks []Tas
 			statusText = "Error"
 		}
 
-		// Build sidebar task links
+		// Get current task's namespace
+		currentNamespace := ""
+		if idx := strings.Index(taskName, ":"); idx > 0 {
+			currentNamespace = taskName[:idx]
+		}
+
+		// Group tasks by namespace for organized sidebar
+		groups := groupTasksByNamespace(tasks)
+		namespaces := getNamespaceOrder(groups)
+
+		// Build sidebar with collapsible groups
 		var sidebarLinks []h.H
-		for _, t := range tasks {
-			isActive := t.Name == taskName
-			style := "display: block; padding: 0.5rem; text-decoration: none; border-radius: 0.25rem; margin-bottom: 0.25rem;"
-			if isActive {
-				style += " background-color: var(--pico-primary); color: white;"
+		for _, ns := range namespaces {
+			groupTasks := groups[ns]
+			isCurrentGroup := ns == currentNamespace
+
+			// Group header (if namespace exists)
+			if ns != "" {
+				headerStyle := "display: block; padding: 0.5rem 0.5rem; font-weight: bold; font-size: 0.85rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-muted-border-color); margin-top: 0.5rem;"
+				if isCurrentGroup {
+					headerStyle = "display: block; padding: 0.5rem 0.5rem; font-weight: bold; font-size: 0.85rem; color: var(--pico-primary); border-bottom: 1px solid var(--pico-primary); margin-top: 0.5rem;"
+				}
+				sidebarLinks = append(sidebarLinks, h.Div(
+					h.Style(headerStyle),
+					h.Text(ns+":"),
+				))
 			}
-			sidebarLinks = append(sidebarLinks,
-				h.A(
+
+			// Task links in this group
+			for _, t := range groupTasks {
+				isActive := t.Name == taskName
+				// Get display name (without namespace prefix if in a group)
+				displayName := t.Name
+				if ns != "" && strings.HasPrefix(t.Name, ns+":") {
+					displayName = strings.TrimPrefix(t.Name, ns+":")
+				}
+
+				style := "display: block; padding: 0.35rem 0.5rem; text-decoration: none; border-radius: 0.25rem; margin-bottom: 0.15rem; font-size: 0.9rem;"
+				if ns != "" {
+					style += " padding-left: 1rem;" // Indent namespaced tasks
+				}
+				if isActive {
+					style += " background-color: var(--pico-primary); color: white;"
+				}
+				link := h.A(
 					h.Href("/task/"+t.Name),
 					h.Style(style),
-					h.Text(t.Name),
-				),
-			)
+					h.Text(displayName),
+				)
+				if isActive {
+					link = h.A(
+						h.Href("/task/"+t.Name),
+						h.Style(style),
+						h.ID("active-task"),
+						h.Text(displayName),
+					)
+				}
+				sidebarLinks = append(sidebarLinks, link)
+			}
 		}
 
 		return h.Div(
@@ -311,10 +394,11 @@ func viaTaskExecutionPage(c *via.Context, taskName, taskDesc string, tasks []Tas
 
 					// Sidebar - task list
 					h.Aside(
+						h.Style("position: sticky; top: 1rem; align-self: start;"),
 						h.Article(
 							h.H4(h.Text("Tasks")),
 							h.Div(
-								h.Style("max-height: 400px; overflow-y: auto;"),
+								h.Style("max-height: calc(100vh - 150px); overflow-y: auto;"),
 								h.Div(sidebarLinks...),
 							),
 						),
