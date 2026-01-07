@@ -9,11 +9,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cmd/xplat/**'
+      - '*.go'
+      - 'cmd/**'
+      - 'internal/**'
       - '.github/workflows/core-xplat.yml'
   pull_request:
     paths:
-      - 'cmd/xplat/**'
+      - '*.go'
+      - 'cmd/**'
+      - 'internal/**'
   workflow_dispatch:
 
 jobs:
@@ -40,11 +44,11 @@ jobs:
       - name: Build xplat
         shell: bash
         run: |
-          go build -o xplat${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/xplat
+          go build -o xplat${{ runner.os == 'Windows' && '.exe' || '' }} .
           echo "Built xplat for ${{ matrix.name }}"
 
       - name: Run Go tests
-        run: go test -v ./cmd/xplat/...
+        run: go test -v ./...
 
       - name: Test xplat commands (Unix)
         if: runner.os != 'Windows'

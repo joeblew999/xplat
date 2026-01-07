@@ -77,7 +77,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           OUTPUT="xplat-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          go build -ldflags="-s -w -X main.Version=${VERSION}" -o "${OUTPUT}" ./cmd/xplat
+          go build -ldflags="-s -w -X main.Version=${VERSION}" -o "${OUTPUT}" .
           echo "Built ${OUTPUT}"
 
       - name: Upload artifact
