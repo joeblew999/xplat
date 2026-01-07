@@ -3,6 +3,7 @@
 Cross-platform Taskfile bootstrapper - a single binary that embeds:
 - **Task** (taskfile runner)
 - **Process-Compose** (process orchestration)
+- **Task UI** (web-based task runner with real-time output)
 - **Cross-platform utilities** (rm, cp, mv, glob, etc.)
 
 ## Installation
@@ -15,6 +16,29 @@ curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | 
 go build -o xplat .
 ```
 
+## Task UI
+
+A web-based interface for browsing and running Taskfile tasks with real-time streaming output.
+
+```bash
+xplat ui                    # Start on port 3000
+xplat ui -p 8080            # Custom port
+xplat ui -t Taskfile.ci.yml # Specific taskfile
+```
+
+**Features:**
+- Browse all tasks with descriptions
+- Grouped sidebar organized by namespace (e.g., `check:`, `dev:`, `build:`)
+- Real-time SSE streaming output
+- Remote taskfile support via `includes:` directive
+- Cached remote taskfiles (1-hour disk cache)
+
+### Task List
+![Task List](docs/images/taskui-tasklist.png)
+
+### Task Execution
+![Task Execution](docs/images/taskui-execution.png)
+
 ## Commands
 
 ### Core
@@ -23,6 +47,7 @@ go build -o xplat .
 |---------|-------------|
 | `xplat run` | Run a managed tool |
 | `xplat task` | Run Taskfile tasks (embedded Task runner) |
+| `xplat ui` | Start web-based Task UI |
 | `xplat version` | Print xplat version |
 | `xplat which` | Find binary in managed locations or PATH |
 
@@ -221,6 +246,20 @@ Run a managed tool
 ### `xplat task`
 
 Run Taskfile tasks (embedded Task runner)
+
+### `xplat ui`
+
+Start web-based Task UI for browsing and running tasks.
+
+**Flags:**
+- `-p, --port` - Port to listen on (default: 3000)
+- `-t, --taskfile` - Path to Taskfile (default: Taskfile.yml)
+- `--no-browser` - Don't open browser automatically
+
+**Features:**
+- Parses `includes:` directive to load remote taskfiles
+- Groups tasks by namespace prefix in sidebar
+- Real-time output streaming via SSE
 
 ### `xplat test`
 
