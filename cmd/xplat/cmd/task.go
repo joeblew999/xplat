@@ -70,6 +70,7 @@ import (
 	"github.com/go-task/task/v3"
 	"github.com/go-task/task/v3/args"
 	"github.com/go-task/task/v3/errors"
+	"github.com/go-task/task/v3/experiments"
 	"github.com/go-task/task/v3/taskfile/ast"
 	"github.com/joeblew999/xplat/internal/paths"
 )
@@ -250,6 +251,11 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		// Also update PATH to include PLAT_BIN and XPLAT_BIN
 		os.Setenv("PATH", paths.PathWithPlatBin(workDir))
 	}
+
+	// Enable remote taskfiles experiment by default in xplat
+	// This allows projects to include taskfiles from URLs
+	os.Setenv("TASK_X_REMOTE_TASKFILES", "1")
+	experiments.Parse(workDir)
 
 	// Create and configure the Executor
 	// Note: We can't use flags.WithFlags() since it's in an internal package,

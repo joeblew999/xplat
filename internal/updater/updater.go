@@ -98,6 +98,8 @@ func NeedsUpdate(currentVersion, latestVersion string) bool {
 }
 
 // DownloadAndReplace downloads a new binary and replaces the current one.
+// On Unix, this uses atomic rename which is safe even if the binary is running.
+// On Windows, we rename the old binary first since you can't delete a running exe.
 func DownloadAndReplace(ctx context.Context, downloadURL, targetPath string) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 	if err != nil {
@@ -115,40 +117,59 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath string) err
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 
-	// Download to temp file
-	tmpFile, err := os.CreateTemp("", "xplat-update-*")
+	// Download to temp file in the same directory as target (required for atomic rename)
+	targetDir := filepath.Dir(targetPath)
+	tmpFile, err := os.CreateTemp(targetDir, ".xplat-update-*")
 	if err != nil {
-		return err
+		// Fall back to system temp if target dir doesn't work
+		tmpFile, err = os.CreateTemp("", "xplat-update-*")
+		if err != nil {
+			return err
+		}
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
 		tmpFile.Close()
+		os.Remove(tmpPath)
 		return err
 	}
 	tmpFile.Close()
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
 		return err
 	}
 
 	// Replace binary (platform-specific)
 	if runtime.GOOS == "windows" {
+		// Windows: can't delete running exe, so rename it first
 		oldPath := targetPath + ".old"
 		os.Remove(oldPath)
 		if err := os.Rename(targetPath, oldPath); err != nil {
+			os.Remove(tmpPath)
 			return err
 		}
-		if err := copyFile(tmpPath, targetPath); err != nil {
+		if err := os.Rename(tmpPath, targetPath); err != nil {
 			os.Rename(oldPath, targetPath) // Restore on failure
+			os.Remove(tmpPath)
 			return err
 		}
 		os.Remove(oldPath)
 	} else {
-		if err := copyFile(tmpPath, targetPath); err != nil {
-			return err
+		// Unix: atomic rename is safe even with running binary
+		// The old inode stays valid for running processes until they exit
+		// First remove the old file (unlinks it, but running processes keep their fd)
+		os.Remove(targetPath)
+		// Then rename new file into place
+		if err := os.Rename(tmpPath, targetPath); err != nil {
+			// If rename fails (e.g., cross-device), fall back to copy
+			if err := copyFile(tmpPath, targetPath); err != nil {
+				os.Remove(tmpPath)
+				return err
+			}
+			os.Remove(tmpPath)
 		}
 	}
 
