@@ -90,6 +90,9 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 	rootCmd.AddCommand(cmd.SyncGHCmd)
 	rootCmd.AddCommand(cmd.SyncCFCmd)
 
+	// P14 (Web UI for tasks)
+	rootCmd.AddCommand(cmd.UICmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
