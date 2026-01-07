@@ -11,6 +11,9 @@ import (
 var (
 	serviceWorkDir string
 	serviceName    string
+	serviceWithUI  bool
+	serviceUIPort  string
+	serviceUIVia   bool
 )
 
 // ServiceCmd is the parent command for service operations.
@@ -49,7 +52,16 @@ var serviceUninstallCmd = &cobra.Command{
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the xplat service",
-	RunE:  runServiceStart,
+	Long: `Start the xplat service.
+
+Use --with-ui to also start the Task UI web interface alongside the service.
+
+Examples:
+  xplat service start              # Start service only
+  xplat service start --with-ui    # Start service + Task UI on port 3000
+  xplat service start --with-ui --ui-port 8080  # Task UI on port 8080
+  xplat service start --with-ui --ui-via        # Use Via/SSE mode`,
+	RunE: runServiceStart,
 }
 
 var serviceStopCmd = &cobra.Command{
@@ -81,6 +93,11 @@ func init() {
 	ServiceCmd.PersistentFlags().StringVarP(&serviceWorkDir, "dir", "d", "", "Working directory (default: current directory)")
 	ServiceCmd.PersistentFlags().StringVarP(&serviceName, "name", "n", "", "Service name (default: xplat-<dirname>)")
 
+	// UI flags for start command
+	serviceStartCmd.Flags().BoolVar(&serviceWithUI, "with-ui", false, "Start Task UI alongside the service")
+	serviceStartCmd.Flags().StringVar(&serviceUIPort, "ui-port", "3000", "Port for Task UI (requires --with-ui)")
+	serviceStartCmd.Flags().BoolVar(&serviceUIVia, "ui-via", false, "Use Via/SSE mode for Task UI (requires --with-ui)")
+
 	ServiceCmd.AddCommand(serviceInstallCmd)
 	ServiceCmd.AddCommand(serviceUninstallCmd)
 	ServiceCmd.AddCommand(serviceStartCmd)
@@ -102,6 +119,11 @@ func getServiceConfig() service.Config {
 		cfg.Name = serviceName
 		cfg.DisplayName = fmt.Sprintf("xplat: %s", serviceName)
 	}
+
+	// UI config
+	cfg.WithUI = serviceWithUI
+	cfg.UIPort = serviceUIPort
+	cfg.UIViaMode = serviceUIVia
 
 	return cfg
 }
@@ -155,6 +177,9 @@ func runServiceStart(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Service '%s' started\n", cfg.Name)
+	if cfg.WithUI {
+		fmt.Printf("Task UI: http://localhost:%s\n", cfg.UIPort)
+	}
 	return nil
 }
 
