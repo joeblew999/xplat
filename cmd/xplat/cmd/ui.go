@@ -13,10 +13,9 @@ import (
 )
 
 var (
-	uiPort       string
-	uiTaskfile   string
-	uiNoBrowser  bool
-	uiUseVia     bool
+	uiPort      string
+	uiTaskfile  string
+	uiNoBrowser bool
 )
 
 // UICmd starts the web-based Task UI.
@@ -27,16 +26,11 @@ var UICmd = &cobra.Command{
 
 The UI provides:
 - List of available tasks from your Taskfile.yml
-- Click-to-run execution with real-time terminal output
-- Interactive task support (keyboard input)
-
-Two modes available:
-- WebSocket mode (default): Uses xterm.js with PTY for full terminal emulation
-- Via/SSE mode (--via): Uses Datastar/PicoCSS with SSE streaming (lighter weight)
+- Click-to-run execution with real-time output streaming
+- Reactive updates using Via/Datastar with SSE
 
 Examples:
-  xplat ui                    # Start on port 3000 (WebSocket mode)
-  xplat ui --via              # Start with Via/SSE mode
+  xplat ui                    # Start on port 3000
   xplat ui -p 8080            # Start on port 8080
   xplat ui -t Taskfile.ci.yml # Use specific Taskfile
   xplat ui --no-browser       # Don't open browser`,
@@ -47,7 +41,6 @@ func init() {
 	UICmd.Flags().StringVarP(&uiPort, "port", "p", "3000", "Port to listen on")
 	UICmd.Flags().StringVarP(&uiTaskfile, "taskfile", "t", "Taskfile.yml", "Path to Taskfile")
 	UICmd.Flags().BoolVar(&uiNoBrowser, "no-browser", false, "Don't open browser automatically")
-	UICmd.Flags().BoolVar(&uiUseVia, "via", false, "Use Via/SSE mode instead of WebSocket (lighter weight, PicoCSS)")
 }
 
 func runUI(cmd *cobra.Command, args []string) error {
@@ -69,27 +62,12 @@ func runUI(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	// Use Via/SSE mode if requested
-	if uiUseVia {
-		viaCfg := taskui.DefaultViaConfig()
-		viaCfg.Port = uiPort
-		viaCfg.Taskfile = uiTaskfile
-		viaCfg.OpenBrowser = !uiNoBrowser
-		viaCfg.WorkDir = wd
-		return taskui.StartVia(ctx, viaCfg)
-	}
-
-	// Default: WebSocket mode with xterm.js
-	cfg := taskui.DefaultConfig()
-	cfg.ListenAddr = ":" + uiPort
+	// Start Via/SSE UI
+	cfg := taskui.DefaultViaConfig()
+	cfg.Port = uiPort
 	cfg.Taskfile = uiTaskfile
 	cfg.OpenBrowser = !uiNoBrowser
 	cfg.WorkDir = wd
 
-	server, err := taskui.New(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create server: %w", err)
-	}
-
-	return server.Start(ctx)
+	return taskui.StartVia(ctx, cfg)
 }

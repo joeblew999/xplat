@@ -23,6 +23,13 @@ import (
 	"github.com/go-via/via/h"
 )
 
+// TaskInfo holds information about a task.
+type TaskInfo struct {
+	Name        string
+	Description string
+	Summary     string
+}
+
 // ViaConfig holds the Via server configuration.
 type ViaConfig struct {
 	Port        string // Port to listen on (default "3000")

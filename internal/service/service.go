@@ -31,7 +31,6 @@ type Config struct {
 	Version     string // Current version (injected at build time)
 	WithUI      bool   // Start Task UI alongside process-compose
 	UIPort      string // Port for Task UI (default: "3000")
-	UIViaMode   bool   // Use Via/SSE mode for Task UI
 }
 
 // DefaultConfig returns the default service configuration.
@@ -70,7 +69,6 @@ type program struct {
 	version    string
 	withUI     bool
 	uiPort     string
-	uiViaMode  bool
 	stopChan   chan struct{}
 }
 
@@ -88,11 +86,8 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) runUI() {
-	// Build UI command args
+	// Build UI command args (Via mode is now the only mode)
 	args := []string{"ui", "--no-browser", "-p", p.uiPort}
-	if p.uiViaMode {
-		args = append(args, "--via")
-	}
 
 	p.uiCmd = exec.Command(p.xplatBin, args...)
 	p.uiCmd.Dir = p.workDir
@@ -242,7 +237,6 @@ func NewManager(cfg Config) (*Manager, error) {
 		version:    cfg.Version,
 		withUI:     cfg.WithUI,
 		uiPort:     uiPort,
-		uiViaMode:  cfg.UIViaMode,
 	}
 
 	svc, err := service.New(prg, svcConfig)

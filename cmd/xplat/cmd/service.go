@@ -13,7 +13,6 @@ var (
 	serviceName    string
 	serviceWithUI  bool
 	serviceUIPort  string
-	serviceUIVia   bool
 )
 
 // ServiceCmd is the parent command for service operations.
@@ -59,8 +58,7 @@ Use --with-ui to also start the Task UI web interface alongside the service.
 Examples:
   xplat service start              # Start service only
   xplat service start --with-ui    # Start service + Task UI on port 3000
-  xplat service start --with-ui --ui-port 8080  # Task UI on port 8080
-  xplat service start --with-ui --ui-via        # Use Via/SSE mode`,
+  xplat service start --with-ui --ui-port 8080  # Task UI on port 8080`,
 	RunE: runServiceStart,
 }
 
@@ -96,7 +94,6 @@ func init() {
 	// UI flags for start command
 	serviceStartCmd.Flags().BoolVar(&serviceWithUI, "with-ui", false, "Start Task UI alongside the service")
 	serviceStartCmd.Flags().StringVar(&serviceUIPort, "ui-port", "3000", "Port for Task UI (requires --with-ui)")
-	serviceStartCmd.Flags().BoolVar(&serviceUIVia, "ui-via", false, "Use Via/SSE mode for Task UI (requires --with-ui)")
 
 	ServiceCmd.AddCommand(serviceInstallCmd)
 	ServiceCmd.AddCommand(serviceUninstallCmd)
@@ -123,7 +120,6 @@ func getServiceConfig() service.Config {
 	// UI config
 	cfg.WithUI = serviceWithUI
 	cfg.UIPort = serviceUIPort
-	cfg.UIViaMode = serviceUIVia
 
 	return cfg
 }
