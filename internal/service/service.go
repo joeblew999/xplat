@@ -2,15 +2,22 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/joeblew999/xplat/internal/paths"
+	"github.com/joeblew999/xplat/internal/updater"
 	"github.com/kardianos/service"
+)
+
+const (
+	updateInterval = 1 * time.Hour // Check for updates every hour
 )
 
 // Config holds service configuration.
@@ -20,6 +27,8 @@ type Config struct {
 	Description string // Service description
 	WorkDir     string // Working directory for the service
 	UserService bool   // Install as user service (not root)
+	AutoUpdate  bool   // Enable automatic updates (default: true)
+	Version     string // Current version (injected at build time)
 }
 
 // DefaultConfig returns the default service configuration.
@@ -31,6 +40,7 @@ func DefaultConfig() Config {
 		Description: "xplat process orchestration service",
 		WorkDir:     workDir,
 		UserService: true,
+		AutoUpdate:  true,
 	}
 }
 
@@ -43,19 +53,27 @@ func ConfigForProject(projectDir string) Config {
 		Description: fmt.Sprintf("xplat service for %s", name),
 		WorkDir:     projectDir,
 		UserService: true,
+		AutoUpdate:  true,
 	}
 }
 
 // program implements the service.Interface.
 type program struct {
-	cmd     *exec.Cmd
-	workDir string
-	xplatBin string
+	cmd        *exec.Cmd
+	workDir    string
+	xplatBin   string
+	autoUpdate bool
+	version    string
+	stopChan   chan struct{}
 }
 
 func (p *program) Start(s service.Service) error {
 	log.Printf("Starting %s service...", s.String())
+	p.stopChan = make(chan struct{})
 	go p.run()
+	if p.autoUpdate {
+		go p.updateLoop()
+	}
 	return nil
 }
 
@@ -74,8 +92,76 @@ func (p *program) run() {
 	}
 }
 
+func (p *program) updateLoop() {
+	ticker := time.NewTicker(updateInterval)
+	defer ticker.Stop()
+
+	// Check immediately on startup
+	p.checkAndUpdate()
+
+	for {
+		select {
+		case <-ticker.C:
+			p.checkAndUpdate()
+		case <-p.stopChan:
+			return
+		}
+	}
+}
+
+func (p *program) checkAndUpdate() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	latest, err := updater.GetLatestVersion(ctx)
+	if err != nil {
+		log.Printf("Auto-update: failed to check for updates: %v", err)
+		return
+	}
+
+	// Skip if already up to date or running dev version
+	if !updater.NeedsUpdate(p.version, latest) {
+		return
+	}
+
+	log.Printf("Auto-update: new version available: %s -> %s", p.version, latest)
+
+	// Get the download URL
+	release, err := updater.GetLatestRelease(ctx)
+	if err != nil {
+		log.Printf("Auto-update: failed to get release info: %v", err)
+		return
+	}
+
+	downloadURL, err := updater.FindAssetURL(release)
+	if err != nil {
+		log.Printf("Auto-update: %v", err)
+		return
+	}
+
+	// Download and replace
+	dlCtx, dlCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dlCancel()
+
+	if err := updater.DownloadAndReplace(dlCtx, downloadURL, p.xplatBin); err != nil {
+		log.Printf("Auto-update: failed to update: %v", err)
+		return
+	}
+
+	log.Printf("Auto-update: updated to %s, restarting...", latest)
+
+	// Restart by exiting - the service manager will restart us
+	if p.cmd != nil && p.cmd.Process != nil {
+		p.cmd.Process.Signal(os.Interrupt)
+	}
+	os.Exit(0)
+}
+
 func (p *program) Stop(s service.Service) error {
 	log.Printf("Stopping %s service...", s.String())
+	if p.stopChan != nil {
+		close(p.stopChan)
+	}
 	if p.cmd != nil && p.cmd.Process != nil {
 		// Send SIGTERM/SIGINT to gracefully stop
 		p.cmd.Process.Signal(os.Interrupt)
@@ -112,8 +198,10 @@ func NewManager(cfg Config) (*Manager, error) {
 	}
 
 	prg := &program{
-		workDir:  cfg.WorkDir,
-		xplatBin: xplatBin,
+		workDir:    cfg.WorkDir,
+		xplatBin:   xplatBin,
+		autoUpdate: cfg.AutoUpdate,
+		version:    cfg.Version,
 	}
 
 	svc, err := service.New(prg, svcConfig)

@@ -97,6 +97,7 @@ func getServiceConfig() service.Config {
 	}
 
 	cfg := service.ConfigForProject(workDir)
+	cfg.Version = version // Pass version for auto-update checking
 	if serviceName != "" {
 		cfg.Name = serviceName
 		cfg.DisplayName = fmt.Sprintf("xplat: %s", serviceName)

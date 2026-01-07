@@ -1,21 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
+	"time"
 
+	"github.com/joeblew999/xplat/internal/updater"
 	"github.com/spf13/cobra"
-)
-
-const (
-	xplatRepo   = "joeblew999/xplat"
-	releasesAPI = "https://api.github.com/repos/" + xplatRepo + "/releases/latest"
 )
 
 var (
@@ -41,15 +32,10 @@ func init() {
 	UpdateCmd.Flags().BoolVar(&updateForce, "force", false, "Force update even if already up to date")
 }
 
-type githubRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-	} `json:"assets"`
-}
-
 func runUpdate(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
 	// Get current version
 	currentVersion := version
 	if currentVersion == "" {
@@ -57,13 +43,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Fetch latest release info
-	release, err := getLatestRelease()
+	release, err := updater.GetLatestRelease(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
 
-	// Extract version from tag (xplat-v0.3.0 -> v0.3.0)
-	latestVersion := strings.TrimPrefix(release.TagName, "xplat-")
+	latestVersion := updater.ParseVersion(release.TagName)
 
 	fmt.Printf("Current version: %s\n", currentVersion)
 	fmt.Printf("Latest version:  %s\n", latestVersion)
@@ -82,130 +67,20 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Find the right asset for this platform
-	assetName := getAssetName()
-	var downloadURL string
-	for _, asset := range release.Assets {
-		if asset.Name == assetName {
-			downloadURL = asset.BrowserDownloadURL
-			break
-		}
+	downloadURL, err := updater.FindAssetURL(release)
+	if err != nil {
+		return err
 	}
 
-	if downloadURL == "" {
-		return fmt.Errorf("no release asset found for %s/%s (looking for %s)", runtime.GOOS, runtime.GOARCH, assetName)
-	}
-
+	assetName := updater.GetAssetName()
 	fmt.Printf("\nDownloading %s...\n", assetName)
 
-	// Download to temp file
-	tmpFile, err := os.CreateTemp("", "xplat-update-*")
+	newVersion, err := updater.Update(ctx, currentVersion, updateForce)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	resp, err := http.Get(downloadURL)
-	if err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to download: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		tmpFile.Close()
-		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+		return err
 	}
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to write update: %w", err)
-	}
-	tmpFile.Close()
-
-	// Make executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
-	}
-
-	// Get current executable path
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve executable path: %w", err)
-	}
-
-	// On Windows, we can't replace a running executable directly
-	// Move old binary to .old, then move new binary in place
-	if runtime.GOOS == "windows" {
-		oldPath := execPath + ".old"
-		os.Remove(oldPath) // Remove any existing .old file
-		if err := os.Rename(execPath, oldPath); err != nil {
-			return fmt.Errorf("failed to backup old binary: %w", err)
-		}
-		if err := copyFile(tmpPath, execPath); err != nil {
-			// Try to restore old binary
-			os.Rename(oldPath, execPath)
-			return fmt.Errorf("failed to install new binary: %w", err)
-		}
-		os.Remove(oldPath)
-	} else {
-		// Unix: atomic rename
-		if err := copyFile(tmpPath, execPath); err != nil {
-			return fmt.Errorf("failed to install update: %w", err)
-		}
-	}
-
-	fmt.Printf("Updated xplat to %s\n", latestVersion)
+	fmt.Printf("Updated xplat to %s\n", newVersion)
+	_ = downloadURL // URL is used internally by Update
 	return nil
-}
-
-func getLatestRelease() (*githubRelease, error) {
-	resp, err := http.Get(releasesAPI)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
-	}
-
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("failed to parse release info: %w", err)
-	}
-
-	return &release, nil
-}
-
-func getAssetName() string {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	return fmt.Sprintf("xplat-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext)
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-
-	return out.Close()
 }
