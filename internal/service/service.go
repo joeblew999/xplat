@@ -78,8 +78,8 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) run() {
-	// Run xplat dev (process-compose) in foreground mode
-	p.cmd = exec.Command(p.xplatBin, "dev")
+	// Run process-compose in headless mode (no TUI, suitable for service)
+	p.cmd = exec.Command(p.xplatBin, "process", "--no-server")
 	p.cmd.Dir = p.workDir
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr
@@ -88,7 +88,7 @@ func (p *program) run() {
 	p.cmd.Env = paths.FullEnv(p.workDir)
 
 	if err := p.cmd.Run(); err != nil {
-		log.Printf("xplat dev exited: %v", err)
+		log.Printf("xplat process exited: %v", err)
 	}
 }
 
