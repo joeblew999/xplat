@@ -274,7 +274,7 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	sb.WriteString("  docs:\n")
 	sb.WriteString("    desc: Regenerate README.md and Taskfile.yml from code\n")
 	sb.WriteString("    cmds:\n")
-	sb.WriteString("      - '{{.XPLAT_LOCAL}}' docs all\n\n")
+	sb.WriteString("      - \"{{.XPLAT_LOCAL}} docs all\"\n\n")
 
 	// xplat wrapper tasks (for common operations)
 	sb.WriteString("  # ===========================================================================\n")
@@ -289,7 +289,7 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 		sb.WriteString(fmt.Sprintf("  xplat:%s:\n", c.Name))
 		sb.WriteString(fmt.Sprintf("    desc: \"%s\"\n", c.Short))
 		sb.WriteString("    cmds:\n")
-		sb.WriteString(fmt.Sprintf("      - '{{.XPLAT_LOCAL}}' %s {{.CLI_ARGS}}\n\n", c.Name))
+		sb.WriteString(fmt.Sprintf("      - \"{{.XPLAT_LOCAL}} %s {{.CLI_ARGS}}\"\n\n", c.Name))
 	}
 
 	// Write file
