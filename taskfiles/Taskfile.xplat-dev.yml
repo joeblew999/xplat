@@ -1,0 +1,32 @@
+# Standalone dev workflow tasks for remote includes
+#
+# Include this in any project to get xplat dev commands:
+#
+#   includes:
+#     dev:
+#       taskfile: https://raw.githubusercontent.com/joeblew999/xplat/main/taskfiles/Taskfile.xplat-dev.yml
+#
+# REQUIRES: xplat installed and in PATH
+
+version: "3"
+
+tasks:
+  up:
+    desc: Start dev environment (process-compose with TUI)
+    cmds:
+      - xplat dev up
+
+  down:
+    desc: Stop dev environment
+    cmds:
+      - xplat dev down
+
+  logs:
+    desc: View dev logs
+    cmds:
+      - xplat dev logs
+
+  status:
+    desc: Show dev environment status
+    cmds:
+      - xplat dev status
