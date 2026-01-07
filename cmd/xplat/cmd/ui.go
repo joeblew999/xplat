@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	uiPort       string
-	uiTaskfile   string
-	uiNoBrowser  bool
+	uiPort      string
+	uiTaskfile  string
+	uiNoBrowser bool
 )
 
 // UICmd starts the web-based Task UI.
@@ -26,8 +26,8 @@ var UICmd = &cobra.Command{
 
 The UI provides:
 - List of available tasks from your Taskfile.yml
-- Click-to-run execution with real-time terminal output
-- Interactive task support (keyboard input)
+- Click-to-run execution with real-time output streaming
+- Reactive updates using Via/Datastar with SSE
 
 Examples:
   xplat ui                    # Start on port 3000
@@ -44,21 +44,10 @@ func init() {
 }
 
 func runUI(cmd *cobra.Command, args []string) error {
-	cfg := taskui.DefaultConfig()
-	cfg.ListenAddr = ":" + uiPort
-	cfg.Taskfile = uiTaskfile
-	cfg.OpenBrowser = !uiNoBrowser
-
 	// Get working directory
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
-	}
-	cfg.WorkDir = wd
-
-	server, err := taskui.New(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create server: %w", err)
 	}
 
 	// Handle graceful shutdown
@@ -73,5 +62,12 @@ func runUI(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	return server.Start(ctx)
+	// Start Via/SSE UI
+	cfg := taskui.DefaultViaConfig()
+	cfg.Port = uiPort
+	cfg.Taskfile = uiTaskfile
+	cfg.OpenBrowser = !uiNoBrowser
+	cfg.WorkDir = wd
+
+	return taskui.StartVia(ctx, cfg)
 }

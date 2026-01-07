@@ -29,6 +29,8 @@ type Config struct {
 	UserService bool   // Install as user service (not root)
 	AutoUpdate  bool   // Enable automatic updates (default: true)
 	Version     string // Current version (injected at build time)
+	WithUI      bool   // Start Task UI alongside process-compose
+	UIPort      string // Port for Task UI (default: "3000")
 }
 
 // DefaultConfig returns the default service configuration.
@@ -60,10 +62,13 @@ func ConfigForProject(projectDir string) Config {
 // program implements the service.Interface.
 type program struct {
 	cmd        *exec.Cmd
+	uiCmd      *exec.Cmd // Task UI process (if WithUI is enabled)
 	workDir    string
 	xplatBin   string
 	autoUpdate bool
 	version    string
+	withUI     bool
+	uiPort     string
 	stopChan   chan struct{}
 }
 
@@ -71,10 +76,29 @@ func (p *program) Start(s service.Service) error {
 	log.Printf("Starting %s service...", s.String())
 	p.stopChan = make(chan struct{})
 	go p.run()
+	if p.withUI {
+		go p.runUI()
+	}
 	if p.autoUpdate {
 		go p.updateLoop()
 	}
 	return nil
+}
+
+func (p *program) runUI() {
+	// Build UI command args (Via mode is now the only mode)
+	args := []string{"ui", "--no-browser", "-p", p.uiPort}
+
+	p.uiCmd = exec.Command(p.xplatBin, args...)
+	p.uiCmd.Dir = p.workDir
+	p.uiCmd.Stdout = os.Stdout
+	p.uiCmd.Stderr = os.Stderr
+	p.uiCmd.Env = paths.FullEnv(p.workDir)
+
+	log.Printf("Starting Task UI on port %s...", p.uiPort)
+	if err := p.uiCmd.Run(); err != nil {
+		log.Printf("Task UI exited: %v", err)
+	}
 }
 
 func (p *program) run() {
@@ -166,6 +190,9 @@ func (p *program) Stop(s service.Service) error {
 		// Send SIGTERM/SIGINT to gracefully stop
 		p.cmd.Process.Signal(os.Interrupt)
 	}
+	if p.uiCmd != nil && p.uiCmd.Process != nil {
+		p.uiCmd.Process.Signal(os.Interrupt)
+	}
 	return nil
 }
 
@@ -197,11 +224,19 @@ func NewManager(cfg Config) (*Manager, error) {
 		}
 	}
 
+	// Default UI port if not set
+	uiPort := cfg.UIPort
+	if uiPort == "" {
+		uiPort = "3000"
+	}
+
 	prg := &program{
 		workDir:    cfg.WorkDir,
 		xplatBin:   xplatBin,
 		autoUpdate: cfg.AutoUpdate,
 		version:    cfg.Version,
+		withUI:     cfg.WithUI,
+		uiPort:     uiPort,
 	}
 
 	svc, err := service.New(prg, svcConfig)
