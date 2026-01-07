@@ -8,11 +8,11 @@ Cross-platform Taskfile bootstrapper - a single binary that embeds:
 ## Installation
 
 ```bash
-# Build from source
-go build -o xplat ./cmd/xplat/
+# Quick install (auto-detects OS/arch)
+curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | sh
 
-# Install to ~/.local/bin
-task build:install
+# Or build from source
+go build -o xplat .
 ```
 
 ## Commands
