@@ -10,6 +10,8 @@ version: '3'
 vars:
   BIN_INSTALL_DIR: '{{if eq OS "windows"}}{{.HOME}}/bin{{else}}{{.HOME}}/.local/bin{{end}}'
   XPLAT_BIN: '{{.BIN_INSTALL_DIR}}/xplat{{exeExt}}'
+  # Local build binary (for development)
+  XPLAT_LOCAL: './xplat{{exeExt}}'
 
 tasks:
   default:
@@ -20,13 +22,13 @@ tasks:
   build:
     desc: Build xplat binary
     cmds:
-      - go build -o xplat{{exeExt}} ./cmd/xplat/
+      - go build -o xplat{{exeExt}} .
 
   build:install:
     desc: Build and install xplat to ~/.local/bin
     cmds:
       - mkdir -p "{{.BIN_INSTALL_DIR}}"
-      - go build -o "{{.XPLAT_BIN}}" ./cmd/xplat/
+      - go build -o "{{.XPLAT_BIN}}" .
 
   test:
     desc: Run tests
@@ -52,7 +54,7 @@ tasks:
   docs:
     desc: Regenerate README.md and Taskfile.yml from code
     cmds:
-      - ./xplat docs all
+      - '{{.XPLAT_LOCAL}}' docs all
 
   # ===========================================================================
   # xplat Command Wrappers
@@ -61,130 +63,130 @@ tasks:
   xplat:archetype:
     desc: "Taskfile archetype operations"
     cmds:
-      - ./xplat archetype {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' archetype {{.CLI_ARGS}}
 
   xplat:binary:
     desc: "Binary management commands"
     cmds:
-      - ./xplat binary {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' binary {{.CLI_ARGS}}
 
   xplat:cat:
     desc: "Print file contents"
     cmds:
-      - ./xplat cat {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' cat {{.CLI_ARGS}}
 
   xplat:cp:
     desc: "Copy files or directories"
     cmds:
-      - ./xplat cp {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' cp {{.CLI_ARGS}}
 
   xplat:dev:
     desc: "Development workflow shortcuts"
     cmds:
-      - ./xplat dev {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' dev {{.CLI_ARGS}}
 
   xplat:docs:
     desc: "Generate documentation from xplat commands"
     cmds:
-      - ./xplat docs {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' docs {{.CLI_ARGS}}
 
   xplat:env:
     desc: "Get environment variable"
     cmds:
-      - ./xplat env {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' env {{.CLI_ARGS}}
 
   xplat:extract:
     desc: "Extract archives (zip, tar.gz, tar.bz2, tar.xz, 7z, rar)"
     cmds:
-      - ./xplat extract {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' extract {{.CLI_ARGS}}
 
   xplat:fetch:
     desc: "Download files with optional archive extraction"
     cmds:
-      - ./xplat fetch {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' fetch {{.CLI_ARGS}}
 
   xplat:fmt:
     desc: "Format Taskfiles"
     cmds:
-      - ./xplat fmt {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' fmt {{.CLI_ARGS}}
 
   xplat:glob:
     desc: "Expand glob pattern"
     cmds:
-      - ./xplat glob {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' glob {{.CLI_ARGS}}
 
   xplat:jq:
     desc: "Process JSON with jq syntax"
     cmds:
-      - ./xplat jq {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' jq {{.CLI_ARGS}}
 
   xplat:lint:
     desc: "Lint Taskfiles for convention violations"
     cmds:
-      - ./xplat lint {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' lint {{.CLI_ARGS}}
 
   xplat:mkdir:
     desc: "Create directories"
     cmds:
-      - ./xplat mkdir {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' mkdir {{.CLI_ARGS}}
 
   xplat:mv:
     desc: "Move or rename files and directories"
     cmds:
-      - ./xplat mv {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' mv {{.CLI_ARGS}}
 
   xplat:pkg:
     desc: "Package management from Ubuntu Software registry"
     cmds:
-      - ./xplat pkg {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' pkg {{.CLI_ARGS}}
 
   xplat:process:
     desc: "Process orchestration (embedded process-compose)"
     cmds:
-      - ./xplat process {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' process {{.CLI_ARGS}}
 
   xplat:process-gen:
     desc: "Generate process-compose.yaml from package registry"
     cmds:
-      - ./xplat process-gen {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' process-gen {{.CLI_ARGS}}
 
   xplat:release:
     desc: "Release build orchestration"
     cmds:
-      - ./xplat release {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' release {{.CLI_ARGS}}
 
   xplat:rm:
     desc: "Remove files or directories"
     cmds:
-      - ./xplat rm {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' rm {{.CLI_ARGS}}
 
   xplat:run:
     desc: "Run a managed tool"
     cmds:
-      - ./xplat run {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' run {{.CLI_ARGS}}
 
   xplat:task:
     desc: "Run Taskfile tasks (embedded Task runner)"
     cmds:
-      - ./xplat task {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' task {{.CLI_ARGS}}
 
   xplat:test:
     desc: "Test a Taskfile based on its archetype"
     cmds:
-      - ./xplat test {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' test {{.CLI_ARGS}}
 
   xplat:touch:
     desc: "Create files or update timestamps"
     cmds:
-      - ./xplat touch {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' touch {{.CLI_ARGS}}
 
   xplat:version:
     desc: "Print xplat version"
     cmds:
-      - ./xplat version {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' version {{.CLI_ARGS}}
 
   xplat:which:
     desc: "Find binary in managed locations or PATH"
     cmds:
-      - ./xplat which {{.CLI_ARGS}}
+      - '{{.XPLAT_LOCAL}}' which {{.CLI_ARGS}}
 

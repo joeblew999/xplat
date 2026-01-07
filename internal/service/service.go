@@ -78,8 +78,8 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) run() {
-	// Run process-compose in headless mode (no TUI, suitable for service)
-	p.cmd = exec.Command(p.xplatBin, "process", "--no-server")
+	// Run process-compose in headless mode (no TUI, no server, suitable for service)
+	p.cmd = exec.Command(p.xplatBin, "process", "-t=false", "--no-server")
 	p.cmd.Dir = p.workDir
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr

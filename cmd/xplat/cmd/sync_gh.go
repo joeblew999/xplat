@@ -81,7 +81,7 @@ var syncGHStateCmd = &cobra.Command{
 
 		log.Printf("Capturing state for %s...", repo)
 
-		state, err := syncgh.CaptureState(parts[0], parts[1])
+		state, err := syncgh.CaptureState(parts[0], parts[1], os.Getenv("GITHUB_TOKEN"))
 		if err != nil {
 			return fmt.Errorf("failed to capture state: %w", err)
 		}
@@ -113,7 +113,7 @@ var syncGHReleaseCmd = &cobra.Command{
 			return fmt.Errorf("invalid repo format: %s (expected owner/repo)", repo)
 		}
 
-		tag, err := syncgh.GetLatestRelease(parts[0], parts[1])
+		tag, err := syncgh.GetLatestRelease(parts[0], parts[1], os.Getenv("GITHUB_TOKEN"))
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ Repos to poll are configured via xplat.yaml or command line.`,
 			log.Printf("Running in demo mode - will just log poll cycles.")
 		}
 
-		poller := syncgh.NewPoller(interval, repos)
+		poller := syncgh.NewPoller(interval, repos, os.Getenv("GITHUB_TOKEN"))
 		poller.OnUpdate(func(subsystem, oldVersion, newVersion string) {
 			log.Printf("Update detected: %s -> %s", subsystem, newVersion)
 		})

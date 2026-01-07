@@ -224,7 +224,9 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 
 	sb.WriteString("vars:\n")
 	sb.WriteString("  BIN_INSTALL_DIR: '{{if eq OS \"windows\"}}{{.HOME}}/bin{{else}}{{.HOME}}/.local/bin{{end}}'\n")
-	sb.WriteString("  XPLAT_BIN: '{{.BIN_INSTALL_DIR}}/xplat{{exeExt}}'\n\n")
+	sb.WriteString("  XPLAT_BIN: '{{.BIN_INSTALL_DIR}}/xplat{{exeExt}}'\n")
+	sb.WriteString("  # Local build binary (for development)\n")
+	sb.WriteString("  XPLAT_LOCAL: './xplat{{exeExt}}'\n\n")
 
 	sb.WriteString("tasks:\n")
 
@@ -238,13 +240,13 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	sb.WriteString("  build:\n")
 	sb.WriteString("    desc: Build xplat binary\n")
 	sb.WriteString("    cmds:\n")
-	sb.WriteString("      - go build -o xplat{{exeExt}} ./cmd/xplat/\n\n")
+	sb.WriteString("      - go build -o xplat{{exeExt}} .\n\n")
 
 	sb.WriteString("  build:install:\n")
 	sb.WriteString("    desc: Build and install xplat to ~/.local/bin\n")
 	sb.WriteString("    cmds:\n")
 	sb.WriteString("      - mkdir -p \"{{.BIN_INSTALL_DIR}}\"\n")
-	sb.WriteString("      - go build -o \"{{.XPLAT_BIN}}\" ./cmd/xplat/\n\n")
+	sb.WriteString("      - go build -o \"{{.XPLAT_BIN}}\" .\n\n")
 
 	// Test/quality tasks
 	sb.WriteString("  test:\n")
@@ -272,7 +274,7 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	sb.WriteString("  docs:\n")
 	sb.WriteString("    desc: Regenerate README.md and Taskfile.yml from code\n")
 	sb.WriteString("    cmds:\n")
-	sb.WriteString("      - ./xplat docs all\n\n")
+	sb.WriteString("      - '{{.XPLAT_LOCAL}}' docs all\n\n")
 
 	// xplat wrapper tasks (for common operations)
 	sb.WriteString("  # ===========================================================================\n")
@@ -287,7 +289,7 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 		sb.WriteString(fmt.Sprintf("  xplat:%s:\n", c.Name))
 		sb.WriteString(fmt.Sprintf("    desc: \"%s\"\n", c.Short))
 		sb.WriteString("    cmds:\n")
-		sb.WriteString(fmt.Sprintf("      - ./xplat %s {{.CLI_ARGS}}\n\n", c.Name))
+		sb.WriteString(fmt.Sprintf("      - '{{.XPLAT_LOCAL}}' %s {{.CLI_ARGS}}\n\n", c.Name))
 	}
 
 	// Write file

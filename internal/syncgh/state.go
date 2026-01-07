@@ -47,13 +47,14 @@ type Release struct {
 	HTMLURL     string    `json:"html_url"`
 }
 
-// CaptureState fetches current GitHub state for a repository
-func CaptureState(owner, repo string) (*State, error) {
+// CaptureState fetches current GitHub state for a repository.
+// If token is provided, it will be used for authenticated requests (higher rate limits).
+func CaptureState(owner, repo, token string) (*State, error) {
 	client := github.NewClient(nil)
 	ctx := context.Background()
 
 	// Use token if available for higher rate limits
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+	if token != "" {
 		client = client.WithAuthToken(token)
 	}
 

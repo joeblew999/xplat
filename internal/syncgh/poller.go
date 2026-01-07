@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -27,11 +26,10 @@ type Poller struct {
 	onUpdate func(subsystem, oldVersion, newVersion string) // callback on update
 }
 
-// NewPoller creates a new poller with specified interval
-// Set GITHUB_TOKEN env var for authenticated requests (5000/hour vs 60/hour)
-func NewPoller(interval time.Duration, repos []RepoConfig) *Poller {
+// NewPoller creates a new poller with specified interval.
+// If token is provided, it will be used for authenticated requests (5000/hour vs 60/hour).
+func NewPoller(interval time.Duration, repos []RepoConfig, token string) *Poller {
 	var client *github.Client
-	token := os.Getenv("GITHUB_TOKEN")
 	if token != "" {
 		client = github.NewClient(nil).WithAuthToken(token)
 		log.Printf("sync-gh: Using authenticated GitHub API (5000 req/hour)")
@@ -180,10 +178,11 @@ func parseRepo(repo string) (string, string) {
 	return parts[0], parts[1]
 }
 
-// GetLatestRelease gets the latest release tag for a repository
-func GetLatestRelease(owner, repo string) (string, error) {
+// GetLatestRelease gets the latest release tag for a repository.
+// If token is provided, it will be used for authenticated requests.
+func GetLatestRelease(owner, repo, token string) (string, error) {
 	client := github.NewClient(nil)
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+	if token != "" {
 		client = client.WithAuthToken(token)
 	}
 
