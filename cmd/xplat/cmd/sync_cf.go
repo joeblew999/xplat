@@ -23,6 +23,7 @@ Works identically on macOS, Linux, and Windows.
 Designed to run as part of xplat service for continuous syncing.
 
 Commands:
+  auth       Set up R2 credentials interactively
   tunnel     Start cloudflared quick tunnel
   poll       Poll CF audit logs continuously
   webhook    Start CF webhook server
@@ -33,9 +34,11 @@ Commands:
 Environment:
   CF_ACCOUNT_ID       Cloudflare account ID
   CF_API_TOKEN        Cloudflare API token
-  CF_WEBHOOK_SECRET   Cloudflare webhook secret
+  R2_ACCESS_KEY       R2 API access key
+  R2_SECRET_KEY       R2 API secret key
 
 Examples:
+  xplat sync-cf auth
   xplat sync-cf check
   xplat sync-cf tunnel 8080
   xplat sync-cf poll --interval=1m
@@ -95,6 +98,29 @@ var syncCFWebhookCmd = &cobra.Command{
 			os.Getenv("CF_API_TOKEN"),
 			os.Getenv("CF_WEBHOOK_SECRET"),
 		)
+	},
+}
+
+var syncCFAuthCmd = &cobra.Command{
+	Use:   "auth",
+	Short: "Set up Cloudflare credentials interactively",
+	Long: `Interactive authentication setup for Cloudflare.
+
+Guides you through setting up all Cloudflare credentials:
+  1. Account ID (required)
+  2. API Token (optional - for Workers, Pages, DNS)
+  3. R2 credentials (optional - for object storage)
+
+Opens the relevant Cloudflare dashboard pages in your browser and
+saves credentials to your .env file.
+
+Saved credentials:
+  CF_ACCOUNT_ID    - Your Cloudflare account ID
+  CF_API_TOKEN     - Cloudflare API token (optional)
+  R2_ACCESS_KEY    - R2 API access key
+  R2_SECRET_KEY    - R2 API secret key`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.RunAuth(os.Stdout)
 	},
 }
 
@@ -180,6 +206,7 @@ func init() {
 	syncCFPollCmd.Flags().StringVar(&syncCFPollInterval, "interval", "1m", "Poll interval")
 	syncCFWebhookCmd.Flags().StringVar(&syncCFWebhookPort, "port", "9090", "Webhook server port")
 
+	SyncCFCmd.AddCommand(syncCFAuthCmd)
 	SyncCFCmd.AddCommand(syncCFTunnelCmd)
 	SyncCFCmd.AddCommand(syncCFPollCmd)
 	SyncCFCmd.AddCommand(syncCFWebhookCmd)
