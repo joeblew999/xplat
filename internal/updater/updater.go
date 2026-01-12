@@ -144,6 +144,20 @@ func NeedsUpdate(currentVersion, latestVersion string) bool {
 	return currentVersion != latestVersion
 }
 
+// GetExpectedChecksum fetches the expected checksum for the current platform from a release.
+// Returns empty string if checksums are unavailable (caller should decide whether to warn/fail).
+func GetExpectedChecksum(ctx context.Context, release *Release) string {
+	checksumURL, err := FindChecksumURL(release)
+	if err != nil {
+		return ""
+	}
+	checksums, err := FetchChecksums(ctx, checksumURL)
+	if err != nil {
+		return ""
+	}
+	return checksums[GetAssetName()]
+}
+
 // DownloadAndReplace downloads a new binary and replaces the current one.
 // On Unix, this uses atomic rename which is safe even if the binary is running.
 // On Windows, we rename the old binary first since you can't delete a running exe.
@@ -253,17 +267,7 @@ func Update(ctx context.Context, currentVersion string, force bool) (newVersion 
 	}
 
 	// Fetch checksums (optional, but warn if not available)
-	var expectedChecksum string
-	checksumURL, err := FindChecksumURL(release)
-	if err == nil {
-		checksums, err := FetchChecksums(ctx, checksumURL)
-		if err == nil {
-			assetName := GetAssetName()
-			if checksum, ok := checksums[assetName]; ok {
-				expectedChecksum = checksum
-			}
-		}
-	}
+	expectedChecksum := GetExpectedChecksum(ctx, release)
 	if expectedChecksum == "" {
 		fmt.Fprintf(os.Stderr, "Warning: %s not found, skipping verification\n", config.XplatChecksumFile)
 	}

@@ -187,17 +187,7 @@ func (p *program) checkAndUpdate() {
 	}
 
 	// Fetch checksums for verification
-	var expectedChecksum string
-	checksumURL, err := updater.FindChecksumURL(release)
-	if err == nil {
-		checksums, err := updater.FetchChecksums(ctx, checksumURL)
-		if err == nil {
-			assetName := updater.GetAssetName()
-			if checksum, ok := checksums[assetName]; ok {
-				expectedChecksum = checksum
-			}
-		}
-	}
+	expectedChecksum := updater.GetExpectedChecksum(ctx, release)
 	if expectedChecksum == "" {
 		log.Printf("Auto-update: warning: checksum not available, skipping verification")
 	}
