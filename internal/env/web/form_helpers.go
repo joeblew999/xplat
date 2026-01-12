@@ -12,9 +12,15 @@ import (
 // We can't reference via.signal directly as it's unexported,
 // so we define interfaces matching the actual signal methods
 type FormFieldData struct {
-	EnvKey       string
-	ValueSignal  interface{ String() string; Bind() h.H }
-	StatusSignal interface{ String() string; SetValue(any) }
+	EnvKey      string
+	ValueSignal interface {
+		String() string
+		Bind() h.H
+	}
+	StatusSignal interface {
+		String() string
+		SetValue(any)
+	}
 }
 
 // CreateFormFields creates signals for a set of form fields
@@ -108,7 +114,10 @@ func HasValidationErrors(results map[string]env.ValidationResult, fieldUpdates m
 }
 
 // CreateSaveAction creates a save action for form fields
-func CreateSaveAction(c *via.Context, svc *env.Service, fields []FormFieldData, saveMessage interface{ String() string; SetValue(any) }) func() {
+func CreateSaveAction(c *via.Context, svc *env.Service, fields []FormFieldData, saveMessage interface {
+	String() string
+	SetValue(any)
+}) func() {
 	return func() {
 		// Prepare field updates map
 		fieldUpdates := make(map[string]string)
@@ -146,7 +155,10 @@ type SelectOption struct {
 }
 
 // RenderSelectField renders a dropdown select field with label and options
-func RenderSelectField(label string, selectedValue interface{ String() string; Bind() h.H }, options []SelectOption) h.H {
+func RenderSelectField(label string, selectedValue interface {
+	String() string
+	Bind() h.H
+}, options []SelectOption) h.H {
 	// Build option elements
 	optionElements := make([]h.H, len(options))
 	for i, opt := range options {
@@ -206,7 +218,7 @@ func RenderPrerequisiteError(missing []PrerequisiteCheck) h.H {
 	listItems = append(listItems, h.Style("margin: 0.5rem 0 0 1.5rem;"))
 	for _, item := range missing {
 		listItems = append(listItems, h.Li(
-			h.Text(item.DisplayName + " - "),
+			h.Text(item.DisplayName+" - "),
 			h.A(
 				h.Href(item.StepPath),
 				h.Text(item.StepLabel),

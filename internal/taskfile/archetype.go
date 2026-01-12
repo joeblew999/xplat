@@ -30,8 +30,8 @@ const (
 
 // ArchetypeInfo provides details about a detected archetype.
 type ArchetypeInfo struct {
-	Type        Archetype
-	Description string
+	Type          Archetype
+	Description   string
 	RequiredVars  []string
 	RequiredTasks []string
 }

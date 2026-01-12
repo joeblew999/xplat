@@ -17,10 +17,10 @@ type InitOptions struct {
 
 // InitResult holds the result of manifest initialization.
 type InitResult struct {
-	Path        string
-	Name        string
-	DetectedGo  bool
-	GoModule    string
+	Path         string
+	Name         string
+	DetectedGo   bool
+	GoModule     string
 	DetectedTask bool
 	TaskfilePath string
 }

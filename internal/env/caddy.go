@@ -69,7 +69,6 @@ type registryManager struct {
 // Global registry manager instance
 var globalRegistryManager = &registryManager{}
 
-
 // load reads the service registry from disk (private, not locked)
 func (rm *registryManager) load() (*serviceRegistry, error) {
 	// If file doesn't exist, return empty registry
@@ -208,7 +207,6 @@ func getMkcertBinaryPath() string {
 	homeDir := getUserHomeDir()
 	return filepath.Join(homeDir, "workspace", "go", "bin", binaryName)
 }
-
 
 // StartCaddy starts the Caddy server with current service registry configuration
 func StartCaddy() error {
@@ -773,7 +771,7 @@ func validateServiceConfig(service ServiceConfig) error {
 	}
 	for _, char := range service.Name {
 		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
-		     (char >= '0' && char <= '9') || char == '-' || char == '_') {
+			(char >= '0' && char <= '9') || char == '-' || char == '_') {
 			return fmt.Errorf("service name '%s' contains invalid characters (use alphanumeric, hyphens, underscores only)", service.Name)
 		}
 	}
@@ -837,9 +835,9 @@ func RegisterService(service ServiceConfig) (*ServiceRegistrationResult, error) 
 		if existing.Name == service.Name {
 			// Service exists - check if config changed
 			if existing.Port == service.Port &&
-			   existing.PathPattern == service.PathPattern &&
-			   existing.Priority == service.Priority &&
-			   existing.HealthPath == service.HealthPath {
+				existing.PathPattern == service.PathPattern &&
+				existing.Priority == service.Priority &&
+				existing.HealthPath == service.HealthPath {
 				// Same config, no-op (idempotent)
 				fmt.Printf("✓ Service '%s' already registered\n", service.Name)
 				return buildRegistrationResult(service), nil

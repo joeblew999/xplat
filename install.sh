@@ -31,15 +31,14 @@ if [ "$OS" = "windows" ]; then
 fi
 
 # Determine install directory
-if [ "$OS" = "darwin" ] || [ "$OS" = "linux" ]; then
-    if [ -w /usr/local/bin ]; then
-        INSTALL_DIR="/usr/local/bin"
-    elif [ -d "$HOME/.local/bin" ]; then
-        INSTALL_DIR="$HOME/.local/bin"
-    else
-        mkdir -p "$HOME/.local/bin"
-        INSTALL_DIR="$HOME/.local/bin"
-    fi
+# Prefer ~/.local/bin (XDG standard) to avoid permission issues
+# Override with INSTALL_DIR env var if set
+if [ -n "$INSTALL_DIR" ]; then
+    mkdir -p "$INSTALL_DIR"
+elif [ "$OS" = "darwin" ] || [ "$OS" = "linux" ]; then
+    # Prefer ~/.local/bin (user-writable, XDG standard)
+    mkdir -p "$HOME/.local/bin"
+    INSTALL_DIR="$HOME/.local/bin"
 elif [ "$OS" = "windows" ]; then
     INSTALL_DIR="$LOCALAPPDATA/xplat"
     mkdir -p "$INSTALL_DIR"

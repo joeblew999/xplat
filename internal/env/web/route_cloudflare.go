@@ -11,7 +11,7 @@ import (
 // cloudflarePage - Landing page showing all wizard steps with status
 func cloudflarePage(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 	// Reactive signals for validation state
-	validationMode := c.Signal("fast")        // Track validation mode: "fast", "deep"
+	validationMode := c.Signal("fast") // Track validation mode: "fast", "deep"
 	validationInProgress := c.Signal(false)
 	validationMessage := c.Signal("")
 

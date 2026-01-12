@@ -17,6 +17,7 @@ require (
 	github.com/kardianos/service v1.2.4
 	github.com/mholt/archives v0.1.5
 	github.com/otiai10/copy v1.14.1
+	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -158,7 +159,6 @@ require (
 	github.com/quic-go/quic-go v0.57.1 // indirect
 	github.com/rivo/tview v0.42.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sajari/fuzzy v1.0.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect

@@ -31,16 +31,16 @@ Examples:
 
 // Platform represents a target platform for builds
 type Platform struct {
-	OS       string `json:"os"`
-	Arch     string `json:"arch"`
-	Runner   string `json:"runner,omitempty"`   // GitHub Actions runner
-	CrossCompile bool `json:"cross_compile"`    // Can be built from Linux
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	Runner       string `json:"runner,omitempty"` // GitHub Actions runner
+	CrossCompile bool   `json:"cross_compile"`    // Can be built from Linux
 }
 
 // BuildMatrix represents the full build configuration
 type BuildMatrix struct {
 	Tool      string     `json:"tool"`
-	BinName   string     `json:"bin_name"`  // Actual binary name (e.g., task-ui vs tui)
+	BinName   string     `json:"bin_name"` // Actual binary name (e.g., task-ui vs tui)
 	Lang      string     `json:"lang"`
 	CGO       bool       `json:"cgo"`
 	Platforms []Platform `json:"platforms"`
@@ -135,10 +135,10 @@ Examples:
 }
 
 var (
-	matrixFormat   string
-	buildCurrent   bool
-	buildPlatform  string
-	listBuildDir   string
+	matrixFormat  string
+	buildCurrent  bool
+	buildPlatform string
+	listBuildDir  string
 )
 
 func init() {
@@ -331,10 +331,10 @@ func runReleaseMatrix(cmd *cobra.Command, args []string) error {
 			})
 		}
 		output := map[string]interface{}{
-			"include":        includes,
-			"bin_name":       matrix.BinName,
-			"cgo":            matrix.CGO,
-			"cross_compile":  !matrix.CGO,
+			"include":       includes,
+			"bin_name":      matrix.BinName,
+			"cgo":           matrix.CGO,
+			"cross_compile": !matrix.CGO,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(data))

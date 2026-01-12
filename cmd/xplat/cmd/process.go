@@ -112,12 +112,6 @@ func runProcessWithArgs(args []string) error {
 		return nil
 	}
 
-	// Suppress debug logs from process-compose unless explicitly enabled
-	// This prevents noisy "could not locate process-compose config" messages
-	if os.Getenv("PC_LOG_LEVEL") == "" {
-		os.Setenv("PC_LOG_LEVEL", "info")
-	}
-
 	// Auto-detect config file if not specified
 	args = autoDetectProcessConfig(args)
 

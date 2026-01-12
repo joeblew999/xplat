@@ -38,10 +38,10 @@ type TaskInfo struct {
 
 // ViaConfig holds the Via server configuration.
 type ViaConfig struct {
-	Port              string // Port to listen on (default "3000")
-	Taskfile          string // Path to Taskfile.yml (default "Taskfile.yml")
-	WorkDir           string // Working directory for task execution
-	OpenBrowser       bool   // Open browser on start
+	Port               string // Port to listen on (default "3000")
+	Taskfile           string // Path to Taskfile.yml (default "Taskfile.yml")
+	WorkDir            string // Working directory for task execution
+	OpenBrowser        bool   // Open browser on start
 	ProcessComposePort int    // Port for process-compose API (default 8080)
 }
 

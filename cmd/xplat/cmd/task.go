@@ -22,10 +22,10 @@
 // # Our Approach
 //
 // Since we cannot import internal/flags, we replicate the flag parsing logic:
-//   1. Define our own flags that mirror Task's flags exactly
-//   2. Parse them using Cobra's flag parsing
-//   3. Apply the parsed values directly to the Executor struct fields
-//   4. Use Task's public API (Executor, args.Parse, ListOptions, etc.)
+//  1. Define our own flags that mirror Task's flags exactly
+//  2. Parse them using Cobra's flag parsing
+//  3. Apply the parsed values directly to the Executor struct fields
+//  4. Use Task's public API (Executor, args.Parse, ListOptions, etc.)
 //
 // This approach provides ~99% CLI compatibility. Known limitations:
 //   - --experiments flag is not supported (rarely used)
@@ -41,13 +41,13 @@
 // # Bootstrap Sequence
 //
 // Local development:
-//   1. Use existing `task` to run taskfiles (already installed)
-//   2. `task xplat:build` creates xplat with embedded Task
-//   3. Can then use `xplat task` instead of `task`
+//  1. Use existing `task` to run taskfiles (already installed)
+//  2. `task xplat:build` creates xplat with embedded Task
+//  3. Can then use `xplat task` instead of `task`
 //
 // CI:
-//   1. `go build ./cmd/xplat` creates xplat (no Task needed!)
-//   2. `xplat task <taskname>` runs tasks
+//  1. `go build ./cmd/xplat` creates xplat (no Task needed!)
+//  2. `xplat task <taskname>` runs tasks
 //
 // # Task-UI Note
 //

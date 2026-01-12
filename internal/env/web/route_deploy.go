@@ -15,9 +15,9 @@ func deployPage(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 
 	// Deployment signals
 	deployOutput := c.Signal("")
-	buildInProgress := c.Signal(false)       // "Build Site Only" button progress
-	previewInProgress := c.Signal(false)     // "Deploy to Preview" button progress
-	productionInProgress := c.Signal(false)  // "Deploy to Production" button progress
+	buildInProgress := c.Signal(false)      // "Build Site Only" button progress
+	previewInProgress := c.Signal(false)    // "Deploy to Preview" button progress
+	productionInProgress := c.Signal(false) // "Deploy to Production" button progress
 	localURL := c.Signal("")
 	lanURL := c.Signal("")        // LAN URL for mobile testing
 	previewURL := c.Signal("")    // Cloudflare preview URL (*.pages.dev)

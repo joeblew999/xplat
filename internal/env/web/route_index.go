@@ -11,7 +11,7 @@ import (
 // homePage creates a welcome page with optional validation
 func homePage(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 	// Reactive signals for validation state
-	validationMode := c.Signal("none")     // Track validation mode: "none", "fast", "deep"
+	validationMode := c.Signal("none") // Track validation mode: "none", "fast", "deep"
 	validationInProgress := c.Signal(false)
 	validationMessage := c.Signal("")
 
@@ -187,7 +187,6 @@ func homePage(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 	})
 }
 
-
 // renderProgressCard renders a progress card for the home page dashboard
 func renderProgressCard(title string, completed, total int, href, buttonText string, isComplete bool) h.H {
 	percentage := float64(completed) / float64(total) * 100
@@ -282,8 +281,8 @@ func renderConfigTable(rows []ConfigTableRow, envPath string) h.H {
 
 		tableBodyRows[i] = h.Tr(
 			h.Td(h.Text(row.Display)),
-			h.Td(h.Code(h.Text(row.Key))),                                // Monospace for env var names
-			h.Td(h.Code(h.Text(row.Value))),                              // Monospace for values
+			h.Td(h.Code(h.Text(row.Key))),   // Monospace for env var names
+			h.Td(h.Code(h.Text(row.Value))), // Monospace for values
 			h.Td(h.Text(row.Required)),
 			h.Td(h.Style(validatedStyle), h.Text(row.Validated)),
 			h.Td(h.Style(errorStyle), h.Text(row.Error)),

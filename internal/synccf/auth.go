@@ -229,10 +229,10 @@ func saveAllCredentialsToEnv(creds CFCredentials) error {
 	updated := make(map[string]bool)
 
 	keysToUpdate := map[string]string{
-		"CF_ACCOUNT_ID":  creds.AccountID,
-		"CF_API_TOKEN":   creds.APIToken,
-		"R2_ACCESS_KEY":  creds.R2AccessKey,
-		"R2_SECRET_KEY":  creds.R2SecretKey,
+		"CF_ACCOUNT_ID": creds.AccountID,
+		"CF_API_TOKEN":  creds.APIToken,
+		"R2_ACCESS_KEY": creds.R2AccessKey,
+		"R2_SECRET_KEY": creds.R2SecretKey,
 	}
 
 	for i, line := range lines {

@@ -46,12 +46,12 @@ func (i *Include) UnmarshalYAML(value *yaml.Node) error {
 
 // Task represents a task in a Taskfile.
 type Task struct {
-	Desc        string   `yaml:"desc"`
-	Summary     string   `yaml:"summary"`
-	Cmds        []any    `yaml:"cmds"`
-	Deps        []any    `yaml:"deps"`
-	Internal    bool     `yaml:"internal"`
-	Interactive bool     `yaml:"interactive"`
+	Desc        string `yaml:"desc"`
+	Summary     string `yaml:"summary"`
+	Cmds        []any  `yaml:"cmds"`
+	Deps        []any  `yaml:"deps"`
+	Internal    bool   `yaml:"internal"`
+	Interactive bool   `yaml:"interactive"`
 }
 
 // remoteTaskfileCache caches fetched remote taskfiles.

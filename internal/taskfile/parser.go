@@ -11,11 +11,11 @@ import (
 
 // Taskfile represents a parsed Taskfile with all relevant sections.
 type Taskfile struct {
-	Path     string           // File path
-	Version  string           `yaml:"version"`
-	Includes map[string]any   `yaml:"includes"` // Can be string or map with taskfile/optional keys
-	Vars     map[string]any   `yaml:"vars"`
-	Tasks    map[string]Task  `yaml:"tasks"`
+	Path     string          // File path
+	Version  string          `yaml:"version"`
+	Includes map[string]any  `yaml:"includes"` // Can be string or map with taskfile/optional keys
+	Vars     map[string]any  `yaml:"vars"`
+	Tasks    map[string]Task `yaml:"tasks"`
 
 	// Parsed metadata
 	RawContent []byte
@@ -24,13 +24,13 @@ type Taskfile struct {
 
 // Task represents a task definition.
 type Task struct {
-	Desc     string   `yaml:"desc"`
-	Deps     []any    `yaml:"deps"`
-	Cmds     []any    `yaml:"cmds"`
-	Status   []string `yaml:"status"`
+	Desc     string         `yaml:"desc"`
+	Deps     []any          `yaml:"deps"`
+	Cmds     []any          `yaml:"cmds"`
+	Status   []string       `yaml:"status"`
 	Vars     map[string]any `yaml:"vars"`
-	Requires *Requires `yaml:"requires"`
-	Internal bool     `yaml:"internal"`
+	Requires *Requires      `yaml:"requires"`
+	Internal bool           `yaml:"internal"`
 }
 
 // Requires represents task requirements.

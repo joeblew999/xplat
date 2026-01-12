@@ -411,4 +411,3 @@ func installProcess(pkg *registry.Package) error {
 	gen := process.NewGenerator(pkgProcessConfig)
 	return gen.AddPackage(pkg.Name)
 }
-

@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	envsubstNoUnset  bool
-	envsubstNoEmpty  bool
-	envsubstEnvFile  string
-	envsubstOutput   string
-	envsubstVars     []string
+	envsubstNoUnset bool
+	envsubstNoEmpty bool
+	envsubstEnvFile string
+	envsubstOutput  string
+	envsubstVars    []string
 )
 
 // EnvsubstCmd substitutes environment variables in text

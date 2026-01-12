@@ -83,7 +83,7 @@ func writeEnvVar(buf *bytes.Buffer, v EnvVar, required bool) {
 
 // ProcessComposeConfig represents a process-compose.yaml file.
 type ProcessComposeConfig struct {
-	Version   string                            `yaml:"version"`
+	Version   string                           `yaml:"version"`
 	Processes map[string]ProcessComposeProcess `yaml:"processes"`
 }
 

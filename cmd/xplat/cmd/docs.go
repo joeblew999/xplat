@@ -137,13 +137,13 @@ func runDocsReadme(cmd *cobra.Command, args []string) error {
 
 	// Group commands by category
 	categories := map[string][]commandInfo{
-		"Core":              {},
-		"File Operations":   {},
-		"Utilities":         {},
+		"Core":               {},
+		"File Operations":    {},
+		"Utilities":          {},
 		"Package Management": {},
-		"Taskfile":          {},
-		"Process":           {},
-		"Other":             {},
+		"Taskfile":           {},
+		"Process":            {},
+		"Other":              {},
 	}
 
 	for _, c := range commands {

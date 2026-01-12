@@ -33,6 +33,9 @@ jobs:
         run: |
           echo "=== Verifying xplat ==="
 
+          # Add ~/.local/bin to PATH (where install.sh installs)
+          export PATH="$HOME/.local/bin:$PATH"
+
           # Check version
           echo "Testing: xplat version"
           xplat version

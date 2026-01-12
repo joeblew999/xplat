@@ -217,4 +217,3 @@ func FormatState(state *State) string {
 
 	return sb.String()
 }
-

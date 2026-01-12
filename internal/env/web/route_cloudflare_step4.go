@@ -48,13 +48,13 @@ func cloudflareStep4Page(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 	})
 
 	saveMessage := c.Signal("")
-	projectsMessage := c.Signal("") // For projects loading status
-	deleteMessage := c.Signal("")   // For delete operation feedback
-	projectToDelete := c.Signal("") // Holds project name pending deletion confirmation
+	projectsMessage := c.Signal("")      // For projects loading status
+	deleteMessage := c.Signal("")        // For delete operation feedback
+	projectToDelete := c.Signal("")      // Holds project name pending deletion confirmation
 	showDeleteConfirm := c.Signal(false) // Controls visibility of delete confirmation dialog
-	createMessage := c.Signal("")   // For project creation feedback
-	createInProgress := c.Signal(false) // For project creation in-progress state
-	newProjectName := c.Signal("")  // Holds new project name input
+	createMessage := c.Signal("")        // For project creation feedback
+	createInProgress := c.Signal(false)  // For project creation in-progress state
+	newProjectName := c.Signal("")       // Holds new project name input
 
 	// Projects loader - populated lazily when first accessed
 	projectsLoader := NewLazyLoader(func() ([]env.PagesProject, error) {
@@ -219,8 +219,8 @@ func cloudflareStep4Page(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 		// Build project list UI elements with delete buttons
 		projectListElements := make([]h.H, 0, len(projectsCache))
 		for _, project := range projectsCache {
-			projectName := project.Name       // Capture in closure
-			createdOn := project.CreatedOn    // Capture in closure
+			projectName := project.Name    // Capture in closure
+			createdOn := project.CreatedOn // Capture in closure
 			deleteAction := c.Action(func() {
 				projectToDelete.SetValue(projectName)
 				showDeleteConfirm.SetValue(true)
@@ -280,7 +280,6 @@ func cloudflareStep4Page(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 				h.Style("color: var(--pico-muted-color);"),
 				h.Text("Select a Pages project to deploy your Hugo site to"),
 			),
-
 
 			// Manage Projects section - delete existing projects
 			h.If(len(projectsCache) > 0,

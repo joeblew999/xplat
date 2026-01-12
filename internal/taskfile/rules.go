@@ -162,8 +162,10 @@ func (r IdempotentDepsRule) Check(tf *Taskfile) []Violation {
 // DocHeaderRule checks for documentation header comment.
 type DocHeaderRule struct{}
 
-func (r DocHeaderRule) Name() string        { return "doc-header" }
-func (r DocHeaderRule) Description() string { return "Every taskfile should have a documentation header" }
+func (r DocHeaderRule) Name() string { return "doc-header" }
+func (r DocHeaderRule) Description() string {
+	return "Every taskfile should have a documentation header"
+}
 
 func (r DocHeaderRule) Check(tf *Taskfile) []Violation {
 	var violations []Violation

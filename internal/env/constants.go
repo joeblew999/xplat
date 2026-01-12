@@ -6,14 +6,14 @@ const (
 	AnthropicAPIMessagesURL = "https://api.anthropic.com/v1/messages"
 
 	// Cloudflare API endpoints
-	CloudflareAPITokenVerifyURL = "https://api.cloudflare.com/client/v4/user/tokens/verify"
-	CloudflareAPITokenInfoURL   = "https://api.cloudflare.com/client/v4/user/tokens/%s"         // requires tokenID
-	CloudflareAPIAccountURL     = "https://api.cloudflare.com/client/v4/accounts/%s"            // requires accountID
-	CloudflareAPIAccountsURL    = "https://api.cloudflare.com/client/v4/accounts"
-	CloudflareAPIZonesURL       = "https://api.cloudflare.com/client/v4/zones"                  // GET zones (domains)
-	CloudflareAPIPagesURL           = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects"              // requires accountID
-	CloudflareAPIPagesDeleteURL     = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s"          // requires accountID, projectName
-	CloudflareAPIPagesDomainsURL    = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s/domains"  // requires accountID, projectName
+	CloudflareAPITokenVerifyURL       = "https://api.cloudflare.com/client/v4/user/tokens/verify"
+	CloudflareAPITokenInfoURL         = "https://api.cloudflare.com/client/v4/user/tokens/%s" // requires tokenID
+	CloudflareAPIAccountURL           = "https://api.cloudflare.com/client/v4/accounts/%s"    // requires accountID
+	CloudflareAPIAccountsURL          = "https://api.cloudflare.com/client/v4/accounts"
+	CloudflareAPIZonesURL             = "https://api.cloudflare.com/client/v4/zones"                                    // GET zones (domains)
+	CloudflareAPIPagesURL             = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects"               // requires accountID
+	CloudflareAPIPagesDeleteURL       = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s"            // requires accountID, projectName
+	CloudflareAPIPagesDomainsURL      = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s/domains"    // requires accountID, projectName
 	CloudflareAPIPagesDeleteDomainURL = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s/domains/%s" // requires accountID, projectName, domainName
 )
 
@@ -35,8 +35,8 @@ const (
 
 	// GitHub URLs
 	GitHubCLIInstallURL      = "https://cli.github.com/"
-	GitHubRepoURLTemplate    = "https://github.com/%s/%s"           // requires owner, name
-	GitHubSecretsURLTemplate = "%s/settings/secrets/actions"        // requires repo URL
+	GitHubRepoURLTemplate    = "https://github.com/%s/%s"    // requires owner, name
+	GitHubSecretsURLTemplate = "%s/settings/secrets/actions" // requires repo URL
 )
 
 // Default Values

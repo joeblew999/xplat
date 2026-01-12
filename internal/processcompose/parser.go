@@ -11,11 +11,11 @@ import (
 
 // ProcessCompose represents a parsed process-compose.yaml file.
 type ProcessCompose struct {
-	Path       string            // File path
-	RawContent []byte            // Original file content
-	Lines      []string          // Lines for line number lookups
-	Version    string            `yaml:"version"`
-	EnvFile    []string          `yaml:"env_file"`
+	Path       string              // File path
+	RawContent []byte              // Original file content
+	Lines      []string            // Lines for line number lookups
+	Version    string              `yaml:"version"`
+	EnvFile    []string            `yaml:"env_file"`
 	Processes  map[string]*Process `yaml:"processes"`
 }
 

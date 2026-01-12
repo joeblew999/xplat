@@ -18,11 +18,11 @@ type ProcessComposeConfig struct {
 
 // Process represents a single process in process-compose.yaml.
 type Process struct {
-	Command       string            `yaml:"command"`
-	Disabled      bool              `yaml:"disabled,omitempty"`
-	DependsOn     map[string]DepCfg `yaml:"depends_on,omitempty"`
-	Namespace     string            `yaml:"namespace,omitempty"`
-	ReadinessProbe *ReadinessProbe  `yaml:"readiness_probe,omitempty"`
+	Command        string            `yaml:"command"`
+	Disabled       bool              `yaml:"disabled,omitempty"`
+	DependsOn      map[string]DepCfg `yaml:"depends_on,omitempty"`
+	Namespace      string            `yaml:"namespace,omitempty"`
+	ReadinessProbe *ReadinessProbe   `yaml:"readiness_probe,omitempty"`
 }
 
 // DepCfg represents a dependency configuration.

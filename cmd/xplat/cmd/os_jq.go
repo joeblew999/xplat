@@ -40,9 +40,9 @@ Common queries:
 }
 
 var (
-	jqRaw    bool
-	jqSlurp  bool
-	jqNull   bool
+	jqRaw   bool
+	jqSlurp bool
+	jqNull  bool
 )
 
 func init() {

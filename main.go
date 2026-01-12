@@ -7,6 +7,9 @@ package main
 import (
 	"os"
 
+	// Bootstrap MUST be imported first to set log level before process-compose initializes
+	_ "github.com/joeblew999/xplat/internal/bootstrap"
+
 	"github.com/joeblew999/xplat/cmd/xplat/cmd"
 	"github.com/spf13/cobra"
 )

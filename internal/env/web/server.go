@@ -105,8 +105,8 @@ func serveSetupGUIWithOptions(mockMode bool) {
 		// DevMode enables the dataSPA Inspector debugging tool in the browser.
 		// Set VIA_DEV_MODE=false to disable for production deployments.
 		// Defaults to enabled when VIA_DEV_MODE is unset or any value other than "false".
-		DevMode:       os.Getenv("VIA_DEV_MODE") != "false",
-		LogLvl:        via.LogLevelWarn,  // Reduce noise from benign SSE race conditions
+		DevMode: os.Getenv("VIA_DEV_MODE") != "false",
+		LogLvl:  via.LogLevelWarn, // Reduce noise from benign SSE race conditions
 	})
 
 	// Helper to load fresh config for each page request
