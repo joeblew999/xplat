@@ -58,58 +58,58 @@ jobs:
           echo "Testing: version"
           ./xplat version
 
-          echo "Testing: which"
-          ./xplat which go
+          echo "Testing: os which"
+          ./xplat os which go
 
-          echo "Testing: glob"
-          COUNT=$(./xplat glob "cmd/**/*.go" | wc -l)
+          echo "Testing: os glob"
+          COUNT=$(./xplat os glob "cmd/**/*.go" | wc -l)
           echo "  Found $COUNT Go files"
           [ "$COUNT" -gt 0 ] || exit 1
 
-          echo "Testing: mkdir -p"
-          ./xplat mkdir -p /tmp/xplat-ci-test/nested/dir
+          echo "Testing: os mkdir -p"
+          ./xplat os mkdir -p /tmp/xplat-ci-test/nested/dir
           [ -d /tmp/xplat-ci-test/nested/dir ] || exit 1
 
-          echo "Testing: touch"
-          ./xplat touch /tmp/xplat-ci-test/testfile.txt
+          echo "Testing: os touch"
+          ./xplat os touch /tmp/xplat-ci-test/testfile.txt
           [ -f /tmp/xplat-ci-test/testfile.txt ] || exit 1
 
-          echo "Testing: cat"
+          echo "Testing: os cat"
           echo "test content" > /tmp/xplat-ci-test/testfile.txt
-          CONTENT=$(./xplat cat /tmp/xplat-ci-test/testfile.txt)
+          CONTENT=$(./xplat os cat /tmp/xplat-ci-test/testfile.txt)
           [ "$CONTENT" = "test content" ] || exit 1
 
-          echo "Testing: cp"
-          ./xplat cp /tmp/xplat-ci-test/testfile.txt /tmp/xplat-ci-test/copied.txt
+          echo "Testing: os cp"
+          ./xplat os cp /tmp/xplat-ci-test/testfile.txt /tmp/xplat-ci-test/copied.txt
           [ -f /tmp/xplat-ci-test/copied.txt ] || exit 1
 
-          echo "Testing: cp -r"
-          ./xplat cp -r /tmp/xplat-ci-test/nested /tmp/xplat-ci-test/nested-copy
+          echo "Testing: os cp -r"
+          ./xplat os cp -r /tmp/xplat-ci-test/nested /tmp/xplat-ci-test/nested-copy
           [ -d /tmp/xplat-ci-test/nested-copy/dir ] || exit 1
 
-          echo "Testing: mv (rename)"
-          ./xplat touch /tmp/xplat-ci-test/to-rename.txt
-          ./xplat mv /tmp/xplat-ci-test/to-rename.txt /tmp/xplat-ci-test/renamed.txt
+          echo "Testing: os mv (rename)"
+          ./xplat os touch /tmp/xplat-ci-test/to-rename.txt
+          ./xplat os mv /tmp/xplat-ci-test/to-rename.txt /tmp/xplat-ci-test/renamed.txt
           [ -f /tmp/xplat-ci-test/renamed.txt ] || exit 1
           [ ! -f /tmp/xplat-ci-test/to-rename.txt ] || exit 1
 
-          echo "Testing: mv (to directory)"
-          ./xplat mv /tmp/xplat-ci-test/renamed.txt /tmp/xplat-ci-test/nested/
+          echo "Testing: os mv (to directory)"
+          ./xplat os mv /tmp/xplat-ci-test/renamed.txt /tmp/xplat-ci-test/nested/
           [ -f /tmp/xplat-ci-test/nested/renamed.txt ] || exit 1
 
-          echo "Testing: env"
-          ./xplat env HOME
+          echo "Testing: os env"
+          ./xplat os env HOME
 
-          echo "Testing: env -d"
-          VAL=$(./xplat env NONEXISTENT -d "fallback")
+          echo "Testing: os env -d"
+          VAL=$(./xplat os env NONEXISTENT -d "fallback")
           [ "$VAL" = "fallback" ] || exit 1
 
-          echo "Testing: rm"
-          ./xplat rm /tmp/xplat-ci-test/copied.txt
+          echo "Testing: os rm"
+          ./xplat os rm /tmp/xplat-ci-test/copied.txt
           [ ! -f /tmp/xplat-ci-test/copied.txt ] || exit 1
 
-          echo "Testing: rm -rf"
-          ./xplat rm -rf /tmp/xplat-ci-test
+          echo "Testing: os rm -rf"
+          ./xplat os rm -rf /tmp/xplat-ci-test
           [ ! -d /tmp/xplat-ci-test ] || exit 1
 
           echo "=== All tests passed (${{ matrix.name }}) ==="
@@ -125,58 +125,58 @@ jobs:
           Write-Host "Testing: version"
           .\xplat.exe version
 
-          Write-Host "Testing: which"
-          .\xplat.exe which powershell
+          Write-Host "Testing: os which"
+          .\xplat.exe os which powershell
 
-          Write-Host "Testing: glob"
-          $count = (.\xplat.exe glob "cmd/**/*.go" | Measure-Object -Line).Lines
+          Write-Host "Testing: os glob"
+          $count = (.\xplat.exe os glob "cmd/**/*.go" | Measure-Object -Line).Lines
           Write-Host "  Found $count Go files"
           if ($count -le 0) { exit 1 }
 
-          Write-Host "Testing: mkdir -p"
-          .\xplat.exe mkdir -p "$env:TEMP\xplat-ci-test\nested\dir"
+          Write-Host "Testing: os mkdir -p"
+          .\xplat.exe os mkdir -p "$env:TEMP\xplat-ci-test\nested\dir"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested\dir")) { exit 1 }
 
-          Write-Host "Testing: touch"
-          .\xplat.exe touch "$env:TEMP\xplat-ci-test\testfile.txt"
+          Write-Host "Testing: os touch"
+          .\xplat.exe os touch "$env:TEMP\xplat-ci-test\testfile.txt"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\testfile.txt")) { exit 1 }
 
-          Write-Host "Testing: cat"
+          Write-Host "Testing: os cat"
           "test content" | Out-File -FilePath "$env:TEMP\xplat-ci-test\testfile.txt" -Encoding utf8 -NoNewline
-          $content = .\xplat.exe cat "$env:TEMP\xplat-ci-test\testfile.txt"
+          $content = .\xplat.exe os cat "$env:TEMP\xplat-ci-test\testfile.txt"
           if ($content.Trim() -ne "test content") { Write-Host "Got: $content"; exit 1 }
 
-          Write-Host "Testing: cp"
-          .\xplat.exe cp "$env:TEMP\xplat-ci-test\testfile.txt" "$env:TEMP\xplat-ci-test\copied.txt"
+          Write-Host "Testing: os cp"
+          .\xplat.exe os cp "$env:TEMP\xplat-ci-test\testfile.txt" "$env:TEMP\xplat-ci-test\copied.txt"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\copied.txt")) { exit 1 }
 
-          Write-Host "Testing: cp -r"
-          .\xplat.exe cp -r "$env:TEMP\xplat-ci-test\nested" "$env:TEMP\xplat-ci-test\nested-copy"
+          Write-Host "Testing: os cp -r"
+          .\xplat.exe os cp -r "$env:TEMP\xplat-ci-test\nested" "$env:TEMP\xplat-ci-test\nested-copy"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested-copy\dir")) { exit 1 }
 
-          Write-Host "Testing: mv (rename)"
-          .\xplat.exe touch "$env:TEMP\xplat-ci-test\to-rename.txt"
-          .\xplat.exe mv "$env:TEMP\xplat-ci-test\to-rename.txt" "$env:TEMP\xplat-ci-test\renamed.txt"
+          Write-Host "Testing: os mv (rename)"
+          .\xplat.exe os touch "$env:TEMP\xplat-ci-test\to-rename.txt"
+          .\xplat.exe os mv "$env:TEMP\xplat-ci-test\to-rename.txt" "$env:TEMP\xplat-ci-test\renamed.txt"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\renamed.txt")) { exit 1 }
           if (Test-Path "$env:TEMP\xplat-ci-test\to-rename.txt") { exit 1 }
 
-          Write-Host "Testing: mv (to directory)"
-          .\xplat.exe mv "$env:TEMP\xplat-ci-test\renamed.txt" "$env:TEMP\xplat-ci-test\nested\"
+          Write-Host "Testing: os mv (to directory)"
+          .\xplat.exe os mv "$env:TEMP\xplat-ci-test\renamed.txt" "$env:TEMP\xplat-ci-test\nested\"
           if (-not (Test-Path "$env:TEMP\xplat-ci-test\nested\renamed.txt")) { exit 1 }
 
-          Write-Host "Testing: env"
-          .\xplat.exe env USERPROFILE
+          Write-Host "Testing: os env"
+          .\xplat.exe os env USERPROFILE
 
-          Write-Host "Testing: env -d"
-          $val = .\xplat.exe env NONEXISTENT -d "fallback"
+          Write-Host "Testing: os env -d"
+          $val = .\xplat.exe os env NONEXISTENT -d "fallback"
           if ($val -ne "fallback") { exit 1 }
 
-          Write-Host "Testing: rm"
-          .\xplat.exe rm "$env:TEMP\xplat-ci-test\copied.txt"
+          Write-Host "Testing: os rm"
+          .\xplat.exe os rm "$env:TEMP\xplat-ci-test\copied.txt"
           if (Test-Path "$env:TEMP\xplat-ci-test\copied.txt") { exit 1 }
 
-          Write-Host "Testing: rm -rf"
-          .\xplat.exe rm -rf "$env:TEMP\xplat-ci-test"
+          Write-Host "Testing: os rm -rf"
+          .\xplat.exe os rm -rf "$env:TEMP\xplat-ci-test"
           if (Test-Path "$env:TEMP\xplat-ci-test") { exit 1 }
 
           Write-Host "=== All tests passed (Windows) ===" -ForegroundColor Cyan
