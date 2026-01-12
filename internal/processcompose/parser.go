@@ -11,26 +11,27 @@ import (
 
 // ProcessCompose represents a parsed process-compose.yaml file.
 type ProcessCompose struct {
-	Path       string              // File path
-	RawContent []byte              // Original file content
-	Lines      []string            // Lines for line number lookups
-	Version    string              `yaml:"version"`
-	EnvFile    []string            `yaml:"env_file"`
-	Processes  map[string]*Process `yaml:"processes"`
+	Path       string   `yaml:"-"` // File path (not serialized)
+	RawContent []byte   `yaml:"-"` // Original file content (not serialized)
+	Lines      []string `yaml:"-"` // Lines for line number lookups (not serialized)
+
+	Version   string              `yaml:"version"`
+	EnvFile   []string            `yaml:"env_file,omitempty"`
+	Processes map[string]*Process `yaml:"processes"`
 }
 
 // Process represents a single process definition.
 type Process struct {
 	Command        string            `yaml:"command"`
-	WorkingDir     string            `yaml:"working_dir"`
-	Disabled       bool              `yaml:"disabled"`
-	Environment    []string          `yaml:"environment"`
-	DependsOn      map[string]DepCfg `yaml:"depends_on"`
-	Shutdown       *Shutdown         `yaml:"shutdown"`
-	Availability   *Availability     `yaml:"availability"`
-	ReadinessProbe *ReadinessProbe   `yaml:"readiness_probe"`
-	LivenessProbe  *ReadinessProbe   `yaml:"liveness_probe"`
-	Namespace      string            `yaml:"namespace"`
+	WorkingDir     string            `yaml:"working_dir,omitempty"`
+	Disabled       bool              `yaml:"disabled,omitempty"`
+	Environment    []string          `yaml:"environment,omitempty"`
+	DependsOn      map[string]DepCfg `yaml:"depends_on,omitempty"`
+	Shutdown       *Shutdown         `yaml:"shutdown,omitempty"`
+	Availability   *Availability     `yaml:"availability,omitempty"`
+	ReadinessProbe *ReadinessProbe   `yaml:"readiness_probe,omitempty"`
+	LivenessProbe  *ReadinessProbe   `yaml:"liveness_probe,omitempty"`
+	Namespace      string            `yaml:"namespace,omitempty"`
 }
 
 // DepCfg represents a dependency configuration.
@@ -47,8 +48,8 @@ type Shutdown struct {
 // Availability configuration for restart policies.
 type Availability struct {
 	Restart        string `yaml:"restart"`
-	BackoffSeconds int    `yaml:"backoff_seconds"`
-	MaxRestarts    int    `yaml:"max_restarts"`
+	BackoffSeconds int    `yaml:"backoff_seconds,omitempty"`
+	MaxRestarts    int    `yaml:"max_restarts,omitempty"`
 }
 
 // ReadinessProbe configuration for health checks.
