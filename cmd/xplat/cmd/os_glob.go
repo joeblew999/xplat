@@ -26,11 +26,11 @@ Patterns:
   {a,b}    - matches either 'a' or 'b'
 
 Examples:
-  xplat glob "taskfiles/*.yml"
-  xplat glob "taskfiles/Taskfile.*.yml"
-  xplat glob "**/*.go"
-  xplat glob "src/**/*.{ts,tsx}"
-  xplat glob "/absolute/path/**/*.txt"`,
+  xplat os glob "taskfiles/*.yml"
+  xplat os glob "taskfiles/Taskfile.*.yml"
+  xplat os glob "**/*.go"
+  xplat os glob "src/**/*.{ts,tsx}"
+  xplat os glob "/absolute/path/**/*.txt"`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		pattern := args[0]

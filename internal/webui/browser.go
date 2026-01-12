@@ -1,4 +1,4 @@
-package taskui
+package web
 
 import (
 	"os/exec"

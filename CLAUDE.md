@@ -389,9 +389,94 @@ Before pushing ANY changes:
 
 ---
 
-## 6. Language-Specific
+## 6. xplat OS Utilities
 
-### 6.1 Go
+All cross-platform OS utilities are grouped under `xplat os`. These work identically on macOS, Linux, and Windows.
+
+### 6.1 File Operations
+
+```yaml
+tasks:
+  file:copy:
+    cmds:
+      - xplat os cp src dst -r    # Copy recursively
+      - xplat os mv old new       # Move/rename
+      - xplat os rm file -f       # Remove (force)
+      - xplat os mkdir -p dir     # Create directories
+      - xplat os touch file       # Create/update timestamp
+      - xplat os cat file         # Print contents
+```
+
+### 6.2 Environment & Text Processing
+
+```yaml
+tasks:
+  config:generate:
+    cmds:
+      # Get environment variable with default
+      - xplat os env PORT -d 3000
+
+      # Substitute environment variables in template
+      - xplat os envsubst config.template > config.yaml
+
+      # Use .env file for substitution
+      - xplat os envsubst --env-file .env template.yml > output.yml
+
+      # Expand glob patterns
+      - xplat os glob "**/*.go"
+
+      # Process JSON
+      - xplat os jq '.name' package.json
+```
+
+### 6.3 Git Operations (no git binary required)
+
+```yaml
+tasks:
+  src:clone:
+    cmds:
+      - xplat os git clone {{.UPSTREAM_REPO}} {{.SRC_DIR}} {{.VERSION}}
+
+  src:update:
+    cmds:
+      - xplat os git pull {{.SRC_DIR}}
+      - xplat os git checkout {{.SRC_DIR}} {{.VERSION}}
+
+  version:
+    cmds:
+      - xplat os git hash {{.SRC_DIR}}
+      - xplat os git branch {{.SRC_DIR}}
+```
+
+### 6.4 envsubst Extended Syntax
+
+The `xplat os envsubst` command supports extended variable substitution:
+
+| Syntax | Description |
+|--------|-------------|
+| `${VAR}` | Substitute, empty if unset |
+| `${VAR:-default}` | Use default if unset or empty |
+| `${VAR:=default}` | Set and use default if unset or empty |
+| `${VAR:+alt}` | Use alt if VAR is set and non-empty |
+| `${VAR:?error}` | Error if unset or empty |
+| `${#VAR}` | Length of value |
+| `${VAR:offset}` | Substring from offset |
+| `${VAR:offset:length}` | Substring |
+
+Example in Taskfile:
+```yaml
+tasks:
+  config:generate:
+    desc: Generate config from template
+    cmds:
+      - xplat os envsubst --env-file .env --no-unset config.template -o config.yaml
+```
+
+---
+
+## 7. Language-Specific
+
+### 7.1 Go
 
 **Set GOWORK at subsystem level:**
 ```yaml
@@ -399,31 +484,31 @@ env:
   GOWORK: off
 ```
 
-**Never shell out to git binary.** Use `sync clone` and `sync pull` commands:
+**Never shell out to git binary.** Use `xplat os git` commands:
 ```yaml
 # BAD - assumes git binary exists
 src:clone:
   cmds:
     - git clone --branch {{.VERSION}} {{.UPSTREAM_REPO}} {{.SRC_DIR}}
 
-# GOOD - uses sync binary with go-git
+# GOOD - uses xplat os git (no git binary required)
 src:clone:
   cmds:
-    - sync/.bin/sync clone {{.UPSTREAM_REPO}} {{.SRC_DIR}} {{.VERSION}}
+    - xplat os git clone {{.UPSTREAM_REPO}} {{.SRC_DIR}} {{.VERSION}}
 ```
 
 ---
 
-## 7. Sync Subsystem (Automated Updates)
+## 8. Sync Subsystem (Automated Updates)
 
-### 7.1 Monitoring Approach
+### 8.1 Monitoring Approach
 
 | Method | Use Case | Trigger |
 |--------|----------|---------|
 | GitHub polling | Upstream repos (nats-io, influxdata) | Every 5 minutes |
 | GitHub webhooks | Our repos (joeblew999/*) | Push events |
 
-### 7.2 Update Flow
+### 8.2 Update Flow
 ```
 Polling/Webhook detects change
   → Maps repo to subsystem
@@ -433,7 +518,7 @@ Polling/Webhook detects change
   → task reload PROC=<subsystem>
 ```
 
-### 7.3 Manual Commands
+### 8.3 Manual Commands
 ```bash
 task sync:check                    # Check all subsystems
 task sync:check SUBSYSTEM=nats     # Check specific subsystem
@@ -441,11 +526,11 @@ task sync:check SUBSYSTEM=nats     # Check specific subsystem
 
 ---
 
-## 8. Validation Specification
+## 9. Validation Specification
 
 This section defines mandatory requirements for subsystem Taskfiles to enable automated validation.
 
-### 8.1 Subsystem Types
+### 9.1 Subsystem Types
 
 | Type | Description | Examples |
 |------|-------------|----------|
@@ -455,7 +540,7 @@ This section defines mandatory requirements for subsystem Taskfiles to enable au
 | `tool` | Download external tool + deps management | utm |
 | `docs` | Documentation/static site generator | docs |
 
-### 8.2 Mandatory Variables
+### 9.2 Mandatory Variables
 
 **All subsystem types MUST have:**
 ```yaml
@@ -478,7 +563,7 @@ vars:
 | `tool` | `<PREFIX>_VERSION` |
 | `docs` | `<PREFIX>_SRC`, `<PREFIX>_DIST`, `<PREFIX>_VERSION` |
 
-### 8.3 Mandatory Tasks
+### 9.3 Mandatory Tasks
 
 **All subsystem types MUST have:**
 ```
@@ -506,7 +591,7 @@ health        # Health check for readiness probe
 run           # Long-running service execution
 ```
 
-### 8.4 Task Requirements
+### 9.4 Task Requirements
 
 **`ensure` task MUST:**
 - Have `status:` checking `test -f {{.<PREFIX>_BIN_PATH}}`
@@ -534,7 +619,7 @@ run           # Long-running service execution
 **`clean` tasks MUST:**
 - Use prefixed variables (`{{.<PREFIX>_BIN}}`, `{{.<PREFIX>_SRC}}`, `{{.<PREFIX>_DATA}}`)
 
-### 8.5 Environment Requirements
+### 9.5 Environment Requirements
 
 **Go subsystems MUST have:**
 ```yaml
@@ -542,7 +627,7 @@ env:
   GOWORK: off
 ```
 
-### 8.6 Validation Checklist
+### 9.6 Validation Checklist
 
 Use this checklist to validate a subsystem Taskfile:
 
@@ -562,7 +647,7 @@ Use this checklist to validate a subsystem Taskfile:
 
 ---
 
-## 9. Remote Taskfiles
+## 10. Remote Taskfiles
 
 Subsystem Taskfiles are published to GitHub Pages for remote consumption. This enables users to run tasks without cloning the repository.
 
@@ -625,3 +710,89 @@ TASK_X_REMOTE_TASKFILES=1 task -t Taskfile.remote-test.yml --list --insecure --y
 - **Task experiment**: `TASK_X_REMOTE_TASKFILES=1` environment variable
 - **Trust**: `--yes` flag or `--trusted-hosts` for non-interactive use
 - **HTTPS**: Required for production (use `--insecure` for localhost HTTP testing)
+
+---
+
+## 11. Service Management
+
+xplat can run as a system service, automatically starting all registered projects.
+
+### 10.1 Local Project Registry
+
+Projects are tracked in a local registry at `~/.xplat/projects.yaml`:
+
+```yaml
+projects:
+  plat-trunk:
+    path: /Users/joe/projects/plat-trunk
+    enabled: true
+  plat-garage:
+    path: /Users/joe/projects/plat-garage
+    enabled: true
+```
+
+### 10.2 Service Commands
+
+```bash
+# Register current project and install OS service
+xplat service install
+
+# List all registered projects
+xplat service list
+
+# Start/stop/restart service
+xplat service start
+xplat service stop
+xplat service restart
+
+# Check status
+xplat service status
+
+# Unregister project and remove OS service
+xplat service uninstall
+```
+
+### 10.3 Multi-Project Support
+
+The service loads all enabled projects from the registry and runs them together using process-compose's multi-config support (`-f` flags):
+
+```bash
+# What the service runs internally:
+xplat process -f /path/plat-trunk/pc.generated.yaml -f /path/plat-garage/pc.generated.yaml -t=false --no-server
+```
+
+This means:
+- One xplat service runs ALL registered projects
+- Projects share a single process-compose instance
+- Process names from all projects are visible together
+
+### 10.4 Config File Detection
+
+For each registered project, xplat searches for config files in this order:
+1. `pc.generated.yaml` (generated from xplat manifest)
+2. `pc.yaml`
+3. `pc.yml`
+4. `process-compose.generated.yaml`
+5. `process-compose.yaml`
+6. `process-compose.yml`
+
+### 10.5 Platform Support
+
+| Platform | Service Type |
+|----------|--------------|
+| macOS | LaunchAgent (user service) |
+| Linux | systemd user service |
+| Windows | Windows service |
+
+### 10.6 Directory Structure
+
+```
+~/.xplat/
+├── bin/           # Global xplat binaries
+├── cache/         # Downloaded taskfiles, package caches
+├── config/        # User preferences, credentials
+└── projects.yaml  # Local project registry
+```
+
+Environment variables:
+- `XPLAT_HOME` - Override global xplat home (default: `~/.xplat`)

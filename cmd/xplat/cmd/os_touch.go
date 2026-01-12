@@ -18,9 +18,9 @@ Works identically on macOS, Linux, and Windows.
 If file doesn't exist, it is created.
 
 Examples:
-  xplat touch newfile.txt
-  xplat touch file1.txt file2.txt
-  xplat touch .timestamp`,
+  xplat os touch newfile.txt
+  xplat os touch file1.txt file2.txt
+  xplat os touch .timestamp`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		hasError := false

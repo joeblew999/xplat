@@ -2,7 +2,7 @@
 //
 // DESIGN INTENT:
 // 1. Users can add ANY Taskfile at runtime that conforms to our Archetypes
-// 2. xplat which REFLECTS off Taskfiles to discover install locations from vars:
+// 2. xplat os which REFLECTS off Taskfiles to discover install locations from vars:
 //    - BUN_GLOBAL_BIN (e.g., ~/.bun/bin)
 //    - <TOOL>_INSTALL_DIR (e.g., WRANGLER_INSTALL_DIR)
 //    - BIN_INSTALL_DIR (e.g., ~/.local/bin)
@@ -15,9 +15,9 @@
 // - JSON output: --json flag for machine consumption
 //
 // COMMANDS:
-//   xplat which <tool>           -> just the path (scripts use this)
-//   xplat which <tool> --all     -> all locations (debugging conflicts)
-//   xplat which doctor <tool>    -> full diagnostics (versions, conflicts)
+//   xplat os which <tool>           -> just the path (scripts use this)
+//   xplat os which <tool> --all     -> all locations (debugging conflicts)
+//   xplat os which doctor <tool>    -> full diagnostics (versions, conflicts)
 //   Add --json to any for machine-parseable output
 //
 // WHY THIS MATTERS:
@@ -84,13 +84,13 @@ modifying their shell configuration.
 
 Use --all to show ALL locations where the binary exists.
 Use --json for machine-parseable output.
-Use 'xplat which doctor <tool>' for detailed diagnostics.
+Use 'xplat os which doctor <tool>' for detailed diagnostics.
 
 Examples:
-  xplat which wrangler           # just the path
-  xplat which wrangler --json    # JSON output
-  xplat which wrangler --all     # all locations
-  xplat which doctor wrangler    # full diagnostics`,
+  xplat os which wrangler           # just the path
+  xplat os which wrangler --json    # JSON output
+  xplat os which wrangler --all     # all locations
+  xplat os which doctor wrangler    # full diagnostics`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
@@ -140,8 +140,8 @@ var WhichDoctorCmd = &cobra.Command{
 and conflict detection. Use --json for machine-parseable output.
 
 Examples:
-  xplat which doctor wrangler
-  xplat which doctor wrangler --json`,
+  xplat os which doctor wrangler
+  xplat os which doctor wrangler --json`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runWhichDoctor(args[0])

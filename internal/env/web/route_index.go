@@ -187,17 +187,6 @@ func homePage(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 	})
 }
 
-// renderConfigValue displays a config value or "(not set)" if it's a placeholder
-func renderConfigValue(value string) h.H {
-	if env.IsPlaceholder(value) || value == "" {
-		return h.Text("(not set)")
-	}
-	// Truncate long values for display
-	if len(value) > 24 {
-		return h.Text(value[:10] + "..." + value[len(value)-10:])
-	}
-	return h.Text(value)
-}
 
 // renderProgressCard renders a progress card for the home page dashboard
 func renderProgressCard(title string, completed, total int, href, buttonText string, isComplete bool) h.H {

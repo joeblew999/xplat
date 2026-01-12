@@ -5,13 +5,15 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/joeblew999/xplat/internal/config"
 )
 
 // Global Hugo server management
 var (
 	hugoServerCmd  *exec.Cmd
 	hugoServerMux  sync.Mutex
-	hugoServerPort = 1313 // Default Hugo server port
+	hugoServerPort = config.DefaultHugoPort
 )
 
 // StartHugoServer starts a simple HTTP server for local preview of the built site

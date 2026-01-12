@@ -50,19 +50,19 @@ the need for per-tool workflow files.
 
 Examples:
   # Test a specific taskfile
-  xplat test taskfiles/Taskfile.dummy.yml
+  xplat task test taskfiles/Taskfile.dummy.yml
 
   # Test by namespace (finds taskfile automatically)
-  xplat test dummy
+  xplat task test dummy
 
   # Get info for CI workflow decisions (JSON)
-  xplat test dummy --info --json
+  xplat task test dummy --info --json
 
   # Run specific phase only
-  xplat test dummy --phase=build
+  xplat task test dummy --phase=build
 
   # Dry run (show what would be tested)
-  xplat test dummy --dry-run`,
+  xplat task test dummy --dry-run`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTest,
 }

@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/spf13/cobra"
+
+	"github.com/joeblew999/xplat/internal/config"
 	"github.com/joeblew999/xplat/internal/process"
 	"github.com/joeblew999/xplat/internal/registry"
-	"github.com/spf13/cobra"
 )
 
 var processConfigPath string
@@ -66,7 +68,7 @@ var processGenListCmd = &cobra.Command{
 }
 
 func init() {
-	ProcessGenCmd.PersistentFlags().StringVarP(&processConfigPath, "config", "f", "process-compose.yaml", "Path to process-compose.yaml")
+	ProcessGenCmd.PersistentFlags().StringVarP(&processConfigPath, "config", "f", config.ProcessComposeGeneratedFile, "Path to process-compose config")
 
 	ProcessGenCmd.AddCommand(processGenGenerateCmd)
 	ProcessGenCmd.AddCommand(processGenAddCmd)

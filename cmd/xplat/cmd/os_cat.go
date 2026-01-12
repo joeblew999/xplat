@@ -18,8 +18,8 @@ Works identically on macOS, Linux, and Windows.
 Multiple files are concatenated.
 
 Examples:
-  xplat cat file.txt
-  xplat cat header.txt body.txt footer.txt`,
+  xplat os cat file.txt
+  xplat os cat header.txt body.txt footer.txt`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		hasError := false

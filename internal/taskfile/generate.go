@@ -267,10 +267,6 @@ xplat manifest bootstrap
 		description = name + " - a plat-* project"
 	}
 
-	// Clean up name for display
-	displayName := strings.TrimPrefix(name, "plat-")
-	displayName = strings.Title(displayName)
-
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, map[string]string{
 		"Name":        name,

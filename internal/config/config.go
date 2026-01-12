@@ -1,4 +1,9 @@
-// Package paths provides wellknown xplat directory paths.
+// Package config provides centralized configuration and paths for xplat.
+//
+// This package defines:
+// - Default ports, paths, and behaviors used across xplat
+// - Global xplat directories (~/.xplat/)
+// - Project-local directories (.src/, .bin/, .data/, .dist/)
 //
 // xplat uses a two-tier directory system:
 //
@@ -11,11 +16,75 @@
 //   - PLAT_BIN: Project binary directory (default: $PWD/.bin)
 //   - PLAT_DATA: Project data directory (default: $PWD/.data)
 //   - PLAT_DIST: Project dist directory (default: $PWD/.dist)
-package paths
+package config
 
 import (
 	"os"
 	"path/filepath"
+)
+
+// === Default ports ===
+
+const (
+	// DefaultUIPort is the default port for web UIs (Task UI, Setup GUI, etc.).
+	// Used by Via framework servers.
+	DefaultUIPort = "3000"
+
+	// DefaultUIPortInt is DefaultUIPort as an int for APIs that need it.
+	DefaultUIPortInt = 3000
+
+	// DefaultProcessComposePort is the default port for the process-compose API.
+	DefaultProcessComposePort = 8080
+
+	// DefaultWebhookPort is the default port for webhook servers.
+	DefaultWebhookPort = "8080"
+
+	// DefaultHugoPort is the default port for Hugo dev server.
+	DefaultHugoPort = 1313
+
+	// DefaultCaddyAdminPort is the default port for Caddy admin API.
+	DefaultCaddyAdminPort = 2019
+)
+
+// === Default permissions ===
+
+const (
+	// DefaultDirPerms is the default permission mode for created directories.
+	DefaultDirPerms = 0755
+
+	// DefaultFilePerms is the default permission mode for created files.
+	DefaultFilePerms = 0644
+)
+
+// === Default paths ===
+
+const (
+	// DefaultTaskfile is the default Taskfile path.
+	DefaultTaskfile = "Taskfile.yml"
+
+	// ProcessComposeGeneratedFile is the generated process-compose config file.
+	// This is the primary output of `xplat manifest gen-process`.
+	ProcessComposeGeneratedFile = "pc.generated.yaml"
+)
+
+// ProcessComposeSearchOrder returns the order to search for process-compose config files.
+// Generated files are prioritized over manual files, and short names over long names.
+func ProcessComposeSearchOrder() []string {
+	return []string{
+		"pc.generated.yaml",
+		"pc.yaml",
+		"pc.yml",
+		"process-compose.generated.yaml",
+		"process-compose.yaml",
+		"process-compose.yml",
+	}
+}
+
+// === Default behaviors ===
+
+const (
+	// DefaultOpenBrowser controls whether to open browser on UI start.
+	DefaultOpenBrowser = true
 )
 
 // === Global xplat directories ===
@@ -52,6 +121,13 @@ func XplatCache() string {
 // Returns ~/.xplat/config (or $XPLAT_HOME/config)
 func XplatConfig() string {
 	return filepath.Join(XplatHome(), "config")
+}
+
+// XplatProjects returns the path to the local project registry.
+// This file tracks all registered xplat projects on this machine.
+// Returns ~/.xplat/projects.yaml (or $XPLAT_HOME/projects.yaml)
+func XplatProjects() string {
+	return filepath.Join(XplatHome(), "projects.yaml")
 }
 
 // === Project-local directories ===
@@ -113,15 +189,21 @@ func EnvSlice(workDir string) []string {
 	}
 }
 
-// PathWithPlatBin returns a PATH string that includes PLAT_BIN and XPLAT_BIN.
+// PathWithPlatBin returns a PATH string that includes PLAT_BIN.
 // Use this when setting up PATH for subprocesses.
+// Uses the platform-appropriate path separator (: on Unix, ; on Windows).
+//
+// Note: We only prepend PLAT_BIN (project-local), NOT XPLAT_BIN.
+// The user's xplat installation location (from their PATH) should be respected.
+// This prevents version conflicts when multiple xplat versions exist.
 func PathWithPlatBin(workDir string) string {
 	existingPath := os.Getenv("PATH")
 	platBin := PlatBin(workDir)
-	xplatBin := XplatBin()
 
-	// Add both project-local and global xplat bins to PATH
-	return platBin + ":" + xplatBin + ":" + existingPath
+	// Only add project-local bin to PATH
+	// Use filepath.ListSeparator for platform compatibility
+	sep := string(filepath.ListSeparator)
+	return platBin + sep + existingPath
 }
 
 // FullEnv returns a complete environment slice including PLAT_* and updated PATH.

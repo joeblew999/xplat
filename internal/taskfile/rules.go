@@ -51,90 +51,109 @@ type FmtRule interface {
 }
 
 // ===== Lint Rules =====
+// These rules focus on cross-platform compatibility and idempotency,
+// not on enforcing specific project structures or archetypes.
 
-// ArchetypeVarsRule checks that required vars exist for the detected archetype.
-type ArchetypeVarsRule struct{}
+// CrossPlatformCmdsRule checks for direct shell commands that should use xplat os.
+type CrossPlatformCmdsRule struct{}
 
-func (r ArchetypeVarsRule) Name() string        { return "archetype-vars" }
-func (r ArchetypeVarsRule) Description() string { return "Check required vars for archetype" }
+func (r CrossPlatformCmdsRule) Name() string { return "cross-platform-cmds" }
+func (r CrossPlatformCmdsRule) Description() string {
+	return "Use xplat os commands for cross-platform compatibility"
+}
 
-func (r ArchetypeVarsRule) Check(tf *Taskfile) []Violation {
+func (r CrossPlatformCmdsRule) Check(tf *Taskfile) []Violation {
 	var violations []Violation
 
-	info := DetectArchetype(tf)
-	for _, suffix := range info.RequiredVars {
-		if !tf.HasVar(suffix) {
-			violations = append(violations, Violation{
-				File:     tf.Path,
-				Line:     tf.FindLineNumber("vars:"),
-				Rule:     r.Name(),
-				Message:  fmt.Sprintf("archetype %s requires var with suffix %s", info.Type, suffix),
-				Severity: SeverityError,
-			})
+	// Commands that should use xplat os instead
+	// Maps command prefix to xplat os equivalent
+	directCmds := map[string]string{
+		"git clone":    "xplat os git clone",
+		"git checkout": "xplat os git checkout",
+		"git pull":     "xplat os git pull",
+		"rm -rf":       "xplat os rm -rf",
+		"rm -r":        "xplat os rm -r",
+		"mkdir -p":     "xplat os mkdir -p",
+		"cp -r":        "xplat os cp -r",
+		"mv ":          "xplat os mv",
+	}
+
+	for i, line := range tf.Lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip comments
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Skip lines that already use xplat os
+		if strings.Contains(trimmed, "xplat os ") {
+			continue
+		}
+
+		// Check for direct commands in task cmds
+		for cmd, replacement := range directCmds {
+			// Check various YAML patterns: - cmd, - 'cmd, - "cmd
+			patterns := []string{
+				"- " + cmd,
+				"- '" + cmd,
+				`- "` + cmd,
+			}
+			for _, pattern := range patterns {
+				if strings.Contains(trimmed, pattern) {
+					violations = append(violations, Violation{
+						File:     tf.Path,
+						Line:     i + 1,
+						Rule:     r.Name(),
+						Message:  fmt.Sprintf("use '%s' instead of '%s' for cross-platform compatibility", replacement, cmd),
+						Severity: SeverityWarning,
+						Fixable:  false, // Could be auto-fixed but risky
+					})
+					break
+				}
+			}
 		}
 	}
 
 	return violations
 }
 
-// ArchetypeTasksRule checks that required tasks exist for the detected archetype.
-type ArchetypeTasksRule struct{}
+// IdempotentDepsRule checks that deps:* tasks have status: sections.
+// This applies universally - any task that installs/clones dependencies should be idempotent.
+type IdempotentDepsRule struct{}
 
-func (r ArchetypeTasksRule) Name() string        { return "archetype-tasks" }
-func (r ArchetypeTasksRule) Description() string { return "Check required tasks for archetype" }
-
-func (r ArchetypeTasksRule) Check(tf *Taskfile) []Violation {
-	var violations []Violation
-
-	info := DetectArchetype(tf)
-	for _, taskName := range info.RequiredTasks {
-		if !tf.HasTask(taskName) {
-			violations = append(violations, Violation{
-				File:     tf.Path,
-				Line:     tf.FindLineNumber("tasks:"),
-				Rule:     r.Name(),
-				Message:  fmt.Sprintf("archetype %s requires task: %s", info.Type, taskName),
-				Severity: SeverityError,
-			})
-		}
-	}
-
-	return violations
+func (r IdempotentDepsRule) Name() string { return "idempotent-deps" }
+func (r IdempotentDepsRule) Description() string {
+	return "deps:* tasks should have status: sections for idempotency"
 }
 
-// CheckDepsStatusRule checks that check:deps has a status: section.
-// Only applies to Tool archetype where binary installation check makes sense.
-// External is excluded because they're often version checkers that should run every time.
-// Bootstrap is excluded because it has special self-bootstrapping logic.
-type CheckDepsStatusRule struct{}
-
-func (r CheckDepsStatusRule) Name() string        { return "check-deps-status" }
-func (r CheckDepsStatusRule) Description() string { return "check:deps should have status: for idempotency" }
-
-func (r CheckDepsStatusRule) Check(tf *Taskfile) []Violation {
+func (r IdempotentDepsRule) Check(tf *Taskfile) []Violation {
 	var violations []Violation
 
-	// Only check Tool archetype - these install binaries and should skip if present
-	// External tools are often version checkers that should run every time
-	// Builder/Aggregation/Bootstrap have different check:deps semantics
-	info := DetectArchetype(tf)
-	if info.Type != ArchetypeTool {
-		return violations
-	}
+	// Check all tasks that look like dependency installation
+	depsTasks := []string{"deps:install", "deps:clone", "deps:download"}
 
-	task, ok := tf.GetTask("check:deps")
-	if !ok {
-		return violations // No check:deps task, archetype-tasks rule handles this
-	}
+	for _, taskName := range depsTasks {
+		task, ok := tf.GetTask(taskName)
+		if !ok {
+			continue // Task doesn't exist, that's fine
+		}
 
-	if len(task.Status) == 0 {
-		violations = append(violations, Violation{
-			File:     tf.Path,
-			Line:     tf.FindLineNumber("check:deps:"),
-			Rule:     r.Name(),
-			Message:  "check:deps should have status: section for idempotency",
-			Severity: SeverityError,
-		})
+		// Skip aggregator tasks that only have deps: and no cmds:
+		// Their idempotency is handled by the sub-tasks they depend on
+		if len(task.Cmds) == 0 && len(task.Deps) > 0 {
+			continue
+		}
+
+		if len(task.Status) == 0 {
+			violations = append(violations, Violation{
+				File:     tf.Path,
+				Line:     tf.FindLineNumber(taskName + ":"),
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("%s should have status: section for idempotency", taskName),
+				Severity: SeverityWarning,
+			})
+		}
 	}
 
 	return violations
@@ -149,13 +168,66 @@ func (r DocHeaderRule) Description() string { return "Every taskfile should have
 func (r DocHeaderRule) Check(tf *Taskfile) []Violation {
 	var violations []Violation
 
-	// Check if file starts with a comment
-	if len(tf.Lines) == 0 || !strings.HasPrefix(strings.TrimSpace(tf.Lines[0]), "#") {
+	// Check if file has a documentation comment in the first few lines
+	// Allow version: to come first, but expect a # comment within first 5 lines
+	hasDocComment := false
+	checkLines := 5
+	if len(tf.Lines) < checkLines {
+		checkLines = len(tf.Lines)
+	}
+
+	for i := 0; i < checkLines; i++ {
+		trimmed := strings.TrimSpace(tf.Lines[i])
+		// Look for a substantial comment (not just # alone)
+		if strings.HasPrefix(trimmed, "#") && len(trimmed) > 2 {
+			hasDocComment = true
+			break
+		}
+	}
+
+	if !hasDocComment {
 		violations = append(violations, Violation{
 			File:     tf.Path,
 			Line:     1,
 			Rule:     r.Name(),
-			Message:  "missing documentation header comment",
+			Message:  "missing documentation header comment in first 5 lines",
+			Severity: SeverityWarning,
+		})
+	}
+
+	return violations
+}
+
+// DebugTaskRule checks that subsystem Taskfiles have a debug:self task.
+// The debug:self task prints all vars for troubleshooting.
+type DebugTaskRule struct{}
+
+func (r DebugTaskRule) Name() string        { return "debug-task" }
+func (r DebugTaskRule) Description() string { return "Subsystem taskfiles should have debug:self task" }
+
+func (r DebugTaskRule) Check(tf *Taskfile) []Violation {
+	var violations []Violation
+
+	// Skip root Taskfiles (they have includes:) - they use debug:all pattern
+	if len(tf.Includes) > 0 {
+		return violations
+	}
+
+	// Skip if no vars defined (probably not a real subsystem)
+	if len(tf.Vars) == 0 {
+		return violations
+	}
+
+	// Check for debug:self task
+	_, hasDebugSelf := tf.GetTask("debug:self")
+	_, hasDebug := tf.GetTask("debug")
+
+	if !hasDebugSelf && !hasDebug {
+		violations = append(violations, Violation{
+			File:     tf.Path,
+			Line:     1,
+			Rule:     r.Name(),
+			Message:  "missing debug:self task for printing vars",
 			Severity: SeverityWarning,
 		})
 	}
@@ -165,33 +237,117 @@ func (r DocHeaderRule) Check(tf *Taskfile) []Violation {
 
 // ===== Fmt Rules (auto-fixable) =====
 
-// ExeExtRule checks and fixes missing {{exeExt}} in _BIN vars.
+// CrossPlatformCmdsFmtRule auto-fixes shell commands to use xplat os equivalents.
+type CrossPlatformCmdsFmtRule struct{}
+
+func (r CrossPlatformCmdsFmtRule) Name() string { return "cross-platform-cmds" }
+func (r CrossPlatformCmdsFmtRule) Description() string {
+	return "Auto-fix shell commands to use xplat os for cross-platform compatibility"
+}
+
+func (r CrossPlatformCmdsFmtRule) Check(tf *Taskfile) []Violation {
+	// FmtRules don't report violations - the lint rule does that
+	// This fmt rule only provides the Fix() method
+	return nil
+}
+
+func (r CrossPlatformCmdsFmtRule) Fix(tf *Taskfile) ([]byte, error) {
+	lines := make([]string, len(tf.Lines))
+	copy(lines, tf.Lines)
+
+	// Commands to replace: direct command -> xplat os command
+	replacements := []struct {
+		from string
+		to   string
+	}{
+		{"rm -rf ", "xplat os rm -rf "},
+		{"rm -r ", "xplat os rm -r "},
+		{"mkdir -p ", "xplat os mkdir -p "},
+		{"cp -r ", "xplat os cp -r "},
+		{"git clone ", "xplat os git clone "},
+		{"git checkout ", "xplat os git checkout "},
+		{"git pull ", "xplat os git pull "},
+	}
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip comments
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Skip lines that already use xplat os
+		if strings.Contains(line, "xplat os ") {
+			continue
+		}
+
+		// Only process command lines (start with -)
+		if !strings.HasPrefix(trimmed, "-") {
+			continue
+		}
+
+		for _, rep := range replacements {
+			// Handle various YAML patterns
+			patterns := []string{
+				"- " + rep.from,
+				"- '" + rep.from,
+				`- "` + rep.from,
+			}
+			for _, pattern := range patterns {
+				if strings.Contains(line, pattern) {
+					lines[i] = strings.Replace(line, rep.from, rep.to, 1)
+					break
+				}
+			}
+		}
+	}
+
+	return []byte(strings.Join(lines, "\n")), nil
+}
+
+// ExeExtRule checks and fixes missing {{exeExt}} in binary path vars.
+// Convention: *_BIN = directory, *_BIN_PATH or *_BIN_NAME = actual binary
 type ExeExtRule struct{}
 
 func (r ExeExtRule) Name() string        { return "exeext" }
-func (r ExeExtRule) Description() string { return "_BIN vars must include {{exeExt}}" }
+func (r ExeExtRule) Description() string { return "Binary path vars must include {{exeExt}}" }
 
 func (r ExeExtRule) Check(tf *Taskfile) []Violation {
 	var violations []Violation
 
 	for k, v := range tf.Vars {
-		if !strings.HasSuffix(strings.ToUpper(k), "_BIN") {
+		upperKey := strings.ToUpper(k)
+
+		// Only check _BIN_PATH vars (actual binary paths)
+		// Skip _BIN (directories) and _BIN_NAME (just the name, no path)
+		if !strings.HasSuffix(upperKey, "_BIN_PATH") {
 			continue
 		}
+
 		val, ok := v.(string)
 		if !ok {
 			continue
 		}
-		if !strings.Contains(val, "{{exeExt}}") && !strings.Contains(val, ".exe") {
-			violations = append(violations, Violation{
-				File:     tf.Path,
-				Line:     tf.FindLineNumber(k + ":"),
-				Rule:     r.Name(),
-				Message:  fmt.Sprintf("%s is missing {{exeExt}}", k),
-				Severity: SeverityError,
-				Fixable:  true,
-			})
+
+		// Skip if already has {{exeExt}} or .exe
+		if strings.Contains(val, "{{exeExt}}") || strings.Contains(val, ".exe") {
+			continue
 		}
+
+		// Skip if value looks like a directory (ends with / or references _BIN})
+		if strings.HasSuffix(val, "/") {
+			continue
+		}
+
+		violations = append(violations, Violation{
+			File:     tf.Path,
+			Line:     tf.FindLineNumber(k + ":"),
+			Rule:     r.Name(),
+			Message:  fmt.Sprintf("%s should include {{exeExt}} for Windows compatibility", k),
+			Severity: SeverityWarning, // Downgrade to warning - not all binaries need .exe
+			Fixable:  true,
+		})
 	}
 
 	return violations
@@ -200,65 +356,17 @@ func (r ExeExtRule) Check(tf *Taskfile) []Violation {
 func (r ExeExtRule) Fix(tf *Taskfile) ([]byte, error) {
 	content := string(tf.RawContent)
 
-	// Pattern to match _BIN vars without {{exeExt}}
-	// Example: DUMMY_BIN: 'dummy' -> DUMMY_BIN: 'dummy{{exeExt}}'
-	re := regexp.MustCompile(`(_BIN:\s*['"])([^'"{}]+)(['"])`)
-	content = re.ReplaceAllString(content, "${1}${2}{{exeExt}}${3}")
-
-	return []byte(content), nil
-}
-
-// BareXplatRule checks and fixes bare 'xplat' commands.
-type BareXplatRule struct{}
-
-func (r BareXplatRule) Name() string        { return "bare-xplat" }
-func (r BareXplatRule) Description() string { return "Use {{.XPLAT_BIN}} instead of bare xplat" }
-
-func (r BareXplatRule) Check(tf *Taskfile) []Violation {
-	var violations []Violation
-
-	// Check each line for bare xplat usage
-	for i, line := range tf.Lines {
-		// Skip if it's already using the variable
-		if strings.Contains(line, "{{.XPLAT_BIN}}") {
-			continue
+	// Pattern to match _BIN_PATH vars without {{exeExt}}
+	// Example: NATS_BIN_PATH: '{{.NATS_BIN}}/nats-server' -> add {{exeExt}} before closing quote
+	re := regexp.MustCompile(`(_BIN_PATH:\s*['"])([^'"]+)(['"])`)
+	content = re.ReplaceAllStringFunc(content, func(match string) string {
+		// Don't add if already has exeExt or .exe
+		if strings.Contains(match, "{{exeExt}}") || strings.Contains(match, ".exe") {
+			return match
 		}
-		// Skip comments
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			continue
-		}
-		// Check for bare xplat command
-		if strings.Contains(line, "- xplat ") || strings.Contains(line, "- 'xplat ") || strings.Contains(line, `- "xplat `) {
-			violations = append(violations, Violation{
-				File:     tf.Path,
-				Line:     i + 1,
-				Rule:     r.Name(),
-				Message:  "use {{.XPLAT_BIN}} instead of bare xplat",
-				Severity: SeverityError,
-				Fixable:  true,
-			})
-		}
-	}
-
-	return violations
-}
-
-func (r BareXplatRule) Fix(tf *Taskfile) ([]byte, error) {
-	content := string(tf.RawContent)
-
-	// Replace bare xplat with {{.XPLAT_BIN}}
-	// Patterns: - xplat, - 'xplat, - "xplat
-	replacements := []struct {
-		old, new string
-	}{
-		{"- xplat ", "- '{{.XPLAT_BIN}} "},
-		{"- 'xplat ", "- '{{.XPLAT_BIN}} "},
-		{`- "xplat `, `- "{{.XPLAT_BIN}} `},
-	}
-
-	for _, r := range replacements {
-		content = strings.ReplaceAll(content, r.old, r.new)
-	}
+		// Insert {{exeExt}} before closing quote
+		return re.ReplaceAllString(match, "${1}${2}{{exeExt}}${3}")
+	})
 
 	return []byte(content), nil
 }
@@ -316,20 +424,21 @@ func (r QuoteEchoRule) Fix(tf *Taskfile) ([]byte, error) {
 // ===== Rule Registry =====
 
 // AllLintRules returns all lint rules.
+// Rules focus on cross-platform compatibility and idempotency.
 func AllLintRules() []Rule {
 	return []Rule{
-		ArchetypeVarsRule{},
-		ArchetypeTasksRule{},
-		CheckDepsStatusRule{},
-		DocHeaderRule{},
+		CrossPlatformCmdsRule{}, // Use xplat os commands
+		IdempotentDepsRule{},    // deps:* tasks need status:
+		DocHeaderRule{},         // Documentation header
+		DebugTaskRule{},         // Subsystem debug:self task
 	}
 }
 
 // AllFmtRules returns all auto-fixable fmt rules.
 func AllFmtRules() []FmtRule {
 	return []FmtRule{
+		CrossPlatformCmdsFmtRule{},
 		ExeExtRule{},
-		BareXplatRule{},
 		QuoteEchoRule{},
 	}
 }

@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-via/via"
 	"github.com/go-via/via-plugin-picocss/picocss"
+
+	"github.com/joeblew999/xplat/internal/config"
 	"github.com/joeblew999/xplat/internal/env"
 )
 
@@ -35,10 +37,10 @@ func serveSetupGUIWithOptions(mockMode bool) {
 	// Serve under /admin/* to avoid URL clashes with Hugo
 	regResult, err := env.RegisterService(env.ServiceConfig{
 		Name:          "via-gui",
-		Port:          3000,
-		PathPattern:   "/admin/*",    // Admin prefix to avoid Hugo clashes
-		Priority:      10,            // Higher priority than Hugo
-		HealthPath:    "/admin/",     // Health check endpoint
+		Port:          config.DefaultUIPortInt,
+		PathPattern:   "/admin/*",      // Admin prefix to avoid Hugo clashes
+		Priority:      10,              // Higher priority than Hugo
+		HealthPath:    "/admin/",       // Health check endpoint
 		AssetPatterns: []string{"/_*"}, // Via framework assets (/_plugins, /_datastar.js)
 	})
 	if err != nil {

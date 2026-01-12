@@ -128,13 +128,13 @@ func RunDomainStatus() error {
 
 	// Validate configuration
 	if apiToken == "" || IsPlaceholder(apiToken) {
-		return fmt.Errorf("Cloudflare API Token not configured. Run 'web-gui' and complete Step 1 first")
+		return fmt.Errorf("cloudflare API Token not configured, run 'web-gui' and complete Step 1 first")
 	}
 	if accountID == "" || IsPlaceholder(accountID) {
-		return fmt.Errorf("Account ID not configured. Run 'web-gui' and complete Step 2 first")
+		return fmt.Errorf("account ID not configured, run 'web-gui' and complete Step 2 first")
 	}
 	if projectName == "" || IsPlaceholder(projectName) {
-		return fmt.Errorf("Project Name not configured. Run 'web-gui' and complete Step 4 first")
+		return fmt.Errorf("project name not configured, run 'web-gui' and complete Step 4 first")
 	}
 
 	fmt.Printf("Checking custom domain status...\n")

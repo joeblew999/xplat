@@ -1,4 +1,4 @@
-package taskui
+package web
 
 import (
 	"crypto/sha256"

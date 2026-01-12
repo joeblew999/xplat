@@ -11,11 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TaskfileCmd is the parent command for Taskfile operations
-var TaskfileCmd = &cobra.Command{
-	Use:   "taskfile",
-	Short: "Taskfile validation and archetype detection",
-	Long: `Validate Taskfiles and detect their archetypes.
+// taskfileArchetypesCmd lists all archetypes with their requirements
+// Registered as subcommand of TaskCmd in task.go
+var taskfileArchetypesCmd = &cobra.Command{
+	Use:   "archetypes",
+	Short: "List all Taskfile archetypes with their requirements",
+	Long: `List all Taskfile archetypes with their requirements.
 
 Archetypes define the purpose and required structure of Taskfiles:
   - tool:        Binary we build and release (has _BIN, _VERSION, _REPO, _CGO)
@@ -24,34 +25,47 @@ Archetypes define the purpose and required structure of Taskfiles:
   - aggregation: Groups children via includes: section
   - bootstrap:   Self-bootstrapping tool (xplat itself)
 
-Use 'xplat taskfile archetypes' to see all archetypes and their requirements.
-Use 'xplat taskfile detect <file>' to identify a file's archetype.`,
+Examples:
+  xplat task archetypes`,
+	RunE: runTaskfileArchetypes,
 }
 
-var taskfileArchetypesCmd = &cobra.Command{
-	Use:   "archetypes",
-	Short: "List all archetypes with their requirements",
-	RunE:  runTaskfileArchetypes,
-}
-
+// taskfileDetectCmd detects archetype for a Taskfile or directory
+// Registered as subcommand of TaskCmd in task.go
 var taskfileDetectCmd = &cobra.Command{
 	Use:   "detect <file|dir>",
 	Short: "Detect archetype for a Taskfile or directory",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runTaskfileDetect,
+	Long: `Detect archetype for a Taskfile or directory.
+
+Scans Taskfiles and determines their archetype based on variable
+and task patterns.
+
+Examples:
+  xplat task detect                              # Detect in current directory
+  xplat task detect taskfiles/                   # Detect in taskfiles/ directory
+  xplat task detect taskfiles/Taskfile.dummy.yml # Detect specific file`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runTaskfileDetect,
 }
 
+// taskfileExplainCmd explains a specific archetype in detail
+// Registered as subcommand of TaskCmd in task.go
 var taskfileExplainCmd = &cobra.Command{
 	Use:   "explain <archetype>",
 	Short: "Explain a specific archetype in detail",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskfileExplain,
-}
+	Long: `Explain a specific archetype in detail.
 
-func init() {
-	TaskfileCmd.AddCommand(taskfileArchetypesCmd)
-	TaskfileCmd.AddCommand(taskfileDetectCmd)
-	TaskfileCmd.AddCommand(taskfileExplainCmd)
+Shows the purpose, required variables, required tasks, and
+examples for a given archetype.
+
+Valid archetypes: tool, external, builder, aggregation, bootstrap, unknown
+
+Examples:
+  xplat task explain tool
+  xplat task explain external
+  xplat task explain builder`,
+	Args: cobra.ExactArgs(1),
+	RunE: runTaskfileExplain,
 }
 
 func runTaskfileArchetypes(cmd *cobra.Command, args []string) error {

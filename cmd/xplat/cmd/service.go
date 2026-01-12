@@ -3,49 +3,60 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"text/tabwriter"
 
-	"github.com/joeblew999/xplat/internal/service"
 	"github.com/spf13/cobra"
+
+	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/projects"
+	"github.com/joeblew999/xplat/internal/service"
 )
 
 var (
-	serviceWorkDir string
-	serviceName    string
-	serviceWithUI  bool
-	serviceUIPort  string
+	serviceWithUI bool
+	serviceUIPort string
 )
 
 // ServiceCmd is the parent command for service operations.
 var ServiceCmd = &cobra.Command{
 	Use:   "service",
 	Short: "Manage xplat as a system service",
-	Long: `Install and manage xplat as a system service.
+	Long: `Manage xplat as a system service that runs all registered projects.
 
-On macOS, this installs as a LaunchAgent (user service).
-On Linux, this installs as a systemd user service.
-On Windows, this installs as a Windows service.
+One global xplat service runs all projects from the registry.
+Use 'install' from each project directory to add it to the registry.
 
-The service runs 'xplat dev' (process-compose) in the background,
-keeping your development processes running automatically.
+On macOS: LaunchAgent (user service)
+On Linux: systemd user service
+On Windows: Windows service
 
 Examples:
-  xplat service install     # Install service for current directory
-  xplat service start       # Start the service
-  xplat service status      # Check service status
-  xplat service stop        # Stop the service
-  xplat service uninstall   # Remove the service`,
+  cd ~/project1 && xplat service install  # Add project to registry
+  cd ~/project2 && xplat service install  # Add another project
+  xplat service list                       # Show all registered projects
+  xplat service start                      # Start THE service (runs all projects)
+  xplat service status                     # Check service status
+  xplat service stop                       # Stop the service`,
 }
 
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install xplat as a system service",
-	RunE:  runServiceInstall,
+	Short: "Add current project to registry and install OS service",
+	Long: `Add the current project to the xplat registry and install the OS service.
+
+This is idempotent - safe to run multiple times.
+Run this from each project directory you want managed by xplat.`,
+	RunE: runServiceInstall,
 }
 
 var serviceUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "Uninstall the xplat service",
-	RunE:  runServiceUninstall,
+	Short: "Remove current project from registry",
+	Long: `Remove the current project from the xplat registry.
+
+The OS service is only removed when no projects remain in the registry.`,
+	RunE: runServiceUninstall,
 }
 
 var serviceStartCmd = &cobra.Command{
@@ -87,13 +98,23 @@ var serviceRunCmd = &cobra.Command{
 	RunE:   runServiceRun,
 }
 
-func init() {
-	ServiceCmd.PersistentFlags().StringVarP(&serviceWorkDir, "dir", "d", "", "Working directory (default: current directory)")
-	ServiceCmd.PersistentFlags().StringVarP(&serviceName, "name", "n", "", "Service name (default: xplat-<dirname>)")
+var serviceListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all registered projects",
+	Long: `List all projects registered in the local xplat registry.
 
+The registry is stored at ~/.xplat/projects.yaml and tracks all projects
+that have been added via 'xplat service install'.
+
+Examples:
+  xplat service list     # Show all registered projects`,
+	RunE: runServiceList,
+}
+
+func init() {
 	// UI flags for start command
 	serviceStartCmd.Flags().BoolVar(&serviceWithUI, "with-ui", false, "Start Task UI alongside the service")
-	serviceStartCmd.Flags().StringVar(&serviceUIPort, "ui-port", "3000", "Port for Task UI (requires --with-ui)")
+	serviceStartCmd.Flags().StringVar(&serviceUIPort, "ui-port", config.DefaultUIPort, "Port for Task UI (requires --with-ui)")
 
 	ServiceCmd.AddCommand(serviceInstallCmd)
 	ServiceCmd.AddCommand(serviceUninstallCmd)
@@ -102,67 +123,99 @@ func init() {
 	ServiceCmd.AddCommand(serviceRestartCmd)
 	ServiceCmd.AddCommand(serviceStatusCmd)
 	ServiceCmd.AddCommand(serviceRunCmd)
+	ServiceCmd.AddCommand(serviceListCmd)
 }
 
-func getServiceConfig() service.Config {
-	workDir := serviceWorkDir
-	if workDir == "" {
-		workDir, _ = os.Getwd()
-	}
-
-	cfg := service.ConfigForProject(workDir)
-	cfg.Version = version // Pass version for auto-update checking
-	if serviceName != "" {
-		cfg.Name = serviceName
-		cfg.DisplayName = fmt.Sprintf("xplat: %s", serviceName)
-	}
-
-	// UI config
+// getGlobalServiceConfig returns config for THE one global xplat service.
+func getGlobalServiceConfig() service.Config {
+	cfg := service.DefaultConfig()
+	cfg.Version = version
 	cfg.WithUI = serviceWithUI
 	cfg.UIPort = serviceUIPort
-
 	return cfg
 }
 
 func runServiceInstall(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	// Add current project to registry
+	workDir, _ := os.Getwd()
+
+	reg, err := projects.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load project registry: %w", err)
+	}
+
+	projectName, err := reg.Add(workDir)
+	if err != nil {
+		return fmt.Errorf("failed to add project to registry: %w", err)
+	}
+
+	if err := reg.Save(); err != nil {
+		return fmt.Errorf("failed to save project registry: %w", err)
+	}
+
+	fmt.Printf("Project '%s' added to registry\n", projectName)
+
+	// Install the global xplat OS service (may already exist)
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
 	}
 
 	if err := mgr.Install(); err != nil {
-		return err
+		fmt.Printf("OS service 'xplat' already installed\n")
+	} else {
+		fmt.Printf("OS service 'xplat' installed (%s)\n", mgr.Platform())
 	}
 
-	fmt.Printf("Service '%s' installed\n", cfg.Name)
-	fmt.Printf("  Platform: %s\n", mgr.Platform())
-	fmt.Printf("  Working directory: %s\n", cfg.WorkDir)
+	fmt.Printf("Registry: %s\n", config.XplatProjects())
 	fmt.Println()
-	fmt.Println("To start the service, run: xplat service start")
+	fmt.Println("To start: xplat service start")
 	return nil
 }
 
 func runServiceUninstall(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
-	mgr, err := service.NewManager(cfg)
+	// Remove current project from registry
+	workDir, _ := os.Getwd()
+
+	reg, err := projects.Load()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load project registry: %w", err)
 	}
 
-	// Try to stop first (ignore errors)
-	_ = mgr.Stop()
-
-	if err := mgr.Uninstall(); err != nil {
-		return err
+	projectName, err := reg.RemoveByPath(workDir)
+	if err != nil {
+		fmt.Printf("Note: %v\n", err)
+	} else {
+		if err := reg.Save(); err != nil {
+			return fmt.Errorf("failed to save project registry: %w", err)
+		}
+		fmt.Printf("Project '%s' removed from registry\n", projectName)
 	}
 
-	fmt.Printf("Service '%s' uninstalled\n", cfg.Name)
+	// Only remove OS service if no projects remain
+	if len(reg.Projects) == 0 {
+		cfg := getGlobalServiceConfig()
+		mgr, err := service.NewManager(cfg)
+		if err != nil {
+			return err
+		}
+
+		_ = mgr.Stop()
+		if err := mgr.Uninstall(); err != nil {
+			fmt.Printf("Note: OS service not found\n")
+		} else {
+			fmt.Printf("OS service 'xplat' uninstalled (no projects remaining)\n")
+		}
+	} else {
+		fmt.Printf("%d project(s) remaining in registry\n", len(reg.Projects))
+	}
+
 	return nil
 }
 
 func runServiceStart(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -172,7 +225,7 @@ func runServiceStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Service '%s' started\n", cfg.Name)
+	fmt.Println("Service 'xplat' started")
 	if cfg.WithUI {
 		fmt.Printf("Task UI: http://localhost:%s\n", cfg.UIPort)
 	}
@@ -180,7 +233,7 @@ func runServiceStart(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceStop(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -190,12 +243,12 @@ func runServiceStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Service '%s' stopped\n", cfg.Name)
+	fmt.Println("Service 'xplat' stopped")
 	return nil
 }
 
 func runServiceRestart(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -205,12 +258,12 @@ func runServiceRestart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Service '%s' restarted\n", cfg.Name)
+	fmt.Println("Service 'xplat' restarted")
 	return nil
 }
 
 func runServiceStatus(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -218,18 +271,22 @@ func runServiceStatus(cmd *cobra.Command, args []string) error {
 
 	status, err := mgr.Status()
 	if err != nil {
-		fmt.Printf("Service '%s': %s (error: %v)\n", cfg.Name, status, err)
+		fmt.Printf("Service 'xplat': %s (error: %v)\n", status, err)
 		return nil
 	}
 
-	fmt.Printf("Service '%s': %s\n", cfg.Name, status)
+	fmt.Printf("Service 'xplat': %s\n", status)
 	fmt.Printf("  Platform: %s\n", mgr.Platform())
-	fmt.Printf("  Working directory: %s\n", cfg.WorkDir)
+
+	// Also show registered projects
+	reg, _ := projects.Load()
+	fmt.Printf("  Projects: %d registered\n", len(reg.Projects))
+
 	return nil
 }
 
 func runServiceRun(cmd *cobra.Command, args []string) error {
-	cfg := getServiceConfig()
+	cfg := getGlobalServiceConfig()
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -237,4 +294,59 @@ func runServiceRun(cmd *cobra.Command, args []string) error {
 
 	// This blocks and runs the service
 	return mgr.Run()
+}
+
+func runServiceList(cmd *cobra.Command, args []string) error {
+	reg, err := projects.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load project registry: %w", err)
+	}
+
+	if len(reg.Projects) == 0 {
+		fmt.Println("No projects registered.")
+		fmt.Printf("Registry: %s\n", config.XplatProjects())
+		fmt.Println()
+		fmt.Println("To add a project, run 'xplat service install' in the project directory.")
+		return nil
+	}
+
+	// Sort project names for consistent output
+	names := make([]string, 0, len(reg.Projects))
+	for name := range reg.Projects {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fmt.Printf("Registered projects (%d):\n", len(reg.Projects))
+	fmt.Println()
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tENABLED\tPATH\tCONFIG")
+
+	searchOrder := config.ProcessComposeSearchOrder()
+	for _, name := range names {
+		proj := reg.Projects[name]
+		enabled := "yes"
+		if !proj.Enabled {
+			enabled = "no"
+		}
+
+		// Find config file
+		configFile := "-"
+		for _, cfgName := range searchOrder {
+			cfgPath := proj.Path + "/" + cfgName
+			if _, err := os.Stat(cfgPath); err == nil {
+				configFile = cfgName
+				break
+			}
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", name, enabled, proj.Path, configFile)
+	}
+	w.Flush()
+
+	fmt.Println()
+	fmt.Printf("Registry: %s\n", config.XplatProjects())
+
+	return nil
 }

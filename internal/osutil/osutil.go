@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/otiai10/copy"
@@ -149,4 +150,38 @@ func IsDir(path string) bool {
 func IsFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// === Platform-specific helpers ===
+
+// BinaryExtension returns ".exe" on Windows, empty string on other platforms.
+func BinaryExtension() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
+}
+
+// UserBinDir returns the default user binary directory for the current platform.
+// On Windows: ~/bin
+// On Unix: ~/.local/bin
+func UserBinDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(home, "bin"), nil
+	}
+	return filepath.Join(home, ".local", "bin"), nil
+}
+
+// MustUserBinDir returns the default user binary directory, panicking on error.
+// Use only during initialization where failure is unrecoverable.
+func MustUserBinDir() string {
+	dir, err := UserBinDir()
+	if err != nil {
+		panic(err)
+	}
+	return dir
 }

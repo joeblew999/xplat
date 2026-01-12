@@ -16,25 +16,25 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/joeblew999/xplat/internal/config"
 )
 
 const (
-	caddyPort          = "443"
-	caddyCertDir       = ".caddy/certs"
-	caddyfilePath      = ".caddy/Caddyfile"
+	caddyPort           = "443"
+	caddyCertDir        = ".caddy/certs"
+	caddyfilePath       = ".caddy/Caddyfile"
 	serviceRegistryPath = ".caddy/services.json"
-	caddyAdminAPIURL   = "http://localhost:2019" // Caddy admin API endpoint
 
 	// Timeout constants
-	caddyStartupTimeout      = 2 * time.Second         // Time to wait for Caddy admin API to become available
-	caddyHealthCheckTimeout  = 500 * time.Millisecond  // Timeout for health check connections
-	caddyShutdownGracePeriod = 500 * time.Millisecond  // Time to wait after sending stop request
-	caddyAdminAPITimeout     = 2 * time.Second         // Timeout for admin API HTTP requests
-
-	// File permission constants
-	defaultDirPerms  = 0755 // Directory permissions for .caddy directories
-	defaultFilePerms = 0644 // File permissions for config files and certificates
+	caddyStartupTimeout      = 2 * time.Second        // Time to wait for Caddy admin API to become available
+	caddyHealthCheckTimeout  = 500 * time.Millisecond // Timeout for health check connections
+	caddyShutdownGracePeriod = 500 * time.Millisecond // Time to wait after sending stop request
+	caddyAdminAPITimeout     = 2 * time.Second        // Timeout for admin API HTTP requests
 )
+
+// caddyAdminAPIURL is the Caddy admin API endpoint
+var caddyAdminAPIURL = fmt.Sprintf("http://localhost:%d", config.DefaultCaddyAdminPort)
 
 // ServiceConfig represents a service to be reverse-proxied by Caddy
 type ServiceConfig struct {
@@ -69,11 +69,6 @@ type registryManager struct {
 // Global registry manager instance
 var globalRegistryManager = &registryManager{}
 
-// Global Caddy process management
-var (
-	caddyProcessCmd *exec.Cmd  // Track the running Caddy process
-	caddyProcessMux sync.Mutex // Protect access to process handle
-)
 
 // load reads the service registry from disk (private, not locked)
 func (rm *registryManager) load() (*serviceRegistry, error) {
@@ -99,7 +94,7 @@ func (rm *registryManager) load() (*serviceRegistry, error) {
 func (rm *registryManager) save(registry *serviceRegistry) error {
 	// Ensure .caddy directory exists
 	caddyDir := filepath.Dir(serviceRegistryPath)
-	if err := os.MkdirAll(caddyDir, defaultDirPerms); err != nil {
+	if err := os.MkdirAll(caddyDir, config.DefaultDirPerms); err != nil {
 		return fmt.Errorf("failed to create .caddy directory: %w", err)
 	}
 
@@ -108,7 +103,7 @@ func (rm *registryManager) save(registry *serviceRegistry) error {
 		return fmt.Errorf("failed to marshal service registry: %w", err)
 	}
 
-	if err := os.WriteFile(serviceRegistryPath, data, defaultFilePerms); err != nil {
+	if err := os.WriteFile(serviceRegistryPath, data, config.DefaultFilePerms); err != nil {
 		return fmt.Errorf("failed to write service registry: %w", err)
 	}
 
@@ -234,12 +229,12 @@ func StartCaddy() error {
 
 	// Ensure .caddy directory exists
 	caddyDir := filepath.Dir(caddyfilePath)
-	if err := os.MkdirAll(caddyDir, defaultDirPerms); err != nil {
+	if err := os.MkdirAll(caddyDir, config.DefaultDirPerms); err != nil {
 		return fmt.Errorf("failed to create .caddy directory: %w", err)
 	}
 
 	// Write Caddyfile
-	if err := os.WriteFile(caddyfilePath, []byte(caddyfileContent), defaultFilePerms); err != nil {
+	if err := os.WriteFile(caddyfilePath, []byte(caddyfileContent), config.DefaultFilePerms); err != nil {
 		return fmt.Errorf("failed to write Caddyfile: %w", err)
 	}
 
@@ -260,11 +255,6 @@ func StartCaddy() error {
 		return fmt.Errorf("failed to start caddy: %w", err)
 	}
 
-	// Store process handle for graceful shutdown
-	caddyProcessMux.Lock()
-	caddyProcessCmd = cmd
-	caddyProcessMux.Unlock()
-
 	// Give Caddy a moment to start (using correct timeout constant)
 	time.Sleep(caddyStartupTimeout)
 
@@ -281,10 +271,6 @@ func StartCaddy() error {
 func StopCaddy() error {
 	if !IsCaddyRunning() {
 		fmt.Println("Caddy is not running")
-		// Clear process handle if any
-		caddyProcessMux.Lock()
-		caddyProcessCmd = nil
-		caddyProcessMux.Unlock()
 		return nil
 	}
 
@@ -309,17 +295,12 @@ func StopCaddy() error {
 		return fmt.Errorf("admin API returned error status: %d", resp.StatusCode)
 	}
 
-	// Clear process handle
-	caddyProcessMux.Lock()
-	caddyProcessCmd = nil
-	caddyProcessMux.Unlock()
-
 	// Give Caddy a moment to shut down
 	time.Sleep(caddyShutdownGracePeriod)
 
 	// Verify Caddy stopped
 	if IsCaddyRunning() {
-		return fmt.Errorf("Caddy is still running after stop request")
+		return fmt.Errorf("caddy is still running after stop request")
 	}
 
 	fmt.Println("✓ Caddy stopped")
@@ -373,7 +354,7 @@ func CheckHTTPSHealth(httpsURL string) (int, error) {
 // ReloadCaddy reloads Caddy configuration without restarting using admin API
 func ReloadCaddy() error {
 	if !IsAdminAPIAvailable() {
-		return fmt.Errorf("Caddy admin API not available at %s", caddyAdminAPIURL)
+		return fmt.Errorf("caddy admin API not available at %s", caddyAdminAPIURL)
 	}
 
 	caddyBin := getCaddyBinaryPath()

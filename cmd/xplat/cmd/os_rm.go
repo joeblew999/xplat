@@ -26,9 +26,9 @@ Flags:
   -f, --force      Ignore nonexistent files, never prompt
 
 Examples:
-  xplat rm file.txt
-  xplat rm -rf build/
-  xplat rm -rf dist/ node_modules/`,
+  xplat os rm file.txt
+  xplat os rm -rf build/
+  xplat os rm -rf dist/ node_modules/`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		hasError := false

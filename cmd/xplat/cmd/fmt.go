@@ -25,10 +25,10 @@ Fixes applied:
 If no files are specified, formats all Taskfiles in taskfiles/ directory.
 
 Examples:
-  xplat fmt                              # Format all taskfiles
-  xplat fmt taskfiles/Taskfile.dummy.yml # Format specific file
-  xplat fmt --check                      # Check only, exit 1 if changes needed
-  xplat fmt --diff                       # Show what would change`,
+  xplat task fmt                              # Format all taskfiles
+  xplat task fmt taskfiles/Taskfile.dummy.yml # Format specific file
+  xplat task fmt --check                      # Check only, exit 1 if changes needed
+  xplat task fmt --diff                       # Show what would change`,
 	RunE: runFmt,
 }
 

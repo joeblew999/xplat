@@ -5,14 +5,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"text/tabwriter"
 
+	"github.com/spf13/cobra"
+
+	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/joeblew999/xplat/internal/process"
 	"github.com/joeblew999/xplat/internal/registry"
 	"github.com/joeblew999/xplat/internal/taskfile"
-	"github.com/spf13/cobra"
 )
 
 // PkgCmd is the parent command for package operations
@@ -86,15 +88,15 @@ var (
 )
 
 func init() {
-	pkgInstallCmd.Flags().StringVar(&pkgTaskfile, "taskfile", "Taskfile.yml", "Path to Taskfile.yml")
+	pkgInstallCmd.Flags().StringVar(&pkgTaskfile, "taskfile", config.DefaultTaskfile, "Path to Taskfile.yml")
 	pkgInstallCmd.Flags().BoolVar(&pkgForce, "force", false, "Force reinstall even if already installed")
 	pkgInstallCmd.Flags().BoolVar(&pkgNoTaskfile, "no-taskfile", false, "Skip adding taskfile include")
 	pkgInstallCmd.Flags().BoolVar(&pkgNoBinary, "no-binary", false, "Skip binary installation")
 	pkgInstallCmd.Flags().BoolVar(&pkgWithProcess, "with-process", false, "Also add process to process-compose.yaml")
-	pkgInstallCmd.Flags().StringVar(&pkgProcessConfig, "process-config", "process-compose.yaml", "Path to process-compose.yaml")
+	pkgInstallCmd.Flags().StringVar(&pkgProcessConfig, "process-config", config.ProcessComposeGeneratedFile, "Path to process-compose config")
 
-	pkgRemoveCmd.Flags().StringVar(&pkgTaskfile, "taskfile", "Taskfile.yml", "Path to Taskfile.yml")
-	pkgRemoveCmd.Flags().StringVar(&pkgProcessConfig, "process-config", "process-compose.yaml", "Path to process-compose.yaml")
+	pkgRemoveCmd.Flags().StringVar(&pkgTaskfile, "taskfile", config.DefaultTaskfile, "Path to Taskfile.yml")
+	pkgRemoveCmd.Flags().StringVar(&pkgProcessConfig, "process-config", config.ProcessComposeGeneratedFile, "Path to process-compose config")
 
 	PkgCmd.AddCommand(pkgInstallCmd)
 	PkgCmd.AddCommand(pkgInfoCmd)
@@ -321,10 +323,7 @@ func installBinary(pkg *registry.Package) error {
 
 	// Check if already installed (unless force)
 	if !pkgForce {
-		ext := ""
-		if runtime.GOOS == "windows" {
-			ext = ".exe"
-		}
+		ext := osutil.BinaryExtension()
 		if path, err := exec.LookPath(pkg.BinaryName + ext); err == nil {
 			fmt.Printf("Binary %s already installed at %s\n", pkg.BinaryName, path)
 			return nil
@@ -383,23 +382,12 @@ func installTaskfile(pkg *registry.Package) error {
 
 // removeBinary removes the installed binary
 func removeBinary(pkg *registry.Package) error {
-	home, err := os.UserHomeDir()
+	installDir, err := osutil.UserBinDir()
 	if err != nil {
 		return err
 	}
 
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-
-	var installDir string
-	if runtime.GOOS == "windows" {
-		installDir = filepath.Join(home, "bin")
-	} else {
-		installDir = filepath.Join(home, ".local", "bin")
-	}
-
+	ext := osutil.BinaryExtension()
 	binPath := filepath.Join(installDir, pkg.BinaryName+ext)
 
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
@@ -424,16 +412,3 @@ func installProcess(pkg *registry.Package) error {
 	return gen.AddPackage(pkg.Name)
 }
 
-// removeProcess removes the package's process from process-compose.yaml
-func removeProcess(pkg *registry.Package) error {
-	gen := process.NewGenerator(pkgProcessConfig)
-	return gen.RemovePackage(pkg.Name)
-}
-
-// Helper to truncate strings
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-3] + "..."
-}

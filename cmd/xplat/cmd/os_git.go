@@ -18,12 +18,12 @@ Works identically on macOS, Linux, and Windows without requiring
 git to be installed. Perfect for CI/CD and Docker environments.
 
 Examples:
-  xplat git clone https://github.com/user/repo .src
-  xplat git clone https://github.com/user/repo .src v1.0.0
-  xplat git pull .src
-  xplat git checkout .src v2.0.0
-  xplat git hash .src
-  xplat git tags .src`,
+  xplat os git clone https://github.com/user/repo .src
+  xplat os git clone https://github.com/user/repo .src v1.0.0
+  xplat os git pull .src
+  xplat os git checkout .src v2.0.0
+  xplat os git hash .src
+  xplat os git tags .src`,
 }
 
 var gitCloneCmd = &cobra.Command{

@@ -12,38 +12,36 @@ import (
 // LintCmd is the command for linting Taskfiles.
 var LintCmd = &cobra.Command{
 	Use:   "lint [files...]",
-	Short: "Lint Taskfiles for convention violations",
-	Long: `Lint Taskfiles for convention violations that require human review.
+	Short: "Lint Taskfiles for cross-platform compatibility",
+	Long: `Lint Taskfiles for cross-platform compatibility and best practices.
 
 Checks performed:
-  - archetype-vars:  Required vars for detected archetype
-  - archetype-tasks: Required tasks for detected archetype
-  - check-deps-status: check:deps should have status: section
-  - doc-header: Documentation header comment
+  - cross-platform-cmds: Use xplat os commands instead of direct shell (git, rm, mkdir, etc.)
+  - idempotent-deps:     deps:* tasks should have status: sections
+  - doc-header:          Documentation header comment
 
-If no files are specified, lints all Taskfiles in taskfiles/ directory.
+If no files are specified, lints all Taskfiles in current directory.
 
 Examples:
-  xplat lint                              # Lint all taskfiles
-  xplat lint taskfiles/Taskfile.dummy.yml # Lint specific file
-  xplat lint --json                       # JSON output for CI
-  xplat lint --strict                     # Treat warnings as errors
-  xplat lint --fix                        # Also run fmt fixes`,
+  xplat task lint                              # Lint all taskfiles
+  xplat task lint systems/                     # Lint taskfiles in systems/
+  xplat task lint systems/truck/Taskfile.truck.yml  # Lint specific file
+  xplat task lint --json                       # JSON output for CI
+  xplat task lint --strict                     # Treat warnings as errors
+  xplat task lint --fix                        # Also run fmt fixes`,
 	RunE: runLint,
 }
 
 var (
-	lintJSON     bool
-	lintStrict   bool
-	lintFix      bool
-	lintArchetype string
+	lintJSON   bool
+	lintStrict bool
+	lintFix    bool
 )
 
 func init() {
 	LintCmd.Flags().BoolVar(&lintJSON, "json", false, "Output as JSON")
 	LintCmd.Flags().BoolVar(&lintStrict, "strict", false, "Treat warnings as errors")
 	LintCmd.Flags().BoolVar(&lintFix, "fix", false, "Also run fmt fixes")
-	LintCmd.Flags().StringVar(&lintArchetype, "archetype", "", "Override archetype detection (tool|external|builder|aggregation)")
 }
 
 // LintResult represents the result of linting a file.

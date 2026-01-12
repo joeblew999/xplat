@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeblew999/xplat/internal/syncgh"
 	"github.com/spf13/cobra"
+
+	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/syncgh"
 )
 
 // SyncGHCmd is the parent command for GitHub sync operations
@@ -219,7 +221,7 @@ func init() {
 
 	syncGHPollCmd.Flags().StringVar(&syncGHPollInterval, "interval", "1h", "Poll interval (e.g., 1h, 30m)")
 
-	syncGHWebhookCmd.Flags().StringVar(&syncGHWebhookPort, "port", "8080", "Webhook server port")
+	syncGHWebhookCmd.Flags().StringVar(&syncGHWebhookPort, "port", config.DefaultWebhookPort, "Webhook server port")
 
 	syncGHTunnelSetupCmd.Flags().StringVar(&syncGHTunnelSetupEvents, "events", "push,release,workflow_run,page_build,deployment_status", "Webhook events")
 

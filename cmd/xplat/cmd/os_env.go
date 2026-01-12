@@ -23,9 +23,9 @@ Flags:
   -d, --default  Default value if variable is not set
 
 Examples:
-  xplat env HOME
-  xplat env PATH
-  xplat env MY_VAR -d "default_value"`,
+  xplat os env HOME
+  xplat os env PATH
+  xplat os env MY_VAR -d "default_value"`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		key := args[0]

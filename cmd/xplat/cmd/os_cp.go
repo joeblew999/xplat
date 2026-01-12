@@ -23,9 +23,9 @@ Flags:
   -r, --recursive  Copy directories recursively
 
 Examples:
-  xplat cp file.txt backup.txt
-  xplat cp -r src/ dist/
-  xplat cp config.json build/config.json`,
+  xplat os cp file.txt backup.txt
+  xplat os cp -r src/ dist/
+  xplat os cp config.json build/config.json`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		src := args[0]

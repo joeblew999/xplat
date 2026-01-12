@@ -22,9 +22,9 @@ Flags:
   -p, --parents  Create parent directories as needed, no error if existing
 
 Examples:
-  xplat mkdir build
-  xplat mkdir -p src/components/ui
-  xplat mkdir -p dist/ tmp/`,
+  xplat os mkdir build
+  xplat os mkdir -p src/components/ui
+  xplat os mkdir -p dist/ tmp/`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		hasError := false

@@ -3,41 +3,17 @@
 Cross-platform Taskfile bootstrapper - a single binary that embeds:
 - **Task** (taskfile runner)
 - **Process-Compose** (process orchestration)
-- **Task UI** (web-based task runner with real-time output)
 - **Cross-platform utilities** (rm, cp, mv, glob, etc.)
 
 ## Installation
 
 ```bash
-# Quick install (auto-detects OS/arch)
-curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | sh
+# Build from source
+go build -o xplat ./cmd/xplat/
 
-# Or build from source
-go build -o xplat .
+# Install to ~/.local/bin
+task build:install
 ```
-
-## Task UI
-
-A web-based interface for browsing and running Taskfile tasks with real-time streaming output.
-
-```bash
-xplat ui                    # Start on port 3000
-xplat ui -p 8080            # Custom port
-xplat ui -t Taskfile.ci.yml # Specific taskfile
-```
-
-**Features:**
-- Browse all tasks with descriptions
-- Grouped sidebar organized by namespace (e.g., `check:`, `dev:`, `build:`)
-- Real-time SSE streaming output
-- Remote taskfile support via `includes:` directive
-- Cached remote taskfiles (1-hour disk cache)
-
-### Task List
-![Task List](docs/images/taskui-tasklist.png)
-
-### Task Execution
-![Task Execution](docs/images/taskui-execution.png)
 
 ## Commands
 
@@ -47,30 +23,7 @@ xplat ui -t Taskfile.ci.yml # Specific taskfile
 |---------|-------------|
 | `xplat run` | Run a managed tool |
 | `xplat task` | Run Taskfile tasks (embedded Task runner) |
-| `xplat ui` | Start web-based Task UI |
 | `xplat version` | Print xplat version |
-| `xplat which` | Find binary in managed locations or PATH |
-
-### File Operations
-
-| Command | Description |
-|---------|-------------|
-| `xplat cat` | Print file contents |
-| `xplat cp` | Copy files or directories |
-| `xplat mkdir` | Create directories |
-| `xplat mv` | Move or rename files and directories |
-| `xplat rm` | Remove files or directories |
-| `xplat touch` | Create files or update timestamps |
-
-### Utilities
-
-| Command | Description |
-|---------|-------------|
-| `xplat env` | Get environment variable |
-| `xplat extract` | Extract archives (zip, tar.gz, tar.bz2, tar.xz, 7z, rar) |
-| `xplat fetch` | Download files with optional archive extraction |
-| `xplat glob` | Expand glob pattern |
-| `xplat jq` | Process JSON with jq syntax |
 
 ### Package Management
 
@@ -79,20 +32,10 @@ xplat ui -t Taskfile.ci.yml # Specific taskfile
 | `xplat binary` | Binary management commands |
 | `xplat pkg` | Package management from Ubuntu Software registry |
 
-### Taskfile
-
-| Command | Description |
-|---------|-------------|
-| `xplat archetype` | Taskfile archetype operations |
-| `xplat fmt` | Format Taskfiles |
-| `xplat lint` | Lint Taskfiles for convention violations |
-| `xplat test` | Test a Taskfile based on its archetype |
-
 ### Process
 
 | Command | Description |
 |---------|-------------|
-| `xplat dev` | Development workflow shortcuts |
 | `xplat process` | Process orchestration (embedded process-compose) |
 | `xplat process-gen` | Generate process-compose.yaml from package registry |
 
@@ -103,18 +46,15 @@ xplat ui -t Taskfile.ci.yml # Specific taskfile
 | `xplat completion` | Generate the autocompletion script for the specified shell |
 | `xplat docs` | Generate documentation from xplat commands |
 | `xplat help` | Help about any command |
+| `xplat manifest` | Work with xplat.yaml manifests |
+| `xplat os` | Cross-platform OS utilities |
 | `xplat release` | Release build orchestration |
+| `xplat service` | Manage xplat as a system service |
+| `xplat sync-cf` | Cloudflare sync operations (no wrangler CLI required) |
+| `xplat sync-gh` | GitHub sync operations (no gh CLI required) |
+| `xplat update` | Update xplat to the latest version |
 
 ## Command Reference
-
-### `xplat archetype`
-
-Taskfile archetype operations
-
-**Subcommands:**
-- `archetype detect` - Detect archetype for a Taskfile or directory
-- `archetype explain` - Explain a specific archetype in detail
-- `archetype list` - List all archetypes with their requirements
 
 ### `xplat binary`
 
@@ -122,10 +62,6 @@ Binary management commands
 
 **Subcommands:**
 - `binary install` - Install a binary (build from source or download)
-
-### `xplat cat`
-
-Print file contents
 
 ### `xplat completion`
 
@@ -137,20 +73,6 @@ Generate the autocompletion script for the specified shell
 - `completion powershell` - Generate the autocompletion script for powershell
 - `completion zsh` - Generate the autocompletion script for zsh
 
-### `xplat cp`
-
-Copy files or directories
-
-### `xplat dev`
-
-Development workflow shortcuts
-
-**Subcommands:**
-- `dev down` - Stop dev environment
-- `dev logs` - Follow dev logs
-- `dev status` - Show dev environment status
-- `dev up` - Start dev environment (process-compose with TUI)
-
 ### `xplat docs`
 
 Generate documentation from xplat commands
@@ -161,45 +83,51 @@ Generate documentation from xplat commands
 - `docs readme` - Generate README.generated.md from xplat commands
 - `docs taskfile` - Generate Taskfile.generated.yml with xplat wrapper tasks
 
-### `xplat env`
-
-Get environment variable
-
-### `xplat extract`
-
-Extract archives (zip, tar.gz, tar.bz2, tar.xz, 7z, rar)
-
-### `xplat fetch`
-
-Download files with optional archive extraction
-
-### `xplat fmt`
-
-Format Taskfiles
-
-### `xplat glob`
-
-Expand glob pattern
-
 ### `xplat help`
 
 Help about any command
 
-### `xplat jq`
+### `xplat manifest`
 
-Process JSON with jq syntax
+Work with xplat.yaml manifests
 
-### `xplat lint`
+**Subcommands:**
+- `manifest bootstrap` - Bootstrap a plat-* repository with standard files
+- `manifest check` - Deep validation of manifest against filesystem
+- `manifest discover` - Discover manifests in plat-* directories
+- `manifest discover-github` - Discover manifests from GitHub plat-* repos
+- `manifest gen-all` - Generate all files from manifests
+- `manifest gen-env` - Generate .env.example from manifests
+- `manifest gen-gitignore` - Generate .gitignore from manifest
+- `manifest gen-process` - Generate process-compose.yaml from manifests
+- `manifest gen-taskfile` - Generate Taskfile.yml with remote includes
+- `manifest gen-workflow` - Generate unified GitHub Actions CI workflow
+- `manifest init` - Initialize a new xplat.yaml manifest
+- `manifest install` - Install binary from manifest
+- `manifest install-all` - Install binaries from all discovered manifests
+- `manifest show` - Show manifest details
+- `manifest validate` - Validate an xplat.yaml manifest
 
-Lint Taskfiles for convention violations
+### `xplat os`
 
-### `xplat mkdir`
+Cross-platform OS utilities
 
-Create directories
-
-### `xplat mv`
-
-Move or rename files and directories
+**Subcommands:**
+- `os cat` - Print file contents
+- `os cp` - Copy files or directories
+- `os env` - Get environment variable
+- `os envsubst` - Substitute environment variables in text
+- `os extract` - Extract archives (zip, tar.gz, tar.bz2, tar.xz, 7z, rar)
+- `os fetch` - Download files with optional archive extraction
+- `os git` - Git operations (no git binary required)
+- `os glob` - Expand glob pattern
+- `os jq` - Process JSON with jq syntax
+- `os mkdir` - Create directories
+- `os mv` - Move or rename files and directories
+- `os rm` - Remove files or directories
+- `os touch` - Create files or update timestamps
+- `os version-file` - Read or write .version file
+- `os which` - Find binary in managed locations or PATH
 
 ### `xplat pkg`
 
@@ -214,6 +142,9 @@ Package management from Ubuntu Software registry
 ### `xplat process`
 
 Process orchestration (embedded process-compose)
+
+**Subcommands:**
+- `process tools` - Process-compose validation and formatting tools
 
 ### `xplat process-gen`
 
@@ -235,48 +166,60 @@ Release build orchestration
 - `release list` - List built release binaries for a tool
 - `release matrix` - Output platform build matrix for a tool
 
-### `xplat rm`
-
-Remove files or directories
-
 ### `xplat run`
 
 Run a managed tool
+
+### `xplat service`
+
+Manage xplat as a system service
+
+**Subcommands:**
+- `service install` - Add current project to registry and install OS service
+- `service list` - List all registered projects
+- `service restart` - Restart the xplat service
+- `service start` - Start the xplat service
+- `service status` - Check service status
+- `service stop` - Stop the xplat service
+- `service uninstall` - Remove current project from registry
+
+### `xplat sync-cf`
+
+Cloudflare sync operations (no wrangler CLI required)
+
+**Subcommands:**
+- `sync-cf auth` - Set up Cloudflare credentials interactively
+- `sync-cf check` - Check if cloudflared is installed
+- `sync-cf install` - Install cloudflared
+- `sync-cf poll` - Poll CF audit logs continuously
+- `sync-cf tunnel` - Start cloudflared quick tunnel
+- `sync-cf webhook` - Start CF webhook server
+- `sync-cf worker` - Manage sync-cf Cloudflare Worker
+
+### `xplat sync-gh`
+
+GitHub sync operations (no gh CLI required)
+
+**Subcommands:**
+- `sync-gh poll` - Poll repositories for updates continuously
+- `sync-gh release` - Get latest release tag for a repository
+- `sync-gh state` - Capture or display GitHub repository state
+- `sync-gh tunnel` - Forward smee.io webhooks to local server
+- `sync-gh tunnel-setup` - Create smee channel and configure GitHub webhook
+- `sync-gh webhook` - Start webhook server
 
 ### `xplat task`
 
 Run Taskfile tasks (embedded Task runner)
 
-### `xplat ui`
+**Subcommands:**
+- `task tools` - Taskfile validation and formatting tools
 
-Start web-based Task UI for browsing and running tasks.
+### `xplat update`
 
-**Flags:**
-- `-p, --port` - Port to listen on (default: 3000)
-- `-t, --taskfile` - Path to Taskfile (default: Taskfile.yml)
-- `--no-browser` - Don't open browser automatically
-
-**Features:**
-- Parses `includes:` directive to load remote taskfiles
-- Groups tasks by namespace prefix in sidebar
-- Real-time output streaming via SSE
-
-### `xplat test`
-
-Test a Taskfile based on its archetype
-
-### `xplat touch`
-
-Create files or update timestamps
+Update xplat to the latest version
 
 ### `xplat version`
 
 Print xplat version
-
-### `xplat which`
-
-Find binary in managed locations or PATH
-
-**Subcommands:**
-- `which doctor` - Diagnose tool installation and version conflicts
 

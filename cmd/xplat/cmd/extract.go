@@ -21,11 +21,11 @@ var ExtractCmd = &cobra.Command{
 Supported formats: zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst, 7z, rar
 
 Examples:
-  xplat extract archive.zip
-  xplat extract archive.tar.gz ./dest
-  xplat extract --strip 1 gh_2.83.1_macOS_arm64.zip
-  xplat extract --include "*/bin/*" --strip 2 gh.zip ./bin
-  xplat extract --list archive.zip
+  xplat os extract archive.zip
+  xplat os extract archive.tar.gz ./dest
+  xplat os extract --strip 1 gh_2.83.1_macOS_arm64.zip
+  xplat os extract --include "*/bin/*" --strip 2 gh.zip ./bin
+  xplat os extract --list archive.zip
 
 Flags:
   --strip N       Remove N leading path components from extracted files

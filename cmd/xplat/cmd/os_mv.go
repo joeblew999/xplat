@@ -18,9 +18,9 @@ Works identically on macOS, Linux, and Windows.
 Can move files across filesystems (copies then deletes).
 
 Examples:
-  xplat mv oldname.txt newname.txt
-  xplat mv file.txt /other/dir/
-  xplat mv srcdir/ dstdir/`,
+  xplat os mv oldname.txt newname.txt
+  xplat os mv file.txt /other/dir/
+  xplat os mv srcdir/ dstdir/`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		src := args[0]

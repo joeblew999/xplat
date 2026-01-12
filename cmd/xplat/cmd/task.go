@@ -72,7 +72,7 @@ import (
 	"github.com/go-task/task/v3/errors"
 	"github.com/go-task/task/v3/experiments"
 	"github.com/go-task/task/v3/taskfile/ast"
-	"github.com/joeblew999/xplat/internal/paths"
+	"github.com/joeblew999/xplat/internal/config"
 )
 
 // TaskCmd embeds the Task runner into xplat.
@@ -135,6 +135,9 @@ var (
 )
 
 func init() {
+	// Add tools subcommand for xplat-specific Taskfile tooling
+	TaskCmd.AddCommand(TaskToolsCmd)
+
 	// Match Task's flags exactly
 	// See: https://github.com/go-task/task/blob/main/internal/flags/flags.go
 	TaskCmd.Flags().StringVarP(&taskDir, "dir", "d", "", "Sets directory of execution")
@@ -200,7 +203,7 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 
 	// Handle --version
 	if taskVersion {
-		fmt.Println("Task version 3.43.3 (embedded in xplat)")
+		fmt.Println("Task version 3.46.4 (embedded in xplat)")
 		return nil
 	}
 
@@ -247,9 +250,9 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		workDir, _ = os.Getwd()
 	}
 	if workDir != "" {
-		paths.SetPlatEnv(workDir)
+		config.SetPlatEnv(workDir)
 		// Also update PATH to include PLAT_BIN and XPLAT_BIN
-		os.Setenv("PATH", paths.PathWithPlatBin(workDir))
+		os.Setenv("PATH", config.PathWithPlatBin(workDir))
 	}
 
 	// Enable remote taskfiles experiment by default in xplat
@@ -268,8 +271,11 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	// These field names match the Executor struct in executor.go
 	e.Dir = dir
 	e.Entrypoint = taskFile
-	e.Force = taskForce
-	e.ForceAll = taskForceAll
+	// Standalone task CLI maps -f to ForceAll when GentleForce experiment is OFF (default)
+	// Since we can't dynamically change Cobra flags based on experiment state,
+	// we match the default standalone behavior: -f forces everything
+	e.Force = false
+	e.ForceAll = taskForce || taskForceAll
 	e.Insecure = taskInsecure
 	e.Download = taskDownload
 	e.Offline = taskOffline
@@ -309,7 +315,7 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	}
 
 	// Handle --list, --list-all, --json
-	listOptions := task.NewListOptions(taskList, taskListAll, taskListJson, false)
+	listOptions := task.NewListOptions(taskList, taskListAll, taskListJson, false, false)
 	if listOptions.ShouldListTasks() {
 		if taskSilent {
 			return e.ListTaskNames(taskListAll)

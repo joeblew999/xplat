@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joeblew999/xplat/internal/config"
 	"github.com/joeblew999/xplat/internal/manifest"
 	"github.com/joeblew999/xplat/internal/taskfile"
 	"github.com/spf13/cobra"
@@ -462,7 +463,7 @@ func runManifestGenProcess(cmd *cobra.Command, args []string) error {
 	}
 
 	gen := manifest.NewGenerator(manifests)
-	outputPath := filepath.Join(manifestOutput, "process-compose.generated.yaml")
+	outputPath := filepath.Join(manifestOutput, config.ProcessComposeGeneratedFile)
 
 	if err := gen.GenerateProcessCompose(outputPath); err != nil {
 		return err
@@ -504,8 +505,8 @@ func runManifestGenAll(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Generated %s\n", envPath)
 
-	// Generate process-compose.yaml
-	processPath := filepath.Join(manifestOutput, "process-compose.generated.yaml")
+	// Generate process-compose config
+	processPath := filepath.Join(manifestOutput, config.ProcessComposeGeneratedFile)
 	if err := gen.GenerateProcessCompose(processPath); err != nil {
 		return fmt.Errorf("failed to generate process-compose: %w", err)
 	}

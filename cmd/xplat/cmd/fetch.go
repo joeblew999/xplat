@@ -21,13 +21,13 @@ var FetchCmd = &cobra.Command{
 
 Examples:
   # Simple download
-  xplat fetch https://example.com/file.txt --output ./downloads
+  xplat os fetch https://example.com/file.txt --output ./downloads
 
   # Download and extract archive
-  xplat fetch --extract https://github.com/cli/cli/releases/download/v2.83.1/gh_2.83.1_macOS_arm64.zip --output ~/.local/bin
+  xplat os fetch --extract https://github.com/cli/cli/releases/download/v2.83.1/gh_2.83.1_macOS_arm64.zip --output ~/.local/bin
 
   # Extract with path manipulation
-  xplat fetch --extract https://example.com/release.tar.gz --output ./bin --strip 2 --include "*/bin/*"
+  xplat os fetch --extract https://example.com/release.tar.gz --output ./bin --strip 2 --include "*/bin/*"
 
 Flags:
   --output DIR    Output directory (default: current directory)

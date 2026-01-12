@@ -20,10 +20,10 @@ var JqCmd = &cobra.Command{
 Reads JSON from file or stdin, applies the query, and outputs results.
 
 Examples:
-  xplat jq '.name' package.json
-  echo '{"foo":"bar"}' | xplat jq '.foo'
-  xplat jq '.assets[].name' < releases.json
-  xplat jq -r '.version' package.json
+  xplat os jq '.name' package.json
+  echo '{"foo":"bar"}' | xplat os jq '.foo'
+  xplat os jq '.assets[].name' < releases.json
+  xplat os jq -r '.version' package.json
 
 Common queries:
   .              Identity (pretty-print)

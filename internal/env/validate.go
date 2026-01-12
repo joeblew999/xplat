@@ -87,10 +87,10 @@ func ValidateFieldFast(envKey, value string, cfg *EnvConfig) ValidationResult {
 	case KeyClaudeAPIKey:
 		// Claude API keys start with "sk-ant-"
 		if !strings.HasPrefix(value, "sk-ant-") {
-			err = fmt.Errorf("Claude API key must start with 'sk-ant-'")
+			err = fmt.Errorf("claude API key must start with 'sk-ant-'")
 		}
 		if len(value) < 20 {
-			err = fmt.Errorf("Claude API key appears too short")
+			err = fmt.Errorf("claude API key appears too short")
 		}
 	case KeyClaudeWorkspaceName:
 		// Workspace name is just metadata

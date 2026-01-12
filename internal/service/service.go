@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeblew999/xplat/internal/paths"
+	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/projects"
 	"github.com/joeblew999/xplat/internal/updater"
 	"github.com/kardianos/service"
 )
@@ -93,7 +94,7 @@ func (p *program) runUI() {
 	p.uiCmd.Dir = p.workDir
 	p.uiCmd.Stdout = os.Stdout
 	p.uiCmd.Stderr = os.Stderr
-	p.uiCmd.Env = paths.FullEnv(p.workDir)
+	p.uiCmd.Env = config.FullEnv(p.workDir)
 
 	log.Printf("Starting Task UI on port %s...", p.uiPort)
 	if err := p.uiCmd.Run(); err != nil {
@@ -102,14 +103,36 @@ func (p *program) runUI() {
 }
 
 func (p *program) run() {
-	// Run process-compose in headless mode (no TUI, no server, suitable for service)
-	p.cmd = exec.Command(p.xplatBin, "process", "-t=false", "--no-server")
+	// Build command args: start with "process"
+	args := []string{"process"}
+
+	// Load all enabled project configs from registry
+	reg, err := projects.Load()
+	if err != nil {
+		log.Printf("Warning: failed to load project registry: %v", err)
+	} else {
+		configFiles := reg.EnabledConfigFiles()
+		if len(configFiles) > 0 {
+			log.Printf("Loading %d project config(s) from registry", len(configFiles))
+			for _, cfg := range configFiles {
+				args = append(args, "-f", cfg)
+			}
+		}
+	}
+
+	// Add headless mode flags (no TUI, no server, suitable for service)
+	args = append(args, "-t=false", "--no-server")
+
+	// Run process-compose with all configs
+	p.cmd = exec.Command(p.xplatBin, args...)
 	p.cmd.Dir = p.workDir
 	p.cmd.Stdout = os.Stdout
 	p.cmd.Stderr = os.Stderr
 
 	// Use xplat paths environment: PLAT_* vars + PLAT_BIN/XPLAT_BIN in PATH
-	p.cmd.Env = paths.FullEnv(p.workDir)
+	p.cmd.Env = config.FullEnv(p.workDir)
+
+	log.Printf("Running: %s %s", p.xplatBin, strings.Join(args, " "))
 
 	if err := p.cmd.Run(); err != nil {
 		log.Printf("xplat process exited: %v", err)
