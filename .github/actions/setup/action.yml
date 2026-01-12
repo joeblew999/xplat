@@ -1,0 +1,78 @@
+# xplat Setup Action
+#
+# Installs xplat binary for cross-platform CI/CD.
+# Auto-detects OS and architecture.
+#
+# Usage:
+#   - uses: joeblew999/xplat/.github/actions/setup@main
+#     with:
+#       version: v0.3.8  # optional, defaults to latest
+
+name: 'Setup xplat'
+description: 'Install xplat binary for cross-platform CI/CD'
+author: 'joeblew999'
+
+inputs:
+  version:
+    description: 'xplat version to install (e.g., v0.3.8). Defaults to latest.'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine xplat version
+      id: version
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -sL https://api.github.com/repos/joeblew999/xplat/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/xplat-//')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Installing xplat $VERSION"
+
+    - name: Determine binary name
+      id: binary
+      shell: bash
+      run: |
+        OS="${{ runner.os }}"
+        ARCH="${{ runner.arch }}"
+
+        # Map runner.os to binary name
+        case "$OS" in
+          Linux)  OS_NAME="linux" ;;
+          macOS)  OS_NAME="darwin" ;;
+          Windows) OS_NAME="windows" ;;
+        esac
+
+        # Map runner.arch to binary name
+        case "$ARCH" in
+          X64)   ARCH_NAME="amd64" ;;
+          ARM64) ARCH_NAME="arm64" ;;
+        esac
+
+        BINARY="xplat-${OS_NAME}-${ARCH_NAME}"
+        if [ "$OS" = "Windows" ]; then
+          BINARY="${BINARY}.exe"
+        fi
+
+        echo "binary=$BINARY" >> $GITHUB_OUTPUT
+        echo "Binary: $BINARY"
+
+    - name: Install xplat (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        curl -sL "https://github.com/joeblew999/xplat/releases/download/xplat-${{ steps.version.outputs.version }}/${{ steps.binary.outputs.binary }}" -o /usr/local/bin/xplat
+        chmod +x /usr/local/bin/xplat
+        xplat version
+
+    - name: Install xplat (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\bin" | Out-Null
+        Invoke-WebRequest -Uri "https://github.com/joeblew999/xplat/releases/download/xplat-${{ steps.version.outputs.version }}/${{ steps.binary.outputs.binary }}" -OutFile "$env:USERPROFILE\bin\xplat.exe"
+        echo "$env:USERPROFILE\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+        & "$env:USERPROFILE\bin\xplat.exe" version
