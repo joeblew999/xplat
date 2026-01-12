@@ -10,7 +10,8 @@ type Manifest struct {
 	Description string `yaml:"description"`
 	Author      string `yaml:"author"`
 	License     string `yaml:"license"`
-	Repo        string `yaml:"repo,omitempty"` // GitHub repo name (e.g., "plat-rush"), defaults to name
+	Repo        string `yaml:"repo,omitempty"`     // GitHub repo name (e.g., "plat-rush"), defaults to name
+	Language    string `yaml:"language,omitempty"` // Primary language: go, rust, bun (for CI setup)
 
 	Binary       *BinaryConfig            `yaml:"binary,omitempty"`
 	Taskfile     *TaskfileConfig          `yaml:"taskfile,omitempty"`

@@ -529,9 +529,6 @@ func runManifestGenWorkflow(cmd *cobra.Command, args []string) error {
 		baseDir = "."
 	}
 
-	// Pass current xplat version to generator
-	manifest.SetXplatVersion(GetVersion())
-
 	gen := manifest.NewGenerator(nil) // No manifests needed for workflow generation
 	if err := gen.GenerateWorkflowDir(baseDir); err != nil {
 		return fmt.Errorf("failed to generate workflow: %w", err)
@@ -755,9 +752,6 @@ func runManifestBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	// Bootstrap mode
-	// Pass current xplat version to generator for workflow
-	manifest.SetXplatVersion(GetVersion())
-
 	opts := manifest.BootstrapOptions{
 		Force:   manifestForce,
 		Verbose: manifestVerbose,
