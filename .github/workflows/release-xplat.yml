@@ -126,71 +126,71 @@ jobs:
           echo "  OK"
 
           echo ""
-          echo "Testing: which"
-          bin/xplat which bash || bin/xplat which sh
+          echo "Testing: os which"
+          bin/xplat os which bash || bin/xplat os which sh
           echo "  OK"
 
           echo ""
-          echo "Testing: glob"
-          COUNT=$(bin/xplat glob "cmd/**/*.go" | wc -l)
+          echo "Testing: os glob"
+          COUNT=$(bin/xplat os glob "cmd/**/*.go" | wc -l)
           echo "  Found $COUNT Go files"
           [ "$COUNT" -gt 0 ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: mkdir -p"
-          bin/xplat mkdir -p /tmp/xplat-test/nested/dir
+          echo "Testing: os mkdir -p"
+          bin/xplat os mkdir -p /tmp/xplat-test/nested/dir
           [ -d /tmp/xplat-test/nested/dir ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: touch"
-          bin/xplat touch /tmp/xplat-test/testfile.txt
+          echo "Testing: os touch"
+          bin/xplat os touch /tmp/xplat-test/testfile.txt
           [ -f /tmp/xplat-test/testfile.txt ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: cat"
+          echo "Testing: os cat"
           echo "hello world" > /tmp/xplat-test/testfile.txt
-          CONTENT=$(bin/xplat cat /tmp/xplat-test/testfile.txt)
+          CONTENT=$(bin/xplat os cat /tmp/xplat-test/testfile.txt)
           [ "$CONTENT" = "hello world" ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: cp"
-          bin/xplat cp /tmp/xplat-test/testfile.txt /tmp/xplat-test/copied.txt
+          echo "Testing: os cp"
+          bin/xplat os cp /tmp/xplat-test/testfile.txt /tmp/xplat-test/copied.txt
           [ -f /tmp/xplat-test/copied.txt ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: cp -r"
-          bin/xplat cp -r /tmp/xplat-test/nested /tmp/xplat-test/nested-copy
+          echo "Testing: os cp -r"
+          bin/xplat os cp -r /tmp/xplat-test/nested /tmp/xplat-test/nested-copy
           [ -d /tmp/xplat-test/nested-copy/dir ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: mv (rename)"
-          bin/xplat touch /tmp/xplat-test/to-rename.txt
-          bin/xplat mv /tmp/xplat-test/to-rename.txt /tmp/xplat-test/renamed.txt
+          echo "Testing: os mv (rename)"
+          bin/xplat os touch /tmp/xplat-test/to-rename.txt
+          bin/xplat os mv /tmp/xplat-test/to-rename.txt /tmp/xplat-test/renamed.txt
           [ -f /tmp/xplat-test/renamed.txt ] && [ ! -f /tmp/xplat-test/to-rename.txt ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: mv (to directory)"
-          bin/xplat mv /tmp/xplat-test/renamed.txt /tmp/xplat-test/nested/
+          echo "Testing: os mv (to directory)"
+          bin/xplat os mv /tmp/xplat-test/renamed.txt /tmp/xplat-test/nested/
           [ -f /tmp/xplat-test/nested/renamed.txt ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: env"
-          HOME_VAL=$(bin/xplat env HOME)
+          echo "Testing: os env"
+          HOME_VAL=$(bin/xplat os env HOME)
           [ -n "$HOME_VAL" ] && echo "  OK: HOME=$HOME_VAL" || exit 1
 
           echo ""
-          echo "Testing: env -d (default)"
-          VAL=$(bin/xplat env NONEXISTENT_12345 -d "default")
+          echo "Testing: os env -d (default)"
+          VAL=$(bin/xplat os env NONEXISTENT_12345 -d "default")
           [ "$VAL" = "default" ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: rm"
-          bin/xplat rm /tmp/xplat-test/copied.txt
+          echo "Testing: os rm"
+          bin/xplat os rm /tmp/xplat-test/copied.txt
           [ ! -f /tmp/xplat-test/copied.txt ] && echo "  OK" || exit 1
 
           echo ""
-          echo "Testing: rm -rf"
-          bin/xplat rm -rf /tmp/xplat-test
+          echo "Testing: os rm -rf"
+          bin/xplat os rm -rf /tmp/xplat-test
           [ ! -d /tmp/xplat-test ] && echo "  OK" || exit 1
 
           echo ""
@@ -211,71 +211,71 @@ jobs:
           Write-Host "  OK" -ForegroundColor Green
 
           Write-Host ""
-          Write-Host "Testing: which"
-          & $bin which powershell
+          Write-Host "Testing: os which"
+          & $bin os which powershell
           Write-Host "  OK" -ForegroundColor Green
 
           Write-Host ""
-          Write-Host "Testing: glob"
-          $count = (& $bin glob "cmd/**/*.go" | Measure-Object -Line).Lines
+          Write-Host "Testing: os glob"
+          $count = (& $bin os glob "cmd/**/*.go" | Measure-Object -Line).Lines
           Write-Host "  Found $count Go files"
           if ($count -gt 0) { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: mkdir -p"
-          & $bin mkdir -p "$env:TEMP\xplat-test\nested\dir"
+          Write-Host "Testing: os mkdir -p"
+          & $bin os mkdir -p "$env:TEMP\xplat-test\nested\dir"
           if (Test-Path "$env:TEMP\xplat-test\nested\dir") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: touch"
-          & $bin touch "$env:TEMP\xplat-test\testfile.txt"
+          Write-Host "Testing: os touch"
+          & $bin os touch "$env:TEMP\xplat-test\testfile.txt"
           if (Test-Path "$env:TEMP\xplat-test\testfile.txt") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: cat"
+          Write-Host "Testing: os cat"
           "hello world" | Out-File -FilePath "$env:TEMP\xplat-test\testfile.txt" -Encoding utf8 -NoNewline
-          $content = & $bin cat "$env:TEMP\xplat-test\testfile.txt"
+          $content = & $bin os cat "$env:TEMP\xplat-test\testfile.txt"
           if ($content.Trim() -eq "hello world") { Write-Host "  OK" -ForegroundColor Green } else { Write-Host "  Got: $content"; exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: cp"
-          & $bin cp "$env:TEMP\xplat-test\testfile.txt" "$env:TEMP\xplat-test\copied.txt"
+          Write-Host "Testing: os cp"
+          & $bin os cp "$env:TEMP\xplat-test\testfile.txt" "$env:TEMP\xplat-test\copied.txt"
           if (Test-Path "$env:TEMP\xplat-test\copied.txt") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: cp -r"
-          & $bin cp -r "$env:TEMP\xplat-test\nested" "$env:TEMP\xplat-test\nested-copy"
+          Write-Host "Testing: os cp -r"
+          & $bin os cp -r "$env:TEMP\xplat-test\nested" "$env:TEMP\xplat-test\nested-copy"
           if (Test-Path "$env:TEMP\xplat-test\nested-copy\dir") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: mv (rename)"
-          & $bin touch "$env:TEMP\xplat-test\to-rename.txt"
-          & $bin mv "$env:TEMP\xplat-test\to-rename.txt" "$env:TEMP\xplat-test\renamed.txt"
+          Write-Host "Testing: os mv (rename)"
+          & $bin os touch "$env:TEMP\xplat-test\to-rename.txt"
+          & $bin os mv "$env:TEMP\xplat-test\to-rename.txt" "$env:TEMP\xplat-test\renamed.txt"
           if ((Test-Path "$env:TEMP\xplat-test\renamed.txt") -and (-not (Test-Path "$env:TEMP\xplat-test\to-rename.txt"))) { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: mv (to directory)"
-          & $bin mv "$env:TEMP\xplat-test\renamed.txt" "$env:TEMP\xplat-test\nested\"
+          Write-Host "Testing: os mv (to directory)"
+          & $bin os mv "$env:TEMP\xplat-test\renamed.txt" "$env:TEMP\xplat-test\nested\"
           if (Test-Path "$env:TEMP\xplat-test\nested\renamed.txt") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: env"
-          $homeVal = & $bin env USERPROFILE
+          Write-Host "Testing: os env"
+          $homeVal = & $bin os env USERPROFILE
           if ($homeVal) { Write-Host "  OK: USERPROFILE=$homeVal" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: env -d (default)"
-          $val = & $bin env NONEXISTENT_12345 -d "default"
+          Write-Host "Testing: os env -d (default)"
+          $val = & $bin os env NONEXISTENT_12345 -d "default"
           if ($val -eq "default") { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: rm"
-          & $bin rm "$env:TEMP\xplat-test\copied.txt"
+          Write-Host "Testing: os rm"
+          & $bin os rm "$env:TEMP\xplat-test\copied.txt"
           if (-not (Test-Path "$env:TEMP\xplat-test\copied.txt")) { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
-          Write-Host "Testing: rm -rf"
-          & $bin rm -rf "$env:TEMP\xplat-test"
+          Write-Host "Testing: os rm -rf"
+          & $bin os rm -rf "$env:TEMP\xplat-test"
           if (-not (Test-Path "$env:TEMP\xplat-test")) { Write-Host "  OK" -ForegroundColor Green } else { exit 1 }
 
           Write-Host ""
@@ -351,21 +351,21 @@ jobs:
           ### Commands
 
           ```
-          # Core (P0)
-          xplat version          # Print version
-          xplat which <binary>   # Find binary in PATH
-          xplat glob <pattern>   # Expand glob pattern (supports **)
+          # Core
+          xplat version              # Print version
+          xplat task [tasks...]      # Run Taskfile tasks
+          xplat process up           # Start process-compose
 
-          # File Operations (P1)
-          xplat rm [-rf] <path>  # Remove files or directories
-          xplat mkdir [-p] <dir> # Create directories
-          xplat cp [-r] <s> <d>  # Copy files or directories
-          xplat mv <src> <dst>   # Move or rename files/directories
-
-          # Utilities (P2)
-          xplat cat <file>       # Print file contents
-          xplat touch <file>     # Create or update file
-          xplat env <key> [-d v] # Get environment variable
+          # OS Utilities (cross-platform)
+          xplat os which <binary>    # Find binary in PATH
+          xplat os glob <pattern>    # Expand glob pattern (supports **)
+          xplat os rm [-rf] <path>   # Remove files or directories
+          xplat os mkdir [-p] <dir>  # Create directories
+          xplat os cp [-r] <s> <d>   # Copy files or directories
+          xplat os mv <src> <dst>    # Move or rename files/directories
+          xplat os cat <file>        # Print file contents
+          xplat os touch <file>      # Create or update file
+          xplat os env <key> [-d v]  # Get environment variable
           ```
           EOF
 
