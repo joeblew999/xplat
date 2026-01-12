@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/joeblew999/xplat/internal/process"
 	"github.com/spf13/cobra"
 )
 
@@ -39,12 +38,6 @@ var docsTaskfileCmd = &cobra.Command{
 	RunE:  runDocsTaskfile,
 }
 
-var docsProcessCmd = &cobra.Command{
-	Use:   "process",
-	Short: "Generate process-compose.generated.yaml from registry",
-	RunE:  runDocsProcess,
-}
-
 var docsAllCmd = &cobra.Command{
 	Use:   "all",
 	Short: "Generate all documentation",
@@ -52,10 +45,7 @@ var docsAllCmd = &cobra.Command{
 		if err := runDocsReadme(cmd, args); err != nil {
 			return err
 		}
-		if err := runDocsTaskfile(cmd, args); err != nil {
-			return err
-		}
-		return runDocsProcess(cmd, args)
+		return runDocsTaskfile(cmd, args)
 	},
 }
 
@@ -66,7 +56,6 @@ func init() {
 
 	DocsCmd.AddCommand(docsReadmeCmd)
 	DocsCmd.AddCommand(docsTaskfileCmd)
-	DocsCmd.AddCommand(docsProcessCmd)
 	DocsCmd.AddCommand(docsAllCmd)
 }
 
@@ -120,53 +109,109 @@ func runDocsReadme(cmd *cobra.Command, args []string) error {
 	var sb strings.Builder
 
 	sb.WriteString("# xplat\n\n")
-	sb.WriteString("Cross-platform Taskfile bootstrapper - a single binary that embeds:\n")
-	sb.WriteString("- **Task** (taskfile runner)\n")
-	sb.WriteString("- **Process-Compose** (process orchestration)\n")
-	sb.WriteString("- **Cross-platform utilities** (rm, cp, mv, glob, etc.)\n\n")
+	sb.WriteString("**One binary to bootstrap and run any plat-* project.**\n\n")
+
+	sb.WriteString("## Why?\n\n")
+	sb.WriteString("Instead of installing Task, process-compose, and various CLIs separately,\n")
+	sb.WriteString("xplat embeds them all. One binary, works on macOS/Linux/Windows.\n\n")
+
+	sb.WriteString("## Quick Start\n\n")
+	sb.WriteString("```bash\n")
+	sb.WriteString("# 1. Bootstrap a new project\n")
+	sb.WriteString("xplat manifest bootstrap\n\n")
+	sb.WriteString("# 2. Generate project files from xplat.yaml\n")
+	sb.WriteString("xplat gen all\n\n")
+	sb.WriteString("# 3. Build/test/lint (embedded Task)\n")
+	sb.WriteString("xplat task build\n")
+	sb.WriteString("xplat task test\n\n")
+	sb.WriteString("# 4. Run services (embedded process-compose)\n")
+	sb.WriteString("xplat process\n\n")
+	sb.WriteString("# 5. Install packages from registry\n")
+	sb.WriteString("xplat pkg install <name>\n")
+	sb.WriteString("```\n\n")
 
 	sb.WriteString("## Installation\n\n")
 	sb.WriteString("```bash\n")
 	sb.WriteString("# Build from source\n")
-	sb.WriteString("go build -o xplat ./cmd/xplat/\n\n")
-	sb.WriteString("# Install to ~/.local/bin\n")
-	sb.WriteString("task build:install\n")
+	sb.WriteString("go build -o xplat .\n\n")
+	sb.WriteString("# Or install to ~/.local/bin\n")
+	sb.WriteString("go build -o ~/.local/bin/xplat .\n")
 	sb.WriteString("```\n\n")
+
+	sb.WriteString("## Architecture\n\n")
+	sb.WriteString("xplat solves the problem of consistent tooling across multiple `plat-*` projects on Mac/Linux/Windows.\n\n")
+	sb.WriteString("| Component | Purpose |\n")
+	sb.WriteString("|-----------|--------|\n")
+	sb.WriteString("| **Embedded Task** | Declarative build system. Taskfile.yml defines build/test/lint. |\n")
+	sb.WriteString("| **Embedded process-compose** | Multi-process orchestration. Run app + dependencies together. |\n")
+	sb.WriteString("| **xplat.yaml manifest** | Single source of truth: language, binary, env vars, processes. |\n")
+	sb.WriteString("| **gen commands** | Generate CI, .gitignore, .env from manifest. Change manifest, regenerate. |\n")
+	sb.WriteString("| **pkg registry** | Shared tooling. Install a package = binary + taskfile + process config. |\n")
+	sb.WriteString("| **os utilities** | Cross-platform primitives (rm, cp, glob) that behave identically everywhere. |\n")
+	sb.WriteString("| **sync-gh / sync-cf** | Watch external services (GitHub, Cloudflare) for events. No vendor CLI needed. |\n\n")
+	sb.WriteString("**The pattern:**\n")
+	sb.WriteString("```\n")
+	sb.WriteString("xplat.yaml (manifest) → gen → Taskfile.yml, process-compose.yaml, CI workflow\n")
+	sb.WriteString("                       ↓\n")
+	sb.WriteString("                    xplat task build    (runs tasks)\n")
+	sb.WriteString("                    xplat process       (runs services)\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("## Sync Commands\n\n")
+	sb.WriteString("The `sync-gh` and `sync-cf` commands monitor external services without requiring vendor CLIs.\n\n")
+	sb.WriteString("**Why?** You often need to react to external events:\n")
+	sb.WriteString("- A dependency released a new version (GitHub release)\n")
+	sb.WriteString("- CI workflow completed (GitHub Actions)\n")
+	sb.WriteString("- A deploy finished (Cloudflare Pages)\n\n")
+	sb.WriteString("**How it works:**\n")
+	sb.WriteString("1. **Polling** - Periodically check APIs for changes (`sync-gh poll`, `sync-cf poll`)\n")
+	sb.WriteString("2. **Webhooks** - Receive push notifications from services (`sync-gh webhook`, `sync-cf webhook`)\n")
+	sb.WriteString("3. **Tunnels** - Expose local webhook server via smee.io or cloudflared (`sync-gh tunnel`, `sync-cf tunnel`)\n\n")
+	sb.WriteString("**Use cases:**\n")
+	sb.WriteString("- Auto-update dependencies when upstream releases\n")
+	sb.WriteString("- Trigger rebuilds when CI passes\n")
+	sb.WriteString("- Notify on deploy completion\n\n")
 
 	sb.WriteString("## Commands\n\n")
 
 	// Group commands by category
 	categories := map[string][]commandInfo{
 		"Core":               {},
-		"File Operations":    {},
-		"Utilities":          {},
 		"Package Management": {},
-		"Taskfile":           {},
 		"Process":            {},
+		"Sync":               {},
+		"Development":        {},
 		"Other":              {},
 	}
 
 	for _, c := range commands {
 		switch c.Name {
-		case "task", "run", "which", "version":
+		case "task", "process", "gen", "manifest", "run", "version", "update":
 			categories["Core"] = append(categories["Core"], c)
-		case "rm", "mkdir", "cp", "mv", "cat", "touch":
-			categories["File Operations"] = append(categories["File Operations"], c)
-		case "glob", "env", "jq", "extract", "fetch":
-			categories["Utilities"] = append(categories["Utilities"], c)
 		case "pkg", "binary":
 			categories["Package Management"] = append(categories["Package Management"], c)
-		case "fmt", "lint", "archetype", "test":
-			categories["Taskfile"] = append(categories["Taskfile"], c)
-		case "process", "process-gen", "dev":
+		case "service", "release":
 			categories["Process"] = append(categories["Process"], c)
+		case "sync-gh", "sync-cf":
+			categories["Sync"] = append(categories["Sync"], c)
+		case "docs", "os", "completion":
+			categories["Development"] = append(categories["Development"], c)
 		default:
 			categories["Other"] = append(categories["Other"], c)
 		}
 	}
 
+	// Category descriptions for context
+	categoryDescriptions := map[string]string{
+		"Core":               "",
+		"Package Management": "",
+		"Process":            "",
+		"Sync":               "Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Commands](#sync-commands) above.",
+		"Development":        "",
+		"Other":              "",
+	}
+
 	// Write each category
-	categoryOrder := []string{"Core", "File Operations", "Utilities", "Package Management", "Taskfile", "Process", "Other"}
+	categoryOrder := []string{"Core", "Package Management", "Process", "Sync", "Development", "Other"}
 	for _, cat := range categoryOrder {
 		cmds := categories[cat]
 		if len(cmds) == 0 {
@@ -174,6 +219,9 @@ func runDocsReadme(cmd *cobra.Command, args []string) error {
 		}
 
 		sb.WriteString(fmt.Sprintf("### %s\n\n", cat))
+		if desc := categoryDescriptions[cat]; desc != "" {
+			sb.WriteString(fmt.Sprintf("%s\n\n", desc))
+		}
 		sb.WriteString("| Command | Description |\n")
 		sb.WriteString("|---------|-------------|\n")
 
@@ -299,27 +347,5 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("✓ Generated %s\n", outPath)
-	return nil
-}
-
-func runDocsProcess(cmd *cobra.Command, args []string) error {
-	// Use the process-gen generate command logic
-	gen := process.NewGenerator(fmt.Sprintf("%s/process-compose.generated.yaml", docsOutputDir))
-
-	config, err := gen.GenerateFromRegistry()
-	if err != nil {
-		return fmt.Errorf("failed to generate config: %w", err)
-	}
-
-	if len(config.Processes) == 0 {
-		fmt.Println("No packages with process configurations found in registry.")
-		return nil
-	}
-
-	if err := gen.Write(config); err != nil {
-		return err
-	}
-
-	fmt.Printf("✓ Generated %s with %d processes\n", gen.ConfigPath(), len(config.Processes))
 	return nil
 }

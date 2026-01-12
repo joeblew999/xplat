@@ -1,19 +1,82 @@
 # xplat
 
-Cross-platform Taskfile bootstrapper - a single binary that embeds:
-- **Task** (taskfile runner)
-- **Process-Compose** (process orchestration)
-- **Cross-platform utilities** (rm, cp, mv, glob, etc.)
+**One binary to bootstrap and run any plat-* project.**
+
+## Why?
+
+Instead of installing Task, process-compose, and various CLIs separately,
+xplat embeds them all. One binary, works on macOS/Linux/Windows.
+
+## Quick Start
+
+```bash
+# 1. Bootstrap a new project
+xplat manifest bootstrap
+
+# 2. Generate project files from xplat.yaml
+xplat gen all
+
+# 3. Build/test/lint (embedded Task)
+xplat task build
+xplat task test
+
+# 4. Run services (embedded process-compose)
+xplat process
+
+# 5. Install packages from registry
+xplat pkg install <name>
+```
 
 ## Installation
 
 ```bash
 # Build from source
-go build -o xplat ./cmd/xplat/
+go build -o xplat .
 
-# Install to ~/.local/bin
-task build:install
+# Or install to ~/.local/bin
+go build -o ~/.local/bin/xplat .
 ```
+
+## Architecture
+
+xplat solves the problem of consistent tooling across multiple `plat-*` projects on Mac/Linux/Windows.
+
+| Component | Purpose |
+|-----------|--------|
+| **Embedded Task** | Declarative build system. Taskfile.yml defines build/test/lint. |
+| **Embedded process-compose** | Multi-process orchestration. Run app + dependencies together. |
+| **xplat.yaml manifest** | Single source of truth: language, binary, env vars, processes. |
+| **gen commands** | Generate CI, .gitignore, .env from manifest. Change manifest, regenerate. |
+| **pkg registry** | Shared tooling. Install a package = binary + taskfile + process config. |
+| **os utilities** | Cross-platform primitives (rm, cp, glob) that behave identically everywhere. |
+| **sync-gh / sync-cf** | Watch external services (GitHub, Cloudflare) for events. No vendor CLI needed. |
+
+**The pattern:**
+```
+xplat.yaml (manifest) → gen → Taskfile.yml, process-compose.yaml, CI workflow
+                       ↓
+                    xplat task build    (runs tasks)
+                    xplat process       (runs services)
+```
+
+## Sync Commands
+
+The `sync-gh` and `sync-cf` commands monitor external services without requiring vendor CLIs.
+
+**Why?** You often need to react to external events:
+- A dependency released a new version (GitHub release)
+- CI workflow completed (GitHub Actions)
+- A deploy finished (Cloudflare Pages)
+
+**How it works:**
+1. **Polling** - Periodically check APIs for changes (`sync-gh poll`, `sync-cf poll`)
+2. **Webhooks** - Receive push notifications from services (`sync-gh webhook`, `sync-cf webhook`)
+3. **Tunnels** - Expose local webhook server via smee.io or cloudflared (`sync-gh tunnel`, `sync-cf tunnel`)
+
+**Use cases:**
+- Auto-update dependencies when upstream releases
+- Trigger rebuilds when CI passes
+- Notify on deploy completion
 
 ## Commands
 
@@ -21,8 +84,12 @@ task build:install
 
 | Command | Description |
 |---------|-------------|
+| `xplat gen` | Generate project files from YOUR local xplat.yaml |
+| `xplat manifest` | Inspect, validate, and bootstrap xplat.yaml manifests |
+| `xplat process` | Process orchestration (embedded process-compose) |
 | `xplat run` | Run a managed tool |
 | `xplat task` | Run Taskfile tasks (embedded Task runner) |
+| `xplat update` | Update xplat to the latest version |
 | `xplat version` | Print xplat version |
 
 ### Package Management
@@ -30,29 +97,37 @@ task build:install
 | Command | Description |
 |---------|-------------|
 | `xplat binary` | Binary management commands |
-| `xplat pkg` | Package management from Ubuntu Software registry |
+| `xplat pkg` | Install packages from REMOTE registry (binaries, taskfiles, processes) |
 
 ### Process
 
 | Command | Description |
 |---------|-------------|
-| `xplat process` | Process orchestration (embedded process-compose) |
-| `xplat process-gen` | Generate process-compose.yaml from package registry |
+| `xplat release` | Release build orchestration |
+| `xplat service` | Manage xplat as a system service |
 
-### Other
+### Sync
+
+Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Commands](#sync-commands) above.
+
+| Command | Description |
+|---------|-------------|
+| `xplat sync-cf` | Cloudflare sync operations (no wrangler CLI required) |
+| `xplat sync-gh` | GitHub sync operations (no gh CLI required) |
+
+### Development
 
 | Command | Description |
 |---------|-------------|
 | `xplat completion` | Generate the autocompletion script for the specified shell |
 | `xplat docs` | Generate documentation from xplat commands |
-| `xplat help` | Help about any command |
-| `xplat manifest` | Work with xplat.yaml manifests |
 | `xplat os` | Cross-platform OS utilities |
-| `xplat release` | Release build orchestration |
-| `xplat service` | Manage xplat as a system service |
-| `xplat sync-cf` | Cloudflare sync operations (no wrangler CLI required) |
-| `xplat sync-gh` | GitHub sync operations (no gh CLI required) |
-| `xplat update` | Update xplat to the latest version |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
+| `xplat help` | Help about any command |
 
 ## Command Reference
 
@@ -79,9 +154,20 @@ Generate documentation from xplat commands
 
 **Subcommands:**
 - `docs all` - Generate all documentation
-- `docs process` - Generate process-compose.generated.yaml from registry
 - `docs readme` - Generate README.generated.md from xplat commands
 - `docs taskfile` - Generate Taskfile.generated.yml with xplat wrapper tasks
+
+### `xplat gen`
+
+Generate project files from YOUR local xplat.yaml
+
+**Subcommands:**
+- `gen all` - Generate all files from manifest
+- `gen env` - Generate .env.example
+- `gen gitignore` - Generate .gitignore
+- `gen process` - Generate process-compose.yaml from manifest
+- `gen taskfile` - Generate Taskfile.generated.yml with remote includes
+- `gen workflow` - Generate .github/workflows/ci.yml
 
 ### `xplat help`
 
@@ -89,19 +175,13 @@ Help about any command
 
 ### `xplat manifest`
 
-Work with xplat.yaml manifests
+Inspect, validate, and bootstrap xplat.yaml manifests
 
 **Subcommands:**
 - `manifest bootstrap` - Bootstrap a plat-* repository with standard files
 - `manifest check` - Deep validation of manifest against filesystem
 - `manifest discover` - Discover manifests in plat-* directories
 - `manifest discover-github` - Discover manifests from GitHub plat-* repos
-- `manifest gen-all` - Generate all files from manifests
-- `manifest gen-env` - Generate .env.example from manifests
-- `manifest gen-gitignore` - Generate .gitignore from manifest
-- `manifest gen-process` - Generate process-compose.yaml from manifests
-- `manifest gen-taskfile` - Generate Taskfile.yml with remote includes
-- `manifest gen-workflow` - Generate unified GitHub Actions CI workflow
 - `manifest init` - Initialize a new xplat.yaml manifest
 - `manifest install` - Install binary from manifest
 - `manifest install-all` - Install binaries from all discovered manifests
@@ -131,13 +211,16 @@ Cross-platform OS utilities
 
 ### `xplat pkg`
 
-Package management from Ubuntu Software registry
+Install packages from REMOTE registry (binaries, taskfiles, processes)
 
 **Subcommands:**
+- `pkg add-process` - Add a package's process to process-compose.yaml
 - `pkg info` - Show package details
 - `pkg install` - Install a package (binary + taskfile)
 - `pkg list` - List available packages
+- `pkg list-processes` - List packages with process configurations
 - `pkg remove` - Remove a package (binary + taskfile include)
+- `pkg remove-process` - Remove a package's process from process-compose.yaml
 
 ### `xplat process`
 
@@ -145,16 +228,6 @@ Process orchestration (embedded process-compose)
 
 **Subcommands:**
 - `process tools` - Process-compose validation and formatting tools
-
-### `xplat process-gen`
-
-Generate process-compose.yaml from package registry
-
-**Subcommands:**
-- `process-gen add` - Add a package's process to process-compose.yaml
-- `process-gen generate` - Generate process-compose.yaml from all registry packages
-- `process-gen list` - List packages with process configurations
-- `process-gen remove` - Remove a package's process from process-compose.yaml
 
 ### `xplat release`
 

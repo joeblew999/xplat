@@ -12,7 +12,7 @@ import (
 
 	"github.com/joeblew999/xplat/internal/config"
 	"github.com/joeblew999/xplat/internal/osutil"
-	"github.com/joeblew999/xplat/internal/process"
+	"github.com/joeblew999/xplat/internal/processcompose"
 	"github.com/joeblew999/xplat/internal/registry"
 	"github.com/joeblew999/xplat/internal/taskfile"
 )
@@ -20,13 +20,18 @@ import (
 // PkgCmd is the parent command for package operations
 var PkgCmd = &cobra.Command{
 	Use:   "pkg",
-	Short: "Package management from Ubuntu Software registry",
+	Short: "Install packages from REMOTE registry (binaries, taskfiles, processes)",
 	Long: `Install and manage packages from the Ubuntu Software registry.
 
+Use this to install pre-built packages from the REMOTE registry.
 Each package can include:
 - A CLI binary (installed to ~/.local/bin)
 - A remote Taskfile include (added to your Taskfile.yml)
 - A process configuration (added to process-compose.yaml)
+
+Compare with:
+  - 'xplat gen' generates files from YOUR LOCAL xplat.yaml
+  - 'xplat manifest' inspects/validates manifests
 
 The registry is hosted at https://www.ubuntusoftware.net/pkg/registry.json
 
@@ -78,6 +83,33 @@ var pkgRemoveCmd = &cobra.Command{
 	RunE:  runPkgRemove,
 }
 
+var pkgAddProcessCmd = &cobra.Command{
+	Use:   "add-process <package>",
+	Short: "Add a package's process to process-compose.yaml",
+	Long: `Add a single package's process configuration from the registry
+to your local process-compose.yaml file.
+
+Examples:
+  xplat pkg add-process mailerlite
+  xplat pkg add-process mailerlite -f pc.yaml`,
+	Args: cobra.ExactArgs(1),
+	RunE: runPkgAddProcess,
+}
+
+var pkgRemoveProcessCmd = &cobra.Command{
+	Use:   "remove-process <package>",
+	Short: "Remove a package's process from process-compose.yaml",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runPkgRemoveProcess,
+}
+
+var pkgListProcessesCmd = &cobra.Command{
+	Use:   "list-processes",
+	Short: "List packages with process configurations",
+	Long:  `List all packages in the registry that define process configurations.`,
+	RunE:  runPkgListProcesses,
+}
+
 var (
 	pkgTaskfile      string // Path to Taskfile.yml
 	pkgForce         bool   // Force reinstall
@@ -98,10 +130,16 @@ func init() {
 	pkgRemoveCmd.Flags().StringVar(&pkgTaskfile, "taskfile", config.DefaultTaskfile, "Path to Taskfile.yml")
 	pkgRemoveCmd.Flags().StringVar(&pkgProcessConfig, "process-config", config.ProcessComposeGeneratedFile, "Path to process-compose config")
 
+	pkgAddProcessCmd.Flags().StringVarP(&pkgProcessConfig, "config", "f", config.ProcessComposeGeneratedFile, "Path to process-compose config")
+	pkgRemoveProcessCmd.Flags().StringVarP(&pkgProcessConfig, "config", "f", config.ProcessComposeGeneratedFile, "Path to process-compose config")
+
 	PkgCmd.AddCommand(pkgInstallCmd)
 	PkgCmd.AddCommand(pkgInfoCmd)
 	PkgCmd.AddCommand(pkgListCmd)
 	PkgCmd.AddCommand(pkgRemoveCmd)
+	PkgCmd.AddCommand(pkgAddProcessCmd)
+	PkgCmd.AddCommand(pkgRemoveProcessCmd)
+	PkgCmd.AddCommand(pkgListProcessesCmd)
 }
 
 func runPkgInstall(cmd *cobra.Command, args []string) error {
@@ -408,6 +446,110 @@ func installProcess(pkg *registry.Package) error {
 		return fmt.Errorf("package has no process config")
 	}
 
-	gen := process.NewGenerator(pkgProcessConfig)
-	return gen.AddPackage(pkg.Name)
+	gen := processcompose.NewGenerator(pkgProcessConfig)
+	input := &processcompose.ProcessInput{
+		Name:       pkg.Name,
+		Command:    pkg.Process.Command,
+		Disabled:   pkg.Process.Disabled,
+		Namespace:  pkg.Process.Namespace,
+		DependsOn:  pkg.Process.DependsOn,
+		Port:       pkg.Process.Port,
+		HealthPath: pkg.Process.HealthPath,
+	}
+	proc := processcompose.ProcessFromInput(input)
+	return gen.AddProcess(pkg.Name, proc)
+}
+
+// runPkgAddProcess adds a package's process to process-compose.yaml
+func runPkgAddProcess(cmd *cobra.Command, args []string) error {
+	pkgName := args[0]
+
+	client := registry.NewClient()
+	pkg, err := client.GetPackage(pkgName)
+	if err != nil {
+		return fmt.Errorf("failed to get package: %w", err)
+	}
+
+	if !pkg.HasProcess() {
+		return fmt.Errorf("package %s does not define a process", pkgName)
+	}
+
+	gen := processcompose.NewGenerator(pkgProcessConfig)
+	input := &processcompose.ProcessInput{
+		Name:       pkg.Name,
+		Command:    pkg.Process.Command,
+		Disabled:   pkg.Process.Disabled,
+		Namespace:  pkg.Process.Namespace,
+		DependsOn:  pkg.Process.DependsOn,
+		Port:       pkg.Process.Port,
+		HealthPath: pkg.Process.HealthPath,
+	}
+	proc := processcompose.ProcessFromInput(input)
+
+	if err := gen.AddProcess(pkgName, proc); err != nil {
+		return err
+	}
+
+	fmt.Printf("Added %s to %s\n", pkgName, gen.ConfigPath())
+	return nil
+}
+
+// runPkgRemoveProcess removes a package's process from process-compose.yaml
+func runPkgRemoveProcess(cmd *cobra.Command, args []string) error {
+	pkgName := args[0]
+	gen := processcompose.NewGenerator(pkgProcessConfig)
+
+	if err := gen.RemoveProcess(pkgName); err != nil {
+		return err
+	}
+
+	fmt.Printf("Removed %s from %s\n", pkgName, gen.ConfigPath())
+	return nil
+}
+
+// runPkgListProcesses lists packages with process configurations
+func runPkgListProcesses(cmd *cobra.Command, args []string) error {
+	client := registry.NewClient()
+	packages, err := client.ListPackages()
+	if err != nil {
+		return fmt.Errorf("failed to fetch registry: %w", err)
+	}
+
+	var withProcess []registry.Package
+	for _, pkg := range packages {
+		if pkg.HasProcess() {
+			withProcess = append(withProcess, pkg)
+		}
+	}
+
+	if len(withProcess) == 0 {
+		fmt.Println("No packages with process configurations found.")
+		return nil
+	}
+
+	sort.Slice(withProcess, func(i, j int) bool {
+		return withProcess[i].Name < withProcess[j].Name
+	})
+
+	fmt.Printf("Packages with process configurations (%d):\n\n", len(withProcess))
+	for _, pkg := range withProcess {
+		disabled := ""
+		if pkg.Process.Disabled {
+			disabled = " (disabled by default)"
+		}
+		fmt.Printf("  %s%s\n", pkg.Name, disabled)
+		fmt.Printf("    Command: %s\n", pkg.Process.Command)
+		if pkg.Process.Port > 0 {
+			fmt.Printf("    Port: %d\n", pkg.Process.Port)
+		}
+		if pkg.Process.HealthPath != "" {
+			fmt.Printf("    Health: %s\n", pkg.Process.HealthPath)
+		}
+		if pkg.Process.Namespace != "" {
+			fmt.Printf("    Namespace: %s\n", pkg.Process.Namespace)
+		}
+		fmt.Println()
+	}
+
+	return nil
 }

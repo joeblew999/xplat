@@ -20,11 +20,27 @@ var Version = "dev"
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "xplat",
-		Short: "Cross-platform utilities for Taskfile",
-		Long: `xplat provides cross-platform shell utilities that work
-identically on macOS, Linux, and Windows.
+		Short: "One binary to bootstrap and run any plat-* project",
+		Long: `xplat is a single binary that bootstraps and runs plat-* projects.
 
-Designed to fill gaps in Task's built-in shell interpreter.`,
+WHY USE THIS?
+  Instead of installing Task, process-compose, and various CLIs separately,
+  xplat embeds them all. One binary, works on macOS/Linux/Windows.
+
+TYPICAL WORKFLOW:
+  1. xplat manifest bootstrap   # Create standard project files
+  2. xplat gen all              # Generate CI, .gitignore, etc from xplat.yaml
+  3. xplat task build           # Build your project (embedded Task)
+  4. xplat process              # Run services (embedded process-compose)
+  5. xplat pkg install <name>   # Add packages from registry
+
+KEY COMMANDS:
+  task      - Run Taskfile tasks (embedded Task runner)
+  process   - Run services (embedded process-compose)
+  gen       - Generate files from YOUR local xplat.yaml
+  pkg       - Install packages from REMOTE registry
+  manifest  - Inspect/validate/bootstrap manifests
+  os        - Cross-platform utilities (rm, cp, mv, glob, etc.)`,
 	}
 
 	// Pass version to the version command
@@ -53,18 +69,20 @@ Designed to fill gaps in Task's built-in shell interpreter.`,
 
 	// P6 (Process orchestration)
 	rootCmd.AddCommand(cmd.ProcessCmd)
-	rootCmd.AddCommand(cmd.ProcessGenCmd)
 
 	// P7 (Documentation generation)
 	rootCmd.AddCommand(cmd.DocsCmd)
 
-	// P8 (Manifest management)
+	// P8 (Generation from xplat.yaml manifest)
+	rootCmd.AddCommand(cmd.GenCmd)
+
+	// P9 (Manifest management)
 	rootCmd.AddCommand(cmd.ManifestCmd)
 
-	// P9 (Service management)
+	// P10 (Service management)
 	rootCmd.AddCommand(cmd.ServiceCmd)
 
-	// P10 (Sync operations - run as service or CLI)
+	// P11 (Sync operations - run as service or CLI)
 	rootCmd.AddCommand(cmd.SyncGHCmd)
 	rootCmd.AddCommand(cmd.SyncCFCmd)
 

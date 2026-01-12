@@ -5,16 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/joeblew999/xplat/internal/config"
 	"github.com/joeblew999/xplat/internal/manifest"
-	"github.com/joeblew999/xplat/internal/taskfile"
 	"github.com/spf13/cobra"
 )
 
 var (
 	manifestDir          string
-	manifestOutput       string
-	manifestRepoURL      string
 	manifestForce        bool
 	manifestVerbose      bool
 	manifestGitHubOwner  string
@@ -24,8 +20,19 @@ var (
 // ManifestCmd is the parent command for manifest operations.
 var ManifestCmd = &cobra.Command{
 	Use:   "manifest",
-	Short: "Work with xplat.yaml manifests",
-	Long:  `Load, validate, and generate files from xplat.yaml package manifests.`,
+	Short: "Inspect, validate, and bootstrap xplat.yaml manifests",
+	Long: `Inspect, validate, and bootstrap xplat.yaml manifests.
+
+Use this to:
+  - Validate manifest syntax and references
+  - View manifest contents
+  - Discover manifests across repos
+  - Bootstrap new projects with standard files
+  - Install binaries defined in manifests
+
+Compare with:
+  - 'xplat gen' generates files FROM your manifest (workflow, gitignore, etc.)
+  - 'xplat pkg' installs packages from the REMOTE registry`,
 }
 
 var manifestValidateCmd = &cobra.Command{
@@ -61,62 +68,6 @@ Examples:
   xplat manifest discover-github --owner=myorg           # From myorg/plat-*
   xplat manifest discover-github --owner=myorg --prefix=my-  # From myorg/my-*`,
 	RunE: runManifestDiscoverGitHub,
-}
-
-var manifestGenEnvCmd = &cobra.Command{
-	Use:   "gen-env",
-	Short: "Generate .env.example from manifests",
-	RunE:  runManifestGenEnv,
-}
-
-var manifestGenProcessCmd = &cobra.Command{
-	Use:   "gen-process",
-	Short: "Generate process-compose.yaml from manifests",
-	RunE:  runManifestGenProcess,
-}
-
-var manifestGenTaskfileCmd = &cobra.Command{
-	Use:   "gen-taskfile",
-	Short: "Generate Taskfile.yml with remote includes",
-	RunE:  runManifestGenTaskfile,
-}
-
-var manifestGenAllCmd = &cobra.Command{
-	Use:   "gen-all",
-	Short: "Generate all files from manifests",
-	RunE:  runManifestGenAll,
-}
-
-var manifestGenWorkflowCmd = &cobra.Command{
-	Use:   "gen-workflow",
-	Short: "Generate unified GitHub Actions CI workflow",
-	Long: `Generate a minimal CI workflow that delegates to Taskfile.
-
-This creates .github/workflows/ci.yml with:
-- Go setup
-- Task installation
-- Calls to: task build, task test, task lint
-
-The same commands work locally and in CI.`,
-	RunE: runManifestGenWorkflow,
-}
-
-var manifestGenGitignoreCmd = &cobra.Command{
-	Use:   "gen-gitignore [path]",
-	Short: "Generate .gitignore from manifest",
-	Long: `Generate a .gitignore file based on the xplat.yaml manifest.
-
-Includes:
-- Base patterns (Go artifacts, IDE files, OS files)
-- Binary name from manifest (root level only)
-- Custom patterns from manifest gitignore.patterns
-
-Examples:
-  xplat manifest gen-gitignore                    # Generate in current directory
-  xplat manifest gen-gitignore /path/to/project   # Generate for specific project
-  xplat manifest gen-gitignore --force            # Overwrite existing .gitignore`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runManifestGenGitignore,
 }
 
 var manifestInstallCmd = &cobra.Command{
@@ -204,10 +155,8 @@ Examples:
 var manifestBootstrapCheck bool
 
 func init() {
-	// Flags for discover/gen commands
+	// Flags for discover commands
 	ManifestCmd.PersistentFlags().StringVarP(&manifestDir, "dir", "d", ".", "Directory to search for manifests")
-	ManifestCmd.PersistentFlags().StringVarP(&manifestOutput, "output", "o", ".", "Output directory for generated files")
-	ManifestCmd.PersistentFlags().StringVar(&manifestRepoURL, "repo-url", "https://github.com/joeblew999", "Base URL for GitHub repos")
 
 	// GitHub discovery flags
 	manifestDiscoverGitHubCmd.Flags().StringVar(&manifestGitHubOwner, "owner", "joeblew999", "GitHub owner/org")
@@ -217,15 +166,6 @@ func init() {
 	ManifestCmd.AddCommand(manifestShowCmd)
 	ManifestCmd.AddCommand(manifestDiscoverCmd)
 	ManifestCmd.AddCommand(manifestDiscoverGitHubCmd)
-	ManifestCmd.AddCommand(manifestGenEnvCmd)
-	ManifestCmd.AddCommand(manifestGenProcessCmd)
-	ManifestCmd.AddCommand(manifestGenTaskfileCmd)
-	ManifestCmd.AddCommand(manifestGenAllCmd)
-	ManifestCmd.AddCommand(manifestGenWorkflowCmd)
-	ManifestCmd.AddCommand(manifestGenGitignoreCmd)
-
-	// Gen-gitignore flags
-	manifestGenGitignoreCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Overwrite existing .gitignore")
 
 	// Install commands
 	manifestInstallCmd.Flags().BoolVarP(&manifestForce, "force", "f", false, "Force reinstall")
@@ -415,126 +355,6 @@ func runManifestDiscoverGitHub(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
-}
-
-func loadManifestsForGen() ([]*manifest.Manifest, error) {
-	loader := manifest.NewLoader()
-
-	// First try to load from current directory
-	if m, err := loader.LoadDir(manifestDir); err == nil {
-		return []*manifest.Manifest{m}, nil
-	}
-
-	// Otherwise discover from plat-* directories
-	manifests, err := loader.DiscoverPlat(manifestDir)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(manifests) == 0 {
-		return nil, fmt.Errorf("no manifests found")
-	}
-
-	return manifests, nil
-}
-
-func runManifestGenEnv(cmd *cobra.Command, args []string) error {
-	manifests, err := loadManifestsForGen()
-	if err != nil {
-		return err
-	}
-
-	gen := manifest.NewGenerator(manifests)
-	outputPath := filepath.Join(manifestOutput, ".env.example")
-
-	if err := gen.GenerateEnvExample(outputPath); err != nil {
-		return err
-	}
-
-	fmt.Printf("Generated %s\n", outputPath)
-	return nil
-}
-
-func runManifestGenProcess(cmd *cobra.Command, args []string) error {
-	manifests, err := loadManifestsForGen()
-	if err != nil {
-		return err
-	}
-
-	gen := manifest.NewGenerator(manifests)
-	outputPath := filepath.Join(manifestOutput, config.ProcessComposeGeneratedFile)
-
-	if err := gen.GenerateProcessCompose(outputPath); err != nil {
-		return err
-	}
-
-	fmt.Printf("Generated %s\n", outputPath)
-	return nil
-}
-
-func runManifestGenTaskfile(cmd *cobra.Command, args []string) error {
-	manifests, err := loadManifestsForGen()
-	if err != nil {
-		return err
-	}
-
-	gen := manifest.NewGenerator(manifests)
-	outputPath := filepath.Join(manifestOutput, "Taskfile.generated.yml")
-
-	if err := gen.GenerateTaskfile(outputPath, manifestRepoURL); err != nil {
-		return err
-	}
-
-	fmt.Printf("Generated %s\n", outputPath)
-	return nil
-}
-
-func runManifestGenAll(cmd *cobra.Command, args []string) error {
-	manifests, err := loadManifestsForGen()
-	if err != nil {
-		return err
-	}
-
-	gen := manifest.NewGenerator(manifests)
-
-	// Generate .env.example
-	envPath := filepath.Join(manifestOutput, ".env.example")
-	if err := gen.GenerateEnvExample(envPath); err != nil {
-		return fmt.Errorf("failed to generate .env.example: %w", err)
-	}
-	fmt.Printf("Generated %s\n", envPath)
-
-	// Generate process-compose config
-	processPath := filepath.Join(manifestOutput, config.ProcessComposeGeneratedFile)
-	if err := gen.GenerateProcessCompose(processPath); err != nil {
-		return fmt.Errorf("failed to generate process-compose: %w", err)
-	}
-	fmt.Printf("Generated %s\n", processPath)
-
-	// Generate Taskfile
-	taskfilePath := filepath.Join(manifestOutput, "Taskfile.generated.yml")
-	if err := gen.GenerateTaskfile(taskfilePath, manifestRepoURL); err != nil {
-		return fmt.Errorf("failed to generate Taskfile: %w", err)
-	}
-	fmt.Printf("Generated %s\n", taskfilePath)
-
-	return nil
-}
-
-func runManifestGenWorkflow(cmd *cobra.Command, args []string) error {
-	// Use current directory or specified output
-	baseDir := manifestOutput
-	if baseDir == "" {
-		baseDir = "."
-	}
-
-	gen := manifest.NewGenerator(nil) // No manifests needed for workflow generation
-	if err := gen.GenerateWorkflowDir(baseDir); err != nil {
-		return fmt.Errorf("failed to generate workflow: %w", err)
-	}
-
-	fmt.Printf("Generated %s/.github/workflows/ci.yml\n", baseDir)
 	return nil
 }
 
@@ -793,59 +613,5 @@ func runManifestBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\nBootstrap complete for %s\n", path)
-	return nil
-}
-
-func runManifestGenGitignore(cmd *cobra.Command, args []string) error {
-	path := "."
-	if len(args) > 0 {
-		path = args[0]
-	}
-
-	// Load manifest
-	loader := manifest.NewLoader()
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("failed to stat path: %w", err)
-	}
-
-	var m *manifest.Manifest
-	var repoDir string
-	if info.IsDir() {
-		m, err = loader.LoadDir(path)
-		repoDir = path
-	} else {
-		m, err = loader.LoadFile(path)
-		repoDir = filepath.Dir(path)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// Check if .gitignore exists and --force not set
-	gitignorePath := filepath.Join(repoDir, ".gitignore")
-	if _, err := os.Stat(gitignorePath); err == nil && !manifestForce {
-		return fmt.Errorf(".gitignore already exists, use --force to overwrite")
-	}
-
-	// Get binary name
-	binaryName := m.Name
-	if m.Binary != nil && m.Binary.Name != "" {
-		binaryName = m.Binary.Name
-	}
-
-	// Build options
-	opts := taskfile.GitignoreOptions{BinaryName: binaryName}
-	if m.HasGitignore() {
-		opts.Patterns = m.Gitignore.Patterns
-	}
-
-	if err := taskfile.GenerateGitignoreWithOptions(gitignorePath, opts); err != nil {
-		return err
-	}
-
-	fmt.Printf("Generated %s\n", gitignorePath)
 	return nil
 }
