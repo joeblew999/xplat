@@ -317,35 +317,16 @@ jobs:
           cat > /tmp/release-notes.md << 'EOF'
           ## xplat - Cross-platform utilities for Taskfile
 
-          Download the binary for your platform and add it to your PATH.
-
           ### Installation
 
-          **Recommended:** Use self-update (if xplat is already installed):
+          **New install (auto-detects OS/arch):**
           ```bash
-          xplat update
+          curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | sh
           ```
 
-          **Manual install:**
+          **Update existing install:**
           ```bash
-          # macOS (Apple Silicon)
-          curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-darwin-arm64 -o /usr/local/bin/xplat
-          chmod +x /usr/local/bin/xplat
-
-          # macOS (Intel)
-          curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-darwin-amd64 -o /usr/local/bin/xplat
-          chmod +x /usr/local/bin/xplat
-
-          # Linux (x86_64)
-          curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-linux-amd64 -o ~/.local/bin/xplat
-          chmod +x ~/.local/bin/xplat
-
-          # Linux (ARM64)
-          curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-linux-arm64 -o ~/.local/bin/xplat
-          chmod +x ~/.local/bin/xplat
-
-          # Windows (PowerShell)
-          Invoke-WebRequest -Uri https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/xplat-windows-amd64.exe -OutFile $env:LOCALAPPDATA\xplat\xplat.exe
+          xplat update
           ```
 
           ### Commands
