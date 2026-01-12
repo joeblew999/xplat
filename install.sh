@@ -109,6 +109,11 @@ if [ "$OS" != "windows" ]; then
     chmod +x "$INSTALL_DIR/$BINARY$EXT"
 fi
 
+# macOS: Remove quarantine attribute to allow unsigned binary to run
+if [ "$OS" = "darwin" ]; then
+    xattr -d com.apple.quarantine "$INSTALL_DIR/$BINARY$EXT" 2>/dev/null || true
+fi
+
 # Verify installation
 if [ -x "$INSTALL_DIR/$BINARY$EXT" ]; then
     echo

@@ -67,6 +67,22 @@ const (
 	ProcessComposeGeneratedFile = "pc.generated.yaml"
 )
 
+// === Updater configuration ===
+
+const (
+	// XplatRepo is the GitHub repository for xplat releases.
+	XplatRepo = "joeblew999/xplat"
+
+	// XplatReleasesAPI is the GitHub API endpoint for the latest xplat release.
+	XplatReleasesAPI = "https://api.github.com/repos/" + XplatRepo + "/releases/latest"
+
+	// XplatChecksumFile is the name of the checksum file in releases.
+	XplatChecksumFile = "checksums.txt"
+
+	// XplatTagPrefix is the prefix for xplat release tags (e.g., "xplat-v0.3.0").
+	XplatTagPrefix = "xplat-"
+)
+
 // ProcessComposeSearchOrder returns the order to search for process-compose config files.
 // Generated files are prioritized over manual files, and short names over long names.
 func ProcessComposeSearchOrder() []string {

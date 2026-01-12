@@ -186,11 +186,27 @@ func (p *program) checkAndUpdate() {
 		return
 	}
 
+	// Fetch checksums for verification
+	var expectedChecksum string
+	checksumURL, err := updater.FindChecksumURL(release)
+	if err == nil {
+		checksums, err := updater.FetchChecksums(ctx, checksumURL)
+		if err == nil {
+			assetName := updater.GetAssetName()
+			if checksum, ok := checksums[assetName]; ok {
+				expectedChecksum = checksum
+			}
+		}
+	}
+	if expectedChecksum == "" {
+		log.Printf("Auto-update: warning: checksum not available, skipping verification")
+	}
+
 	// Download and replace
 	dlCtx, dlCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer dlCancel()
 
-	if err := updater.DownloadAndReplace(dlCtx, downloadURL, p.xplatBin); err != nil {
+	if err := updater.DownloadAndReplace(dlCtx, downloadURL, p.xplatBin, expectedChecksum); err != nil {
 		log.Printf("Auto-update: failed to update: %v", err)
 		return
 	}

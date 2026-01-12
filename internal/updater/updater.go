@@ -2,7 +2,10 @@
 package updater
 
 import (
+	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,12 +15,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/joeblew999/xplat/internal/config"
 )
 
-const (
-	XplatRepo   = "joeblew999/xplat"
-	ReleasesAPI = "https://api.github.com/repos/" + XplatRepo + "/releases/latest"
-)
+// Use config constants for updater settings.
+// See config.XplatRepo, config.XplatReleasesAPI, config.XplatChecksumFile, config.XplatTagPrefix
 
 // Release represents a GitHub release.
 type Release struct {
@@ -30,7 +33,7 @@ type Release struct {
 
 // GetLatestRelease fetches the latest release info from GitHub.
 func GetLatestRelease(ctx context.Context) (*Release, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", ReleasesAPI, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", config.XplatReleasesAPI, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +68,7 @@ func GetLatestVersion(ctx context.Context) (string, error) {
 
 // ParseVersion extracts the version from a tag name (e.g., "xplat-v0.3.0" -> "v0.3.0").
 func ParseVersion(tagName string) string {
-	return strings.TrimPrefix(tagName, "xplat-")
+	return strings.TrimPrefix(tagName, config.XplatTagPrefix)
 }
 
 // GetAssetName returns the expected asset name for the current platform.
@@ -88,6 +91,50 @@ func FindAssetURL(release *Release) (string, error) {
 	return "", fmt.Errorf("no asset found for %s", assetName)
 }
 
+// FindChecksumURL finds the checksum file URL in a release.
+func FindChecksumURL(release *Release) (string, error) {
+	for _, asset := range release.Assets {
+		if asset.Name == config.XplatChecksumFile {
+			return asset.BrowserDownloadURL, nil
+		}
+	}
+	return "", fmt.Errorf("no %s found in release", config.XplatChecksumFile)
+}
+
+// FetchChecksums downloads and parses the checksums file.
+func FetchChecksums(ctx context.Context, url string) (map[string]string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch checksums: HTTP %d", resp.StatusCode)
+	}
+
+	checksums := make(map[string]string)
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Fields(line)
+		if len(parts) == 2 {
+			checksums[parts[1]] = parts[0] // filename -> checksum
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return checksums, nil
+}
+
 // NeedsUpdate returns true if the current version differs from latest.
 func NeedsUpdate(currentVersion, latestVersion string) bool {
 	// Never update dev builds automatically
@@ -100,7 +147,7 @@ func NeedsUpdate(currentVersion, latestVersion string) bool {
 // DownloadAndReplace downloads a new binary and replaces the current one.
 // On Unix, this uses atomic rename which is safe even if the binary is running.
 // On Windows, we rename the old binary first since you can't delete a running exe.
-func DownloadAndReplace(ctx context.Context, downloadURL, targetPath string) error {
+func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedChecksum string) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 	if err != nil {
 		return err
@@ -129,12 +176,23 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath string) err
 	}
 	tmpPath := tmpFile.Name()
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	// Download and compute checksum simultaneously
+	hasher := sha256.New()
+	writer := io.MultiWriter(tmpFile, hasher)
+
+	if _, err := io.Copy(writer, resp.Body); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
 		return err
 	}
 	tmpFile.Close()
+
+	// Verify checksum
+	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if expectedChecksum != "" && actualChecksum != expectedChecksum {
+		os.Remove(tmpPath)
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
+	}
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -194,6 +252,22 @@ func Update(ctx context.Context, currentVersion string, force bool) (newVersion 
 		return "", err
 	}
 
+	// Fetch checksums (optional, but warn if not available)
+	var expectedChecksum string
+	checksumURL, err := FindChecksumURL(release)
+	if err == nil {
+		checksums, err := FetchChecksums(ctx, checksumURL)
+		if err == nil {
+			assetName := GetAssetName()
+			if checksum, ok := checksums[assetName]; ok {
+				expectedChecksum = checksum
+			}
+		}
+	}
+	if expectedChecksum == "" {
+		fmt.Fprintf(os.Stderr, "Warning: %s not found, skipping verification\n", config.XplatChecksumFile)
+	}
+
 	execPath, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("failed to get executable path: %w", err)
@@ -203,7 +277,7 @@ func Update(ctx context.Context, currentVersion string, force bool) (newVersion 
 		return "", fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
-	if err := DownloadAndReplace(ctx, downloadURL, execPath); err != nil {
+	if err := DownloadAndReplace(ctx, downloadURL, execPath, expectedChecksum); err != nil {
 		return "", err
 	}
 
