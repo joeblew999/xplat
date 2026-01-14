@@ -44,22 +44,42 @@ Examples:
 // MCPServeCmd starts the MCP server
 var MCPServeCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start MCP server (communicates via stdio)",
+	Short: "Start MCP server (stdio or HTTP transport)",
 	Long: `Starts an MCP server that exposes all Taskfile tasks as MCP tools.
 
-The server communicates via JSON-RPC over stdin/stdout (stdio transport).
-Configure your AI IDE to run this command and it will discover all your tasks.
+TRANSPORTS:
+  stdio (default)  - JSON-RPC over stdin/stdout, spawned by AI client
+  http             - HTTP server on specified port, runs as a service
 
-Example config for Claude Desktop/Cursor:
-  {
-    "mcpServers": {
-      "xplat": {
-        "command": "xplat",
-        "args": ["mcp", "serve"],
-        "cwd": "/path/to/your/project"
+STDIO MODE (default):
+  xplat mcp serve
+
+  Config for Claude Desktop/Cursor/Crush:
+    {
+      "mcpServers": {
+        "xplat": {
+          "type": "stdio",
+          "command": "xplat",
+          "args": ["mcp", "serve"],
+          "cwd": "/path/to/your/project"
+        }
       }
     }
-  }`,
+
+HTTP MODE:
+  xplat mcp serve --http :8080
+
+  Config for Crush (http transport):
+    {
+      "mcp": {
+        "xplat": {
+          "type": "http",
+          "url": "http://localhost:8080/mcp"
+        }
+      }
+    }
+
+  Can run in process-compose as a persistent service.`,
 	RunE: runMCPServe,
 }
 
@@ -80,6 +100,8 @@ var MCPConfigCmd = &cobra.Command{
 var (
 	mcpDir      string
 	mcpTaskfile string
+	mcpHTTP     string
+	mcpSSE      string
 )
 
 func init() {
@@ -89,6 +111,8 @@ func init() {
 
 	MCPServeCmd.Flags().StringVarP(&mcpDir, "dir", "d", "", "Working directory")
 	MCPServeCmd.Flags().StringVarP(&mcpTaskfile, "taskfile", "t", "", "Taskfile to use")
+	MCPServeCmd.Flags().StringVar(&mcpHTTP, "http", "", "HTTP address to listen on (e.g., :8080)")
+	MCPServeCmd.Flags().StringVar(&mcpSSE, "sse", "", "SSE address to listen on (e.g., :8081)")
 
 	MCPListCmd.Flags().StringVarP(&mcpDir, "dir", "d", "", "Working directory")
 	MCPListCmd.Flags().StringVarP(&mcpTaskfile, "taskfile", "t", "", "Taskfile to use")
@@ -313,8 +337,24 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 	// Register xplat documentation as MCP resources
 	registerXplatResources(mcpServer)
 
-	// Start the stdio server
-	return server.ServeStdio(mcpServer)
+	// Choose transport based on flags
+	switch {
+	case mcpHTTP != "":
+		// HTTP transport - runs as a persistent service
+		fmt.Printf("Starting MCP HTTP server on %s\n", mcpHTTP)
+		fmt.Printf("Endpoint: http://%s/mcp\n", mcpHTTP)
+		return server.NewStreamableHTTPServer(mcpServer).Start(mcpHTTP)
+
+	case mcpSSE != "":
+		// SSE transport - Server-Sent Events
+		fmt.Printf("Starting MCP SSE server on %s\n", mcpSSE)
+		fmt.Printf("Endpoint: http://%s/sse\n", mcpSSE)
+		return server.NewSSEServer(mcpServer).Start(mcpSSE)
+
+	default:
+		// stdio transport (default) - spawned by AI client
+		return server.ServeStdio(mcpServer)
+	}
 }
 
 // registerXplatResources adds xplat documentation as MCP resources
