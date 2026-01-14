@@ -1,0 +1,38 @@
+# xplat Package Registry Index
+#
+# This index maps package names to their source repositories.
+# Each repository must have an xplat.yaml at the root that describes
+# the package (binary, process config, taskfile, etc.).
+#
+# Usage:
+#   xplat pkg install <name>           # Install by name from this index
+#   xplat pkg install github.com/...   # Install directly from repo URL
+#
+# To add a package:
+#   1. Add an entry below mapping name -> repo
+#   2. Ensure the repo has an xplat.yaml at root
+
+packages:
+  # joeblew999 plat-* projects
+  plat-nats:
+    repo: github.com/joeblew999/plat-nats
+    description: NATS server and CLI tools
+
+  plat-ibkr:
+    repo: github.com/joeblew999/plat-ibkr
+    description: IBKR trading platform using rust-ibapi
+
+  plat-garage:
+    repo: github.com/joeblew999/plat-garage
+    description: Garage storage platform
+
+  # litesql ecosystem
+  litesql-ha:
+    repo: github.com/litesql/ha
+    description: Highly available SQLite cluster with embedded NATS
+
+  pocketbase-ha:
+    repo: github.com/litesql/pocketbase-ha
+    description: HA PocketBase cluster powered by go-ha driver
+
+  # Add more packages here...

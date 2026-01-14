@@ -1,0 +1,135 @@
+# MCP (Model Context Protocol) Server Tools
+#
+# Provides MCP servers that expose xplat/taskfile functionality to AI IDEs
+#
+# Include in your project:
+#   includes:
+#     mcp:
+#       taskfile: https://raw.githubusercontent.com/joeblew999/xplat/main/taskfiles/Taskfile.mcp.yml
+#
+# Or use directly:
+#   xplat task -t https://raw.githubusercontent.com/joeblew999/xplat/main/taskfiles/Taskfile.mcp.yml taskfile:setup
+
+version: '3'
+
+vars:
+  MCP_BIN_DIR: '{{.PLAT_BIN | default ".bin"}}'
+
+tasks:
+  # ===========================================================================
+  # Taskfile MCP Server
+  # ===========================================================================
+
+  taskfile:setup:
+    desc: Install mcp-taskfile-server (exposes Taskfile tasks as MCP tools)
+    cmds:
+      - |
+        echo "Installing mcp-taskfile-server..."
+        go install github.com/rsclarke/mcp-taskfile-server@latest
+        echo ""
+        echo "OK: Installed mcp-taskfile-server"
+        echo ""
+        echo "Binary location:"
+        which mcp-taskfile-server || echo "  $(go env GOPATH)/bin/mcp-taskfile-server"
+
+  taskfile:config:
+    desc: Show MCP config for Taskfile server
+    cmds:
+      - |
+        echo "========================================"
+        echo "Taskfile MCP Server Configuration"
+        echo "========================================"
+        echo ""
+        echo "Add to your AI IDE settings (Claude Desktop, Cursor, etc.):"
+        echo ""
+        cat << EOF
+        {
+          "mcpServers": {
+            "taskfile": {
+              "command": "mcp-taskfile-server",
+              "cwd": "{{.ROOT_DIR}}"
+            }
+          }
+        }
+        EOF
+        echo ""
+        echo "This exposes ALL your Taskfile tasks as MCP tools!"
+        echo ""
+        echo "Source: https://github.com/rsclarke/mcp-taskfile-server"
+        echo ""
+
+  taskfile:test:
+    desc: Test mcp-taskfile-server (list available tools)
+    cmds:
+      - |
+        echo "Testing mcp-taskfile-server..."
+        echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | mcp-taskfile-server 2>/dev/null | jq -r '.result.tools[].name' | sort
+        echo ""
+        echo "OK: Above are all exposed MCP tools"
+
+  # ===========================================================================
+  # RustFS MCP Server (S3-compatible storage)
+  # ===========================================================================
+
+  rustfs:docker:
+    desc: Pull RustFS MCP Docker image
+    cmds:
+      - |
+        docker pull rustfs/rustfs-mcp:latest
+        echo "OK: Pulled rustfs/rustfs-mcp:latest"
+
+  rustfs:config:
+    desc: Show MCP config for RustFS server
+    cmds:
+      - |
+        echo "========================================"
+        echo "RustFS MCP Server Configuration"
+        echo "========================================"
+        echo ""
+        echo "Add to your AI IDE settings (Claude Desktop, Cursor, etc.):"
+        echo ""
+        cat << 'EOF'
+        {
+          "mcpServers": {
+            "rustfs-mcp": {
+              "command": "docker",
+              "args": [
+                "run", "--rm", "-i",
+                "-e", "AWS_ACCESS_KEY_ID",
+                "-e", "AWS_SECRET_ACCESS_KEY",
+                "-e", "AWS_REGION",
+                "-e", "AWS_ENDPOINT_URL",
+                "rustfs/rustfs-mcp:latest"
+              ],
+              "env": {
+                "AWS_ACCESS_KEY_ID": "your-access-key",
+                "AWS_SECRET_ACCESS_KEY": "your-secret-key",
+                "AWS_REGION": "us-east-1",
+                "AWS_ENDPOINT_URL": "http://localhost:9000"
+              }
+            }
+          }
+        }
+        EOF
+        echo ""
+        echo "Available tools: list_buckets, list_objects, upload_file, get_object, create_bucket, delete_bucket"
+        echo ""
+        echo "Source: https://github.com/rustfs/rustfs"
+        echo "Docs:   https://docs.rustfs.com/developer/mcp.html"
+        echo ""
+
+  # ===========================================================================
+  # All MCP Servers
+  # ===========================================================================
+
+  setup:
+    desc: Install all MCP servers
+    cmds:
+      - task: taskfile:setup
+      - task: rustfs:docker
+
+  config:
+    desc: Show all MCP configurations
+    cmds:
+      - task: taskfile:config
+      - task: rustfs:config

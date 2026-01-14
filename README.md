@@ -7,6 +7,34 @@
 Instead of installing Task, process-compose, and various CLIs separately,
 xplat embeds them all. One binary, works on macOS/Linux/Windows.
 
+## ✨ Composability - The Key Feature
+
+**Reuse tasks and processes across projects.**
+
+xplat enables composability: install packages from other xplat projects
+and immediately use their tasks and processes in your project.
+
+```bash
+# Install a package
+xplat pkg install plat-nats --with-process
+
+# Generate includes from installed packages
+xplat gen taskfile    # Creates Taskfile.generated.yml with remote includes
+xplat gen process     # Creates pc.generated.yaml with processes
+
+# Now use tasks from the installed package!
+task nats:run         # Run tasks defined in plat-nats
+process-compose up    # Run processes including plat-nats
+```
+
+**How it works:**
+1. `xplat pkg install` downloads binaries and records package info in `xplat-lock.yaml`
+2. `xplat gen taskfile` reads the lockfile and generates remote Taskfile includes
+3. `xplat gen process` reads the lockfile and generates process-compose definitions
+
+This lets you build a platform from composable pieces - each `plat-*` project
+can expose tasks and processes that other projects can reuse.
+
 ## Quick Start
 
 ```bash
@@ -165,8 +193,8 @@ Generate project files from YOUR local xplat.yaml
 - `gen all` - Generate all files from manifest
 - `gen env` - Generate .env.example
 - `gen gitignore` - Generate .gitignore
-- `gen process` - Generate process-compose.yaml from manifest
-- `gen taskfile` - Generate Taskfile.generated.yml with remote includes
+- `gen process` - Generate pc.generated.yaml with processes from installed packages
+- `gen taskfile` - Generate Taskfile.generated.yml with remote includes from installed packages
 - `gen workflow` - Generate .github/workflows/ci.yml
 
 ### `xplat help`

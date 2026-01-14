@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/lockfile"
 	"github.com/joeblew999/xplat/internal/manifest"
 	"github.com/joeblew999/xplat/internal/taskfile"
 )
@@ -77,14 +78,42 @@ var genEnvCmd = &cobra.Command{
 
 var genTaskfileCmd = &cobra.Command{
 	Use:   "taskfile",
-	Short: "Generate Taskfile.generated.yml with remote includes",
-	RunE:  runGenTaskfile,
+	Short: "Generate Taskfile.generated.yml with remote includes from installed packages",
+	Long: `Generate a Taskfile with remote includes from installed xplat packages.
+
+This enables COMPOSABILITY - reusing tasks from other xplat packages.
+
+The generated file includes remote taskfiles from packages you've installed
+via 'xplat pkg install'. Each installed package that exposes a taskfile
+becomes an include in your project.
+
+Example workflow:
+  xplat pkg install plat-nats     # Install a package
+  xplat gen taskfile              # Generate includes
+  task nats:run                   # Use tasks from the installed package
+
+Requires packages to be installed first with 'xplat pkg install'.`,
+	RunE: runGenTaskfile,
 }
 
 var genProcessCmd = &cobra.Command{
 	Use:   "process",
-	Short: "Generate process-compose.yaml from manifest",
-	RunE:  runGenProcess,
+	Short: "Generate pc.generated.yaml with processes from installed packages",
+	Long: `Generate a process-compose file with processes from installed xplat packages.
+
+This enables COMPOSABILITY - running processes from other xplat packages.
+
+The generated file includes processes from packages you've installed
+via 'xplat pkg install'. Each installed package that exposes a process
+configuration becomes a process in your compose file.
+
+Example workflow:
+  xplat pkg install plat-nats     # Install a package
+  xplat gen process               # Generate process definitions
+  process-compose up              # Run all processes including installed packages
+
+Requires packages to be installed first with 'xplat pkg install'.`,
+	RunE: runGenProcess,
 }
 
 var genAllCmd = &cobra.Command{
@@ -178,36 +207,50 @@ func runGenEnv(cmd *cobra.Command, args []string) error {
 }
 
 func runGenTaskfile(cmd *cobra.Command, args []string) error {
-	m, err := loadManifestForGen()
+	// Load lockfile to get installed packages
+	lf, err := lockfile.Load(genDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load lockfile: %w", err)
 	}
 
-	gen := manifest.NewGenerator([]*manifest.Manifest{m})
+	// Get packages with taskfile configuration
+	pkgs := lf.PackagesWithTaskfile()
+	if len(pkgs) == 0 {
+		fmt.Println("No installed packages with taskfile configuration found.")
+		fmt.Println("Install packages first with: xplat pkg install <package>")
+		return nil
+	}
+
 	outputPath := filepath.Join(genOutput, "Taskfile.generated.yml")
-
-	if err := gen.GenerateTaskfile(outputPath, genRepoURL); err != nil {
+	if err := generateTaskfileFromLockfile(pkgs, outputPath, genRepoURL); err != nil {
 		return err
 	}
 
-	fmt.Printf("Generated %s\n", outputPath)
+	fmt.Printf("Generated %s with %d package include(s)\n", outputPath, len(pkgs))
 	return nil
 }
 
 func runGenProcess(cmd *cobra.Command, args []string) error {
-	m, err := loadManifestForGen()
+	// Load lockfile to get installed packages
+	lf, err := lockfile.Load(genDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load lockfile: %w", err)
 	}
 
-	gen := manifest.NewGenerator([]*manifest.Manifest{m})
+	// Get packages with process configuration
+	pkgs := lf.PackagesWithProcess()
+	if len(pkgs) == 0 {
+		fmt.Println("No installed packages with process configuration found.")
+		fmt.Println("Install packages first with: xplat pkg install <package>")
+		return nil
+	}
+
 	outputPath := filepath.Join(genOutput, config.ProcessComposeGeneratedFile)
-
-	if err := gen.GenerateProcessCompose(outputPath); err != nil {
+	if err := generateProcessFromLockfile(pkgs, outputPath); err != nil {
 		return err
 	}
 
-	fmt.Printf("Generated %s\n", outputPath)
+	fmt.Printf("Generated %s with %d process(es)\n", outputPath, len(pkgs))
 	return nil
 }
 
@@ -248,19 +291,102 @@ func runGenAll(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Generated %s\n", envPath)
 
-	// Generate process-compose
-	processPath := filepath.Join(baseDir, config.ProcessComposeGeneratedFile)
-	if err := gen.GenerateProcessCompose(processPath); err != nil {
-		return fmt.Errorf("failed to generate process-compose: %w", err)
+	// Load lockfile for taskfile and process generation
+	lf, err := lockfile.Load(genDir)
+	if err != nil {
+		return fmt.Errorf("failed to load lockfile: %w", err)
 	}
-	fmt.Printf("Generated %s\n", processPath)
 
-	// Generate Taskfile
-	taskfilePath := filepath.Join(baseDir, "Taskfile.generated.yml")
-	if err := gen.GenerateTaskfile(taskfilePath, genRepoURL); err != nil {
-		return fmt.Errorf("failed to generate Taskfile: %w", err)
+	// Generate process-compose from lockfile (if packages have process config)
+	processPkgs := lf.PackagesWithProcess()
+	if len(processPkgs) > 0 {
+		processPath := filepath.Join(baseDir, config.ProcessComposeGeneratedFile)
+		if err := generateProcessFromLockfile(processPkgs, processPath); err != nil {
+			return fmt.Errorf("failed to generate process-compose: %w", err)
+		}
+		fmt.Printf("Generated %s with %d process(es)\n", processPath, len(processPkgs))
 	}
-	fmt.Printf("Generated %s\n", taskfilePath)
+
+	// Generate Taskfile from lockfile (if packages have taskfile config)
+	taskfilePkgs := lf.PackagesWithTaskfile()
+	if len(taskfilePkgs) > 0 {
+		taskfilePath := filepath.Join(baseDir, "Taskfile.generated.yml")
+		if err := generateTaskfileFromLockfile(taskfilePkgs, taskfilePath, genRepoURL); err != nil {
+			return fmt.Errorf("failed to generate Taskfile: %w", err)
+		}
+		fmt.Printf("Generated %s with %d package include(s)\n", taskfilePath, len(taskfilePkgs))
+	}
 
 	return nil
+}
+
+// generateTaskfileFromLockfile creates a Taskfile.generated.yml with remote includes
+// from installed packages tracked in the lockfile.
+func generateTaskfileFromLockfile(pkgs []lockfile.Package, outputPath, repoBaseURL string) error {
+	var buf []byte
+	buf = append(buf, []byte(`# Generated by: xplat gen taskfile
+# Regenerate with: xplat gen taskfile
+#
+# This file includes remote taskfiles from installed xplat packages.
+# Install packages with: xplat pkg install <package>
+
+version: "3"
+
+includes:
+`)...)
+
+	for _, pkg := range pkgs {
+		if pkg.Taskfile == nil {
+			continue
+		}
+		ns := pkg.Taskfile.Namespace
+		if ns == "" {
+			ns = pkg.Name
+		}
+		url := pkg.Taskfile.URL
+		if url == "" {
+			// Build URL from source if not provided
+			url = fmt.Sprintf("%s/%s.git//%s", repoBaseURL, pkg.Name, pkg.Taskfile.Path)
+		}
+		buf = append(buf, []byte(fmt.Sprintf("  %s:\n    taskfile: %s\n", ns, url))...)
+	}
+
+	buf = append(buf, []byte(`
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+`)...)
+
+	return os.WriteFile(outputPath, buf, 0644)
+}
+
+// generateProcessFromLockfile creates a pc.generated.yaml with processes
+// from installed packages tracked in the lockfile.
+func generateProcessFromLockfile(pkgs []lockfile.Package, outputPath string) error {
+	var buf []byte
+	buf = append(buf, []byte(`# Generated by: xplat gen process
+# Regenerate with: xplat gen process
+#
+# This file includes processes from installed xplat packages.
+# Install packages with: xplat pkg install <package>
+
+version: "0.5"
+
+processes:
+`)...)
+
+	for _, pkg := range pkgs {
+		if pkg.Process == nil {
+			continue
+		}
+		procName := pkg.Process.Name
+		if procName == "" {
+			procName = pkg.Name
+		}
+		buf = append(buf, []byte(fmt.Sprintf("  %s:\n    command: %s\n    availability:\n      restart: on_failure\n", procName, pkg.Process.Command))...)
+	}
+
+	return os.WriteFile(outputPath, buf, 0644)
 }

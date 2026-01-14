@@ -86,6 +86,9 @@ KEY COMMANDS:
 	rootCmd.AddCommand(cmd.SyncGHCmd)
 	rootCmd.AddCommand(cmd.SyncCFCmd)
 
+	// P12 (MCP - Model Context Protocol server for AI IDEs)
+	rootCmd.AddCommand(cmd.MCPCmd)
+
 	// Note: Web UI is available via `xplat dev ui` (starts process-compose + UI together)
 
 	if err := rootCmd.Execute(); err != nil {

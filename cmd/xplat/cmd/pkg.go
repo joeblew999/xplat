@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/lockfile"
 	"github.com/joeblew999/xplat/internal/osutil"
 	"github.com/joeblew999/xplat/internal/processcompose"
 	"github.com/joeblew999/xplat/internal/registry"
@@ -225,6 +226,13 @@ func runPkgInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("    # or: xplat process-gen add %s\n", pkg.Name)
 	}
 
+	// Write to lockfile if anything was installed
+	if installedBinary || installedTaskfile || installedProcess {
+		if err := updateLockfile(pkg, installedBinary, installedTaskfile, installedProcess); err != nil {
+			fmt.Printf("Warning: failed to update lockfile: %v\n", err)
+		}
+	}
+
 	return nil
 }
 
@@ -285,7 +293,7 @@ func runPkgList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(packages) == 0 {
-		fmt.Println("No packages found in registry.")
+		fmt.Println("No packages found in index.")
 		return nil
 	}
 
@@ -295,27 +303,17 @@ func runPkgList(cmd *cobra.Command, args []string) error {
 	})
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tVERSION\tBINARY\tTASKFILE\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t-------\t------\t--------\t-----------")
+	fmt.Fprintln(w, "NAME\tREPO\tDESCRIPTION")
+	fmt.Fprintln(w, "----\t----\t-----------")
 
 	for _, pkg := range packages {
-		hasBin := "-"
-		if pkg.HasBinary {
-			hasBin = "✓"
-		}
-		hasTask := "-"
-		if pkg.TaskfilePath != "" {
-			hasTask = "✓"
-		}
-
 		// Truncate description
 		desc := pkg.Description
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			pkg.Name, pkg.Version, hasBin, hasTask, desc)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", pkg.Name, pkg.Repo, desc)
 	}
 
 	return w.Flush()
@@ -510,15 +508,22 @@ func runPkgRemoveProcess(cmd *cobra.Command, args []string) error {
 // runPkgListProcesses lists packages with process configurations
 func runPkgListProcesses(cmd *cobra.Command, args []string) error {
 	client := registry.NewClient()
-	packages, err := client.ListPackages()
+	entries, err := client.ListPackages()
 	if err != nil {
-		return fmt.Errorf("failed to fetch registry: %w", err)
+		return fmt.Errorf("failed to fetch index: %w", err)
 	}
 
+	fmt.Println("Fetching package details to find process configurations...")
+
 	var withProcess []registry.Package
-	for _, pkg := range packages {
+	for _, entry := range entries {
+		pkg, err := client.GetPackage(entry.Name)
+		if err != nil {
+			fmt.Printf("  Warning: could not fetch %s: %v\n", entry.Name, err)
+			continue
+		}
 		if pkg.HasProcess() {
-			withProcess = append(withProcess, pkg)
+			withProcess = append(withProcess, *pkg)
 		}
 	}
 
@@ -531,7 +536,7 @@ func runPkgListProcesses(cmd *cobra.Command, args []string) error {
 		return withProcess[i].Name < withProcess[j].Name
 	})
 
-	fmt.Printf("Packages with process configurations (%d):\n\n", len(withProcess))
+	fmt.Printf("\nPackages with process configurations (%d):\n\n", len(withProcess))
 	for _, pkg := range withProcess {
 		disabled := ""
 		if pkg.Process.Disabled {
@@ -552,4 +557,44 @@ func runPkgListProcesses(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// updateLockfile adds the installed package to xplat-lock.yaml
+func updateLockfile(pkg *registry.Package, hasBinary, hasTaskfile, hasProcess bool) error {
+	lf, err := lockfile.Load(".")
+	if err != nil {
+		return err
+	}
+
+	lfPkg := lockfile.Package{
+		Name:    pkg.Name,
+		Version: pkg.Version,
+		Source:  fmt.Sprintf("registry:%s", pkg.Name),
+	}
+
+	if hasBinary {
+		installDir, _ := osutil.UserBinDir()
+		lfPkg.Binary = &lockfile.Binary{
+			Name: pkg.BinaryName,
+			Path: filepath.Join(installDir, pkg.BinaryName+osutil.BinaryExtension()),
+		}
+	}
+
+	if hasTaskfile {
+		lfPkg.Taskfile = &lockfile.Taskfile{
+			Path:      pkg.TaskfilePath,
+			Namespace: pkg.Name,
+			URL:       pkg.TaskfileURL(),
+		}
+	}
+
+	if hasProcess && pkg.HasProcess() {
+		lfPkg.Process = &lockfile.Process{
+			Name:    pkg.Name,
+			Command: pkg.Process.Command,
+		}
+	}
+
+	lf.AddPackage(lfPkg)
+	return lf.Save(".")
 }
