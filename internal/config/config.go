@@ -44,6 +44,13 @@ const (
 
 	// DefaultCaddyAdminPort is the default port for Caddy admin API.
 	DefaultCaddyAdminPort = 2019
+
+	// DefaultMCPPort is the default port for the MCP HTTP server.
+	// Used by `xplat mcp serve --http` when no port is specified.
+	DefaultMCPPort = "8765"
+
+	// DefaultMCPPortInt is DefaultMCPPort as an int for APIs that need it.
+	DefaultMCPPortInt = 8765
 )
 
 // === Default permissions ===

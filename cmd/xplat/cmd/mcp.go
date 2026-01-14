@@ -26,6 +26,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// MCP environment variable for port override
+const envMCPPort = "XPLAT_MCP_PORT"
+
 // MCPCmd is the parent command for MCP operations
 var MCPCmd = &cobra.Command{
 	Use:   "mcp",
@@ -67,14 +70,17 @@ STDIO MODE (default):
     }
 
 HTTP MODE:
-  xplat mcp serve --http :8080
+  xplat mcp serve --http           # Uses default port :8765
+  xplat mcp serve --http :9000     # Custom port
+
+  Environment: XPLAT_MCP_PORT=9000
 
   Config for Crush (http transport):
     {
       "mcp": {
         "xplat": {
           "type": "http",
-          "url": "http://localhost:8080/mcp"
+          "url": "http://localhost:8765/mcp"
         }
       }
     }
@@ -111,8 +117,8 @@ func init() {
 
 	MCPServeCmd.Flags().StringVarP(&mcpDir, "dir", "d", "", "Working directory")
 	MCPServeCmd.Flags().StringVarP(&mcpTaskfile, "taskfile", "t", "", "Taskfile to use")
-	MCPServeCmd.Flags().StringVar(&mcpHTTP, "http", "", "HTTP address to listen on (e.g., :8080)")
-	MCPServeCmd.Flags().StringVar(&mcpSSE, "sse", "", "SSE address to listen on (e.g., :8081)")
+	MCPServeCmd.Flags().StringVar(&mcpHTTP, "http", "", "HTTP address (default :"+config.DefaultMCPPort+", or $XPLAT_MCP_PORT)")
+	MCPServeCmd.Flags().StringVar(&mcpSSE, "sse", "", "SSE address (default :"+config.DefaultMCPPort+", or $XPLAT_MCP_PORT)")
 
 	MCPListCmd.Flags().StringVarP(&mcpDir, "dir", "d", "", "Working directory")
 	MCPListCmd.Flags().StringVarP(&mcpTaskfile, "taskfile", "t", "", "Taskfile to use")
@@ -314,6 +320,26 @@ func (s *taskfileServer) getTasks() []string {
 	return tasks
 }
 
+// getMCPHTTPAddress returns the HTTP address for MCP server.
+// Priority: flag value > env var > default port
+func getMCPHTTPAddress(flagValue string) string {
+	// If flag has an explicit value, use it
+	if flagValue != "" && flagValue != "true" {
+		return flagValue
+	}
+
+	// Check environment variable
+	if envPort := os.Getenv(envMCPPort); envPort != "" {
+		if !strings.HasPrefix(envPort, ":") {
+			return ":" + envPort
+		}
+		return envPort
+	}
+
+	// Use default port from config
+	return ":" + config.DefaultMCPPort
+}
+
 func runMCPServe(cmd *cobra.Command, args []string) error {
 	// Create taskfile server
 	tfServer, err := newTaskfileServer(mcpDir, mcpTaskfile)
@@ -337,19 +363,24 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 	// Register xplat documentation as MCP resources
 	registerXplatResources(mcpServer)
 
+	// Check if --http flag was provided (with or without value)
+	httpFlagProvided := cmd.Flags().Changed("http")
+
 	// Choose transport based on flags
 	switch {
-	case mcpHTTP != "":
+	case httpFlagProvided || mcpHTTP != "":
 		// HTTP transport - runs as a persistent service
-		fmt.Printf("Starting MCP HTTP server on %s\n", mcpHTTP)
-		fmt.Printf("Endpoint: http://%s/mcp\n", mcpHTTP)
-		return server.NewStreamableHTTPServer(mcpServer).Start(mcpHTTP)
+		addr := getMCPHTTPAddress(mcpHTTP)
+		fmt.Printf("Starting MCP HTTP server on %s\n", addr)
+		fmt.Printf("Endpoint: http://localhost%s/mcp\n", addr)
+		return server.NewStreamableHTTPServer(mcpServer).Start(addr)
 
 	case mcpSSE != "":
 		// SSE transport - Server-Sent Events
-		fmt.Printf("Starting MCP SSE server on %s\n", mcpSSE)
-		fmt.Printf("Endpoint: http://%s/sse\n", mcpSSE)
-		return server.NewSSEServer(mcpServer).Start(mcpSSE)
+		addr := getMCPHTTPAddress(mcpSSE)
+		fmt.Printf("Starting MCP SSE server on %s\n", addr)
+		fmt.Printf("Endpoint: http://localhost%s/sse\n", addr)
+		return server.NewSSEServer(mcpServer).Start(addr)
 
 	default:
 		// stdio transport (default) - spawned by AI client
