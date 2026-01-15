@@ -23,13 +23,18 @@ Works identically on macOS, Linux, and Windows.
 Designed to run as part of xplat service for continuous syncing.
 
 Commands:
-  auth       Set up R2 credentials interactively
-  tunnel     Start cloudflared quick tunnel
-  poll       Poll CF audit logs continuously
-  webhook    Start CF webhook server
-  check      Check if cloudflared is installed
-  install    Install cloudflared
-  worker     Deploy sync-cf worker to Cloudflare edge
+  auth           Set up R2 credentials interactively
+  tunnel         Start cloudflared tunnel (quick or named)
+  tunnel-login   Authenticate cloudflared with Cloudflare
+  tunnel-list    List existing named tunnels
+  tunnel-create  Create a new named tunnel
+  tunnel-delete  Delete a named tunnel
+  tunnel-route   Add DNS route for a tunnel
+  poll           Poll CF audit logs continuously
+  webhook        Start CF webhook server
+  check          Check if cloudflared is installed
+  install        Install cloudflared
+  worker         Deploy sync-cf worker to Cloudflare edge
 
 Environment:
   CF_ACCOUNT_ID       Cloudflare account ID
@@ -37,22 +42,53 @@ Environment:
   R2_ACCESS_KEY       R2 API access key
   R2_SECRET_KEY       R2 API secret key
 
+Quick Tunnel (random URL, no account needed):
+  xplat sync-cf tunnel 8080
+
+Named Tunnel (stable URL, requires CF account + domain):
+  1. xplat sync-cf tunnel-login           # One-time: authenticate
+  2. xplat sync-cf tunnel-create webhook  # One-time: create tunnel
+  3. xplat sync-cf tunnel-route webhook webhook.yourdomain.com
+  4. xplat sync-cf tunnel --name=webhook  # Run with stable URL
+
 Examples:
   xplat sync-cf auth
   xplat sync-cf check
   xplat sync-cf tunnel 8080
+  xplat sync-cf tunnel --name=webhook --port=8080
   xplat sync-cf poll --interval=1m
   xplat sync-cf webhook --port=9090
   xplat sync-cf worker deploy`,
 }
 
+var syncCFTunnelName string
+var syncCFTunnelPort string
+
 var syncCFTunnelCmd = &cobra.Command{
 	Use:   "tunnel [port]",
-	Short: "Start cloudflared quick tunnel",
-	Args:  cobra.MaximumNArgs(1),
+	Short: "Start cloudflared tunnel (quick or named)",
+	Long: `Start a cloudflared tunnel to expose a local port to the internet.
+
+Quick Tunnel (default):
+  Random URL like https://xxx.trycloudflare.com
+  No account needed, URL changes on each restart
+
+Named Tunnel (--name flag):
+  Stable URL tied to your Cloudflare domain
+  Requires prior setup: tunnel-login, tunnel-create, tunnel-route
+
+Examples:
+  xplat sync-cf tunnel 8080                      # Quick tunnel
+  xplat sync-cf tunnel --port=8080               # Quick tunnel with flag
+  xplat sync-cf tunnel --name=webhook --port=8080  # Named tunnel`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port := 9090
-		if len(args) > 0 {
+		if syncCFTunnelPort != "" {
+			if p, err := strconv.Atoi(syncCFTunnelPort); err == nil && p > 0 {
+				port = p
+			}
+		} else if len(args) > 0 {
 			if p, err := strconv.Atoi(args[0]); err == nil && p > 0 {
 				port = p
 			}
@@ -61,7 +97,75 @@ var syncCFTunnelCmd = &cobra.Command{
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer cancel()
 
+		if syncCFTunnelName != "" {
+			return synccf.RunNamedTunnel(ctx, syncCFTunnelName, port)
+		}
 		return synccf.RunTunnel(ctx, port)
+	},
+}
+
+var syncCFTunnelLoginCmd = &cobra.Command{
+	Use:   "tunnel-login",
+	Short: "Authenticate cloudflared with Cloudflare",
+	Long: `Authenticate cloudflared with your Cloudflare account.
+
+This opens a browser for OAuth authentication and stores
+credentials at ~/.cloudflared/cert.pem.
+
+Required before creating named tunnels.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.LoginCloudflared()
+	},
+}
+
+var syncCFTunnelListCmd = &cobra.Command{
+	Use:   "tunnel-list",
+	Short: "List existing named tunnels",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.ListTunnels()
+	},
+}
+
+var syncCFTunnelCreateCmd = &cobra.Command{
+	Use:   "tunnel-create <name>",
+	Short: "Create a new named tunnel",
+	Long: `Create a new named tunnel.
+
+After creation, add a DNS route to make it accessible:
+  xplat sync-cf tunnel-route <name> <hostname>
+
+Example:
+  xplat sync-cf tunnel-create webhook
+  xplat sync-cf tunnel-route webhook webhook.yourdomain.com`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.CreateTunnel(args[0])
+	},
+}
+
+var syncCFTunnelDeleteCmd = &cobra.Command{
+	Use:   "tunnel-delete <name>",
+	Short: "Delete a named tunnel",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.DeleteTunnel(args[0])
+	},
+}
+
+var syncCFTunnelRouteCmd = &cobra.Command{
+	Use:   "tunnel-route <tunnel-name> <hostname>",
+	Short: "Add DNS route for a tunnel",
+	Long: `Create a DNS CNAME record pointing to a tunnel.
+
+The hostname must be on a domain managed by Cloudflare.
+
+Example:
+  xplat sync-cf tunnel-route webhook webhook.yourdomain.com
+
+This creates: webhook.yourdomain.com -> tunnel`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return synccf.RouteTunnelDNS(args[0], args[1])
 	},
 }
 
@@ -206,12 +310,21 @@ func init() {
 	syncCFPollCmd.Flags().StringVar(&syncCFPollInterval, "interval", "1m", "Poll interval")
 	syncCFWebhookCmd.Flags().StringVar(&syncCFWebhookPort, "port", "9090", "Webhook server port")
 
+	// Tunnel flags
+	syncCFTunnelCmd.Flags().StringVar(&syncCFTunnelName, "name", "", "Named tunnel name (for stable URL)")
+	syncCFTunnelCmd.Flags().StringVar(&syncCFTunnelPort, "port", "", "Local port to expose")
+
 	SyncCFCmd.AddCommand(syncCFAuthCmd)
-	SyncCFCmd.AddCommand(syncCFTunnelCmd)
-	SyncCFCmd.AddCommand(syncCFPollCmd)
-	SyncCFCmd.AddCommand(syncCFWebhookCmd)
 	SyncCFCmd.AddCommand(syncCFCheckCmd)
 	SyncCFCmd.AddCommand(syncCFInstallCmd)
+	SyncCFCmd.AddCommand(syncCFPollCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelCreateCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelDeleteCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelListCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelLoginCmd)
+	SyncCFCmd.AddCommand(syncCFTunnelRouteCmd)
+	SyncCFCmd.AddCommand(syncCFWebhookCmd)
 
 	// Worker subcommands
 	syncCFWorkerCmd.AddCommand(syncCFWorkerBuildCmd)

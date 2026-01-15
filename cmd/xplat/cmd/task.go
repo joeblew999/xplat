@@ -267,8 +267,23 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		task.WithVersionCheck(true),
 	)
 
+	// Apply xplat's opinionated defaults for remote taskfiles.
+	// These are centralized in internal/config/config.go.
+	// See: docs/ADR-002-task-config-remote-taskfiles.md
+	defaults := config.GetTaskDefaults()
+	e.TrustedHosts = defaults.TrustedHosts
+	e.CacheExpiryDuration = defaults.CacheExpiryDuration
+	e.Timeout = defaults.Timeout
+	e.Failfast = defaults.Failfast
+
+	// Auto-approve prompts in CI environments
+	if config.IsCI() {
+		e.AssumeYes = true
+	}
+
 	// Apply our parsed flags to the executor
 	// These field names match the Executor struct in executor.go
+	// CLI flags override xplat defaults above
 	e.Dir = dir
 	e.Entrypoint = taskFile
 	// Standalone task CLI maps -f to ForceAll when GentleForce experiment is OFF (default)
@@ -279,11 +294,17 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	e.Insecure = taskInsecure
 	e.Download = taskDownload
 	e.Offline = taskOffline
-	e.Timeout = taskTimeout
+	// Only override timeout if explicitly set (preserve our 30s default)
+	if cmd.Flags().Changed("timeout") {
+		e.Timeout = taskTimeout
+	}
 	e.Watch = taskWatch
 	e.Verbose = taskVerbose
 	e.Silent = taskSilent
-	e.AssumeYes = taskYes
+	// Only override AssumeYes if explicitly set (preserve our CI auto-approve)
+	if cmd.Flags().Changed("yes") || taskYes {
+		e.AssumeYes = taskYes
+	}
 	e.Dry = taskDry
 	e.Summary = taskSummary
 	e.Parallel = taskParallel

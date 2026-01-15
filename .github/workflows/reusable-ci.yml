@@ -1,0 +1,89 @@
+# Reusable CI Workflow for xplat Projects
+#
+# This workflow is designed to be called from other repositories that use xplat.
+# It installs xplat, runs build/test/lint tasks using the embedded Task runner.
+#
+# Usage in your repo's .github/workflows/ci.yml:
+#   name: CI
+#   on: [push, pull_request]
+#   jobs:
+#     ci:
+#       uses: joeblew999/xplat/.github/workflows/reusable-ci.yml@main
+#       with:
+#         go-version: "stable"  # optional
+#
+# Or for multi-platform testing:
+#   jobs:
+#     ci:
+#       strategy:
+#         matrix:
+#           os: [ubuntu-latest, macos-latest, windows-latest]
+#       uses: joeblew999/xplat/.github/workflows/reusable-ci.yml@main
+#       with:
+#         runs-on: ${{ matrix.os }}
+
+name: Reusable CI
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner OS (e.g., ubuntu-latest, macos-latest, windows-latest)'
+        required: false
+        default: 'ubuntu-latest'
+        type: string
+      go-version:
+        description: 'Go version to install'
+        required: false
+        default: 'stable'
+        type: string
+      xplat-version:
+        description: 'xplat version to install (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+      build-task:
+        description: 'Task to run for build step'
+        required: false
+        default: 'build'
+        type: string
+      test-task:
+        description: 'Task to run for test step'
+        required: false
+        default: 'test'
+        type: string
+      lint-task:
+        description: 'Task to run for lint step'
+        required: false
+        default: 'lint'
+        type: string
+      skip-lint:
+        description: 'Skip the lint step'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - uses: joeblew999/xplat/.github/actions/setup@main
+        with:
+          version: ${{ inputs.xplat-version }}
+
+      - name: Build
+        run: xplat task ${{ inputs.build-task }}
+
+      - name: Test
+        run: xplat task ${{ inputs.test-task }}
+
+      - name: Lint
+        if: ${{ !inputs.skip-lint }}
+        run: xplat task ${{ inputs.lint-task }}
+        continue-on-error: true

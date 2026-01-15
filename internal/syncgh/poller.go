@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v81/github"
 )
 
 // RepoConfig holds configuration for checking a repository

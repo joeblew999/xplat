@@ -27,3 +27,7 @@ workers/**/node_modules/
 
 # Local binaries
 .bin/
+
+# Local .src 
+.src/
+

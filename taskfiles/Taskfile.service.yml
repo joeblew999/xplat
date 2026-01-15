@@ -1,0 +1,65 @@
+# xplat Service Tasks
+#
+# Include this in your Taskfile.yml to get xplat service commands:
+#
+#   includes:
+#     service:
+#       taskfile: https://raw.githubusercontent.com/joeblew999/xplat/main/taskfiles/Taskfile.service.yml
+#
+# Then run: task service:up
+
+version: '3'
+
+vars:
+  XPLAT: xplat
+
+tasks:
+  up:
+    desc: "Start xplat service with UI + MCP (recommended)"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui --with-mcp"
+
+  up:ui:
+    desc: "Start xplat service with UI only"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui"
+
+  up:mcp:
+    desc: "Start xplat service with MCP only"
+    cmds:
+      - "{{.XPLAT}} service start --with-mcp"
+
+  up:minimal:
+    desc: "Start xplat service (process-compose only)"
+    cmds:
+      - "{{.XPLAT}} service start"
+
+  down:
+    desc: "Stop xplat service"
+    cmds:
+      - "{{.XPLAT}} service stop"
+
+  status:
+    desc: "Show xplat service status"
+    cmds:
+      - "{{.XPLAT}} service status"
+
+  restart:
+    desc: "Restart xplat service"
+    cmds:
+      - "{{.XPLAT}} service restart"
+
+  install:
+    desc: "Install xplat as a system service"
+    cmds:
+      - "{{.XPLAT}} service install"
+
+  uninstall:
+    desc: "Uninstall xplat system service"
+    cmds:
+      - "{{.XPLAT}} service uninstall"
+
+  list:
+    desc: "List registered projects"
+    cmds:
+      - "{{.XPLAT}} service list"

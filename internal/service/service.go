@@ -32,6 +32,11 @@ type Config struct {
 	Version     string // Current version (injected at build time)
 	WithUI      bool   // Start Task UI alongside process-compose
 	UIPort      string // Port for Task UI (default: "3000")
+	WithMCP     bool   // Start MCP HTTP server alongside process-compose
+	MCPPort     string // Port for MCP server (default: "8765")
+	WithSync    bool   // Start GitHub sync poller for Task cache invalidation
+	SyncRepos   string // Comma-separated list of repos to poll (e.g., "owner/repo,owner2/repo2")
+	SyncInterval string // Poll interval (e.g., "5m", "1h")
 }
 
 // DefaultConfig returns the default service configuration.
@@ -63,13 +68,20 @@ func ConfigForProject(projectDir string) Config {
 // program implements the service.Interface.
 type program struct {
 	cmd        *exec.Cmd
-	uiCmd      *exec.Cmd // Task UI process (if WithUI is enabled)
+	uiCmd      *exec.Cmd  // Task UI process (if WithUI is enabled)
+	mcpCmd     *exec.Cmd  // MCP HTTP server process (if WithMCP is enabled)
+	syncCmd    *exec.Cmd  // GitHub sync poller (if WithSync is enabled)
 	workDir    string
 	xplatBin   string
 	autoUpdate bool
 	version    string
 	withUI     bool
 	uiPort     string
+	withMCP    bool
+	mcpPort    string
+	withSync   bool
+	syncRepos  string
+	syncInterval string
 	stopChan   chan struct{}
 }
 
@@ -79,6 +91,12 @@ func (p *program) Start(s service.Service) error {
 	go p.run()
 	if p.withUI {
 		go p.runUI()
+	}
+	if p.withMCP {
+		go p.runMCP()
+	}
+	if p.withSync {
+		go p.runSync()
 	}
 	if p.autoUpdate {
 		go p.updateLoop()
@@ -99,6 +117,46 @@ func (p *program) runUI() {
 	log.Printf("Starting Task UI on port %s...", p.uiPort)
 	if err := p.uiCmd.Run(); err != nil {
 		log.Printf("Task UI exited: %v", err)
+	}
+}
+
+func (p *program) runMCP() {
+	// Build MCP command args for HTTP mode
+	args := []string{"mcp", "serve", "--http", ":" + p.mcpPort}
+
+	p.mcpCmd = exec.Command(p.xplatBin, args...)
+	p.mcpCmd.Dir = p.workDir
+	p.mcpCmd.Stdout = os.Stdout
+	p.mcpCmd.Stderr = os.Stderr
+	p.mcpCmd.Env = config.FullEnv(p.workDir)
+
+	log.Printf("Starting MCP HTTP server on port %s...", p.mcpPort)
+	if err := p.mcpCmd.Run(); err != nil {
+		log.Printf("MCP server exited: %v", err)
+	}
+}
+
+func (p *program) runSync() {
+	// Build sync-gh poll command args
+	// If repos not specified, poll command will auto-discover from Taskfile.yml
+	args := []string{"sync-gh", "poll", "--interval=" + p.syncInterval, "--invalidate"}
+	if p.syncRepos != "" {
+		args = append(args, "--repos="+p.syncRepos)
+	}
+
+	p.syncCmd = exec.Command(p.xplatBin, args...)
+	p.syncCmd.Dir = p.workDir
+	p.syncCmd.Stdout = os.Stdout
+	p.syncCmd.Stderr = os.Stderr
+	p.syncCmd.Env = config.FullEnv(p.workDir)
+
+	if p.syncRepos != "" {
+		log.Printf("Starting GitHub sync poller (repos: %s, interval: %s)...", p.syncRepos, p.syncInterval)
+	} else {
+		log.Printf("Starting GitHub sync poller (auto-discover from Taskfile.yml, interval: %s)...", p.syncInterval)
+	}
+	if err := p.syncCmd.Run(); err != nil {
+		log.Printf("GitHub sync poller exited: %v", err)
 	}
 }
 
@@ -222,6 +280,12 @@ func (p *program) Stop(s service.Service) error {
 	if p.uiCmd != nil && p.uiCmd.Process != nil {
 		p.uiCmd.Process.Signal(os.Interrupt)
 	}
+	if p.mcpCmd != nil && p.mcpCmd.Process != nil {
+		p.mcpCmd.Process.Signal(os.Interrupt)
+	}
+	if p.syncCmd != nil && p.syncCmd.Process != nil {
+		p.syncCmd.Process.Signal(os.Interrupt)
+	}
 	return nil
 }
 
@@ -259,13 +323,30 @@ func NewManager(cfg Config) (*Manager, error) {
 		uiPort = "3000"
 	}
 
+	// Default MCP port if not set
+	mcpPort := cfg.MCPPort
+	if mcpPort == "" {
+		mcpPort = "8765"
+	}
+
+	// Default sync interval if not set
+	syncInterval := cfg.SyncInterval
+	if syncInterval == "" {
+		syncInterval = config.DefaultSyncInterval
+	}
+
 	prg := &program{
-		workDir:    cfg.WorkDir,
-		xplatBin:   xplatBin,
-		autoUpdate: cfg.AutoUpdate,
-		version:    cfg.Version,
-		withUI:     cfg.WithUI,
-		uiPort:     uiPort,
+		workDir:      cfg.WorkDir,
+		xplatBin:     xplatBin,
+		autoUpdate:   cfg.AutoUpdate,
+		version:      cfg.Version,
+		withUI:       cfg.WithUI,
+		uiPort:       uiPort,
+		withMCP:      cfg.WithMCP,
+		mcpPort:      mcpPort,
+		withSync:     cfg.WithSync,
+		syncRepos:    cfg.SyncRepos,
+		syncInterval: syncInterval,
 	}
 
 	svc, err := service.New(prg, svcConfig)

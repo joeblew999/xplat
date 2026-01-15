@@ -21,36 +21,38 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // === Default ports ===
+//
+// xplat uses 876x range for its services (easy to remember: 8760-8769)
+//
+//   8760 - Task UI (web interface)
+//   8761 - Process Compose API
+//   8762 - MCP HTTP server
+//   8763 - Webhook server
+//
+// External tools keep their defaults:
+//   1313 - Hugo dev server
+//   2019 - Caddy admin API
 
 const (
-	// DefaultUIPort is the default port for web UIs (Task UI, Setup GUI, etc.).
-	// Used by Via framework servers.
-	DefaultUIPort = "3000"
+	// xplat service ports (876x range)
+	DefaultUIPort             = "8760"
+	DefaultUIPortInt          = 8760
+	DefaultProcessComposePort = 8761
+	DefaultMCPPort            = "8762"
+	DefaultMCPPortInt         = 8762
+	DefaultWebhookPort        = "8763"
+	DefaultWebhookPortInt     = 8763
 
-	// DefaultUIPortInt is DefaultUIPort as an int for APIs that need it.
-	DefaultUIPortInt = 3000
-
-	// DefaultProcessComposePort is the default port for the process-compose API.
-	DefaultProcessComposePort = 8080
-
-	// DefaultWebhookPort is the default port for webhook servers.
-	DefaultWebhookPort = "8080"
-
-	// DefaultHugoPort is the default port for Hugo dev server.
-	DefaultHugoPort = 1313
-
-	// DefaultCaddyAdminPort is the default port for Caddy admin API.
+	// External tool ports (their defaults)
+	DefaultHugoPort       = 1313
 	DefaultCaddyAdminPort = 2019
 
-	// DefaultMCPPort is the default port for the MCP HTTP server.
-	// Used by `xplat mcp serve --http` when no port is specified.
-	DefaultMCPPort = "8765"
-
-	// DefaultMCPPortInt is DefaultMCPPort as an int for APIs that need it.
-	DefaultMCPPortInt = 8765
+	// DefaultSyncInterval is the default interval for GitHub sync polling.
+	DefaultSyncInterval = "5m"
 )
 
 // === Default permissions ===
@@ -210,6 +212,59 @@ func EnvSlice(workDir string) []string {
 		"PLAT_DATA=" + PlatData(workDir),
 		"PLAT_DIST=" + PlatDist(workDir),
 	}
+}
+
+// === Task defaults ===
+//
+// xplat's opinionated defaults for the embedded Task runner.
+// These make remote taskfiles "just work" without user configuration.
+//
+// Priority order (lowest to highest):
+//  1. xplat defaults (here)
+//  2. User's .taskrc.yml (if they create one)
+//  3. CLI flags (--timeout, --offline, etc.)
+//
+// See: docs/ADR-002-task-config-remote-taskfiles.md
+
+// TaskDefaults holds xplat's opinionated defaults for the embedded Task runner.
+type TaskDefaults struct {
+	// TrustedHosts are hosts that don't require confirmation prompts for remote taskfiles.
+	TrustedHosts []string
+
+	// CacheExpiryDuration is how long to cache remote taskfiles before re-downloading.
+	CacheExpiryDuration time.Duration
+
+	// Timeout is the timeout for downloading remote taskfiles.
+	Timeout time.Duration
+
+	// Failfast stops execution on first failure when running tasks in parallel.
+	Failfast bool
+}
+
+// GetTaskDefaults returns xplat's opinionated defaults for the embedded Task runner.
+func GetTaskDefaults() TaskDefaults {
+	return TaskDefaults{
+		// TrustedHosts: Skip confirmation prompts for common Git hosts
+		TrustedHosts: []string{
+			"github.com",
+			"raw.githubusercontent.com",
+			"gitlab.com",
+		},
+		// CacheExpiryDuration: 24h is a reasonable balance between freshness and speed
+		// Use `xplat task --download` to force refresh
+		// CI workflows should use --download for guaranteed freshness
+		CacheExpiryDuration: 24 * time.Hour,
+		// Timeout: Slightly longer for slow networks (30s vs Task's 10s default)
+		Timeout: 30 * time.Second,
+		// Failfast: Stop on first failure (better for CI and dev)
+		Failfast: true,
+	}
+}
+
+// IsCI returns true if running in a CI environment.
+// Checks for common CI environment variables.
+func IsCI() bool {
+	return os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 }
 
 // PathWithPlatBin returns a PATH string that includes PLAT_BIN.

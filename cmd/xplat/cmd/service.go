@@ -13,11 +13,6 @@ import (
 	"github.com/joeblew999/xplat/internal/service"
 )
 
-var (
-	serviceWithUI bool
-	serviceUIPort string
-)
-
 // ServiceCmd is the parent command for service operations.
 var ServiceCmd = &cobra.Command{
 	Use:   "service",
@@ -26,6 +21,7 @@ var ServiceCmd = &cobra.Command{
 
 One global xplat service runs all projects from the registry.
 Use 'install' from each project directory to add it to the registry.
+Use 'config' to configure UI, MCP, and sync settings once.
 
 On macOS: LaunchAgent (user service)
 On Linux: systemd user service
@@ -33,11 +29,9 @@ On Windows: Windows service
 
 Examples:
   cd ~/project1 && xplat service install  # Add project to registry
-  cd ~/project2 && xplat service install  # Add another project
-  xplat service list                       # Show all registered projects
-  xplat service start                      # Start THE service (runs all projects)
-  xplat service status                     # Check service status
-  xplat service stop                       # Stop the service`,
+  xplat service config --ui --sync        # Enable UI and sync (configure once)
+  xplat service start                      # Start THE service
+  xplat service status                     # Check service status`,
 }
 
 var serviceInstallCmd = &cobra.Command{
@@ -62,14 +56,9 @@ The OS service is only removed when no projects remain in the registry.`,
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the xplat service",
-	Long: `Start the xplat service.
+	Long: `Start the xplat service using the configuration from ~/.xplat/service.yaml.
 
-Use --with-ui to also start the Task UI web interface alongside the service.
-
-Examples:
-  xplat service start              # Start service only
-  xplat service start --with-ui    # Start service + Task UI on port 3000
-  xplat service start --with-ui --ui-port 8080  # Task UI on port 8080`,
+To change settings, use 'xplat service config' first.`,
 	RunE: runServiceStart,
 }
 
@@ -111,13 +100,48 @@ Examples:
 	RunE: runServiceList,
 }
 
+// Config command flags
+var (
+	serviceConfigNoUI         bool
+	serviceConfigUIPort       string
+	serviceConfigNoMCP        bool
+	serviceConfigMCPPort      string
+	serviceConfigNoSync       bool
+	serviceConfigSyncRepos    string
+	serviceConfigSyncInterval string
+	serviceConfigReset        bool
+)
+
+var serviceConfigCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Configure service settings",
+	Long: `Configure xplat service settings. Settings are stored in ~/.xplat/service.yaml.
+
+By default, all features are ENABLED (UI, MCP, Sync).
+Use --no-* flags to disable features. Without flags, shows current config.
+
+Examples:
+  xplat service config                # Show current config (defaults: all enabled)
+  xplat service config --no-ui        # Disable Task UI
+  xplat service config --no-sync      # Disable GitHub sync
+  xplat service config --reset        # Reset to defaults (all enabled)`,
+	RunE: runServiceConfig,
+}
+
 func init() {
-	// UI flags for start command
-	serviceStartCmd.Flags().BoolVar(&serviceWithUI, "with-ui", false, "Start Task UI alongside the service")
-	serviceStartCmd.Flags().StringVar(&serviceUIPort, "ui-port", config.DefaultUIPort, "Port for Task UI (requires --with-ui)")
+	// Config command flags - use --no-* to disable (features ON by default)
+	serviceConfigCmd.Flags().BoolVar(&serviceConfigNoUI, "no-ui", false, "Disable Task UI web interface")
+	serviceConfigCmd.Flags().StringVar(&serviceConfigUIPort, "ui-port", "", "Port for Task UI (default: 3000)")
+	serviceConfigCmd.Flags().BoolVar(&serviceConfigNoMCP, "no-mcp", false, "Disable MCP HTTP server")
+	serviceConfigCmd.Flags().StringVar(&serviceConfigMCPPort, "mcp-port", "", "Port for MCP server (default: 8765)")
+	serviceConfigCmd.Flags().BoolVar(&serviceConfigNoSync, "no-sync", false, "Disable GitHub sync poller")
+	serviceConfigCmd.Flags().StringVar(&serviceConfigSyncRepos, "sync-repos", "", "Repos to poll (comma-separated, empty = auto-discover)")
+	serviceConfigCmd.Flags().StringVar(&serviceConfigSyncInterval, "sync-interval", "", "Poll interval (default: 5m)")
+	serviceConfigCmd.Flags().BoolVar(&serviceConfigReset, "reset", false, "Reset to defaults (all enabled)")
 
 	ServiceCmd.AddCommand(serviceInstallCmd)
 	ServiceCmd.AddCommand(serviceUninstallCmd)
+	ServiceCmd.AddCommand(serviceConfigCmd)
 	ServiceCmd.AddCommand(serviceStartCmd)
 	ServiceCmd.AddCommand(serviceStopCmd)
 	ServiceCmd.AddCommand(serviceRestartCmd)
@@ -126,13 +150,104 @@ func init() {
 	ServiceCmd.AddCommand(serviceListCmd)
 }
 
-// getGlobalServiceConfig returns config for THE one global xplat service.
-func getGlobalServiceConfig() service.Config {
+// getServiceConfig loads config from file and converts to service.Config.
+func getServiceConfig() (service.Config, error) {
+	svcCfg, err := config.LoadServiceConfig()
+	if err != nil {
+		return service.Config{}, fmt.Errorf("failed to load service config: %w", err)
+	}
+	svcCfg.ApplyDefaults()
+
 	cfg := service.DefaultConfig()
 	cfg.Version = version
-	cfg.WithUI = serviceWithUI
-	cfg.UIPort = serviceUIPort
-	return cfg
+	cfg.WithUI = svcCfg.UI
+	cfg.UIPort = svcCfg.UIPort
+	cfg.WithMCP = svcCfg.MCP
+	cfg.MCPPort = svcCfg.MCPPort
+	cfg.WithSync = svcCfg.Sync
+	cfg.SyncRepos = svcCfg.SyncRepos
+	cfg.SyncInterval = svcCfg.SyncInterval
+
+	return cfg, nil
+}
+
+func runServiceConfig(cmd *cobra.Command, args []string) error {
+	// Load existing config
+	cfg, err := config.LoadServiceConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// If reset, restore defaults (all enabled)
+	if serviceConfigReset {
+		cfg = config.DefaultServiceConfig()
+		if err := config.SaveServiceConfig(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+		fmt.Println("Service config reset to defaults (all features enabled)")
+		return nil
+	}
+
+	// Check if any flags were set
+	flagsSet := cmd.Flags().Changed("no-ui") || cmd.Flags().Changed("ui-port") ||
+		cmd.Flags().Changed("no-mcp") || cmd.Flags().Changed("mcp-port") ||
+		cmd.Flags().Changed("no-sync") || cmd.Flags().Changed("sync-repos") ||
+		cmd.Flags().Changed("sync-interval")
+
+	if flagsSet {
+		// Update config with flags (--no-* disables features)
+		if cmd.Flags().Changed("no-ui") {
+			cfg.UI = !serviceConfigNoUI
+		}
+		if cmd.Flags().Changed("ui-port") {
+			cfg.UIPort = serviceConfigUIPort
+		}
+		if cmd.Flags().Changed("no-mcp") {
+			cfg.MCP = !serviceConfigNoMCP
+		}
+		if cmd.Flags().Changed("mcp-port") {
+			cfg.MCPPort = serviceConfigMCPPort
+		}
+		if cmd.Flags().Changed("no-sync") {
+			cfg.Sync = !serviceConfigNoSync
+		}
+		if cmd.Flags().Changed("sync-repos") {
+			cfg.SyncRepos = serviceConfigSyncRepos
+		}
+		if cmd.Flags().Changed("sync-interval") {
+			cfg.SyncInterval = serviceConfigSyncInterval
+		}
+
+		if err := config.SaveServiceConfig(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+		fmt.Println("Service config updated")
+		fmt.Println()
+	}
+
+	// Show current config
+	cfg.ApplyDefaults()
+	fmt.Printf("Service config (%s):\n\n", config.XplatServiceConfig())
+
+	fmt.Printf("  UI:            %v\n", cfg.UI)
+	if cfg.UI {
+		fmt.Printf("  UI Port:       %s\n", cfg.UIPort)
+	}
+	fmt.Printf("  MCP:           %v\n", cfg.MCP)
+	if cfg.MCP {
+		fmt.Printf("  MCP Port:      %s\n", cfg.MCPPort)
+	}
+	fmt.Printf("  Sync:          %v\n", cfg.Sync)
+	if cfg.Sync {
+		if cfg.SyncRepos != "" {
+			fmt.Printf("  Sync Repos:    %s\n", cfg.SyncRepos)
+		} else {
+			fmt.Printf("  Sync Repos:    (auto-discover from Taskfile.yml)\n")
+		}
+		fmt.Printf("  Sync Interval: %s\n", cfg.SyncInterval)
+	}
+
+	return nil
 }
 
 func runServiceInstall(cmd *cobra.Command, args []string) error {
@@ -156,7 +271,11 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Project '%s' added to registry\n", projectName)
 
 	// Install the global xplat OS service (may already exist)
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -170,7 +289,8 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Registry: %s\n", config.XplatProjects())
 	fmt.Println()
-	fmt.Println("To start: xplat service start")
+	fmt.Println("To configure: xplat service config --ui --sync")
+	fmt.Println("To start:     xplat service start")
 	return nil
 }
 
@@ -195,7 +315,11 @@ func runServiceUninstall(cmd *cobra.Command, args []string) error {
 
 	// Only remove OS service if no projects remain
 	if len(reg.Projects) == 0 {
-		cfg := getGlobalServiceConfig()
+		cfg, err := getServiceConfig()
+		if err != nil {
+			return err
+		}
+
 		mgr, err := service.NewManager(cfg)
 		if err != nil {
 			return err
@@ -215,7 +339,11 @@ func runServiceUninstall(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceStart(cmd *cobra.Command, args []string) error {
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -227,13 +355,27 @@ func runServiceStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Service 'xplat' started")
 	if cfg.WithUI {
-		fmt.Printf("Task UI: http://localhost:%s\n", cfg.UIPort)
+		fmt.Printf("  Task UI: http://localhost:%s\n", cfg.UIPort)
+	}
+	if cfg.WithMCP {
+		fmt.Printf("  MCP:     http://localhost:%s/mcp\n", cfg.MCPPort)
+	}
+	if cfg.WithSync {
+		if cfg.SyncRepos != "" {
+			fmt.Printf("  Sync:    polling %s every %s\n", cfg.SyncRepos, cfg.SyncInterval)
+		} else {
+			fmt.Printf("  Sync:    auto-discover, polling every %s\n", cfg.SyncInterval)
+		}
 	}
 	return nil
 }
 
 func runServiceStop(cmd *cobra.Command, args []string) error {
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -248,7 +390,11 @@ func runServiceStop(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceRestart(cmd *cobra.Command, args []string) error {
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
@@ -263,22 +409,41 @@ func runServiceRestart(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceStatus(cmd *cobra.Command, args []string) error {
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err
 	}
 
-	status, err := mgr.Status()
-	if err != nil {
-		fmt.Printf("Service 'xplat': %s (error: %v)\n", status, err)
-		return nil
+	status, statusErr := mgr.Status()
+	if statusErr != nil {
+		fmt.Printf("Service 'xplat': %s (error: %v)\n", status, statusErr)
+	} else {
+		fmt.Printf("Service 'xplat': %s\n", status)
 	}
 
-	fmt.Printf("Service 'xplat': %s\n", status)
 	fmt.Printf("  Platform: %s\n", mgr.Platform())
 
-	// Also show registered projects
+	// Show config summary
+	if cfg.WithUI || cfg.WithMCP || cfg.WithSync {
+		fmt.Printf("  Features:")
+		if cfg.WithUI {
+			fmt.Printf(" ui")
+		}
+		if cfg.WithMCP {
+			fmt.Printf(" mcp")
+		}
+		if cfg.WithSync {
+			fmt.Printf(" sync")
+		}
+		fmt.Println()
+	}
+
+	// Show registered projects
 	reg, _ := projects.Load()
 	fmt.Printf("  Projects: %d registered\n", len(reg.Projects))
 
@@ -286,7 +451,11 @@ func runServiceStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceRun(cmd *cobra.Command, args []string) error {
-	cfg := getGlobalServiceConfig()
+	cfg, err := getServiceConfig()
+	if err != nil {
+		return err
+	}
+
 	mgr, err := service.NewManager(cfg)
 	if err != nil {
 		return err

@@ -1,5 +1,27 @@
 # CLAUDE
 
+## 0. Project Structure (READ THIS FIRST)
+
+```
+xplat/
+├── main.go              # MAIN ENTRY POINT - build with: go build .
+├── cmd/xplat/cmd/       # Cobra command definitions
+├── internal/            # Internal packages
+├── .src/                # Cloned upstream sources (gitignored)
+├── .bin/                # Built binaries (gitignored)
+└── .data/               # Runtime data (gitignored)
+```
+
+**To build xplat:**
+```bash
+go build .                    # Creates ./xplat binary
+go build -o /tmp/xplat .      # Build to specific location
+```
+
+**DO NOT use `go build ./cmd/xplat/...`** - main.go is in the root, not in cmd/.
+
+---
+
 ## 1. Core Principles
 
 - **XPLAT REQUIRED** - MUST use `xplat` binary (build locally or download from `https://github.com/joeblew999/xplat/releases/`)
@@ -478,6 +500,14 @@ tasks:
 
 ### 7.1 Go
 
+**Single main.go in root:** The xplat binary has a single `main.go` in the repository root. All commands are defined in `cmd/xplat/cmd/` as cobra subcommands.
+
+**Build locations:**
+- Local dev: `go build -o xplat .` (or `task build`) → outputs to `./xplat`
+- Install: `task build:install` → outputs to `~/.local/bin/xplat`
+
+Do NOT build to `.bin/` - that directory is for subsystem binaries (nats, telegraf, etc.), not the xplat binary itself.
+
 **Set GOWORK at subsystem level:**
 ```yaml
 env:
@@ -496,6 +526,40 @@ src:clone:
   cmds:
     - xplat os git clone {{.UPSTREAM_REPO}} {{.SRC_DIR}} {{.VERSION}}
 ```
+
+### 7.2 Package Documentation (doc.go)
+
+For packages with 3+ files or non-obvious design, add a `doc.go` file:
+
+```go
+// Package syncgh provides GitHub synchronization utilities for xplat.
+//
+// # Components
+//
+//   - Poller: Poll GitHub repos for changes (commit hashes, tags)
+//   - Webhook: HTTP server to receive GitHub push events
+//   - Tunnel: smee.io forwarding for local webhook development
+//
+// # Usage
+//
+//   poller := NewPoller(1*time.Hour, repos, token)
+//   poller.OnUpdate(func(subsystem, old, new string) { ... })
+//   poller.StartAsync()
+//
+// # Design Notes
+//
+// The Poller is "dumb by design" - it returns the new commit hash but
+// does NOT track state. The caller must compare and decide what action to take.
+package syncgh
+```
+
+**When to add doc.go:**
+- Package has 3+ source files
+- Non-obvious component relationships
+- Intentional design decisions that need explanation
+- Public API that needs usage examples
+
+**Keep doc.go updated** when adding new components or changing design.
 
 ---
 
@@ -796,3 +860,86 @@ For each registered project, xplat searches for config files in this order:
 
 Environment variables:
 - `XPLAT_HOME` - Override global xplat home (default: `~/.xplat`)
+
+---
+
+## 12. Centralized Configuration
+
+All xplat defaults and configuration are centralized in `internal/config/config.go`. This is the **source of truth** for:
+
+- Default ports, paths, and permissions
+- Global xplat directories (`~/.xplat/`)
+- Project-local directories (`.src/`, `.bin/`, `.data/`, `.dist/`)
+- Task runner opinionated defaults
+- Environment helpers
+
+### 12.1 Philosophy: No New Config Files
+
+xplat embeds tools (Task, Process Compose) with **opinionated defaults** that work out of the box. Users should NOT need to create config files for basic functionality.
+
+**Priority order** (lowest to highest):
+1. xplat defaults (in `config.go`)
+2. User's config files (if they choose to create them)
+3. CLI flags
+
+### 12.2 Task Defaults
+
+xplat's embedded Task runner uses opinionated defaults from `config.GetTaskDefaults()`:
+
+| Setting | xplat Default | Task Default | Rationale |
+|---------|---------------|--------------|-----------|
+| TrustedHosts | github.com, raw.githubusercontent.com, gitlab.com | (empty) | Skip prompts for common Git hosts |
+| CacheExpiry | 24h | 0 (always refetch) | Balance freshness vs. speed |
+| Timeout | 30s | 10s | More forgiving for slow networks |
+| Failfast | true | false | Fail early, fail fast |
+| AssumeYes (CI) | true | false | No interactive prompts in CI |
+
+**Usage in code:**
+```go
+import "github.com/joeblew999/xplat/internal/config"
+
+// Apply opinionated defaults
+defaults := config.GetTaskDefaults()
+e.TrustedHosts = defaults.TrustedHosts
+e.CacheExpiryDuration = defaults.CacheExpiryDuration
+e.Timeout = defaults.Timeout
+e.Failfast = defaults.Failfast
+
+// CI detection
+if config.IsCI() {
+    e.AssumeYes = true
+}
+```
+
+See: `docs/ADR-002-task-config-remote-taskfiles.md`
+
+### 12.3 Path Helpers
+
+```go
+// Global paths
+config.XplatHome()     // ~/.xplat (or $XPLAT_HOME)
+config.XplatBin()      // ~/.xplat/bin
+config.XplatCache()    // ~/.xplat/cache
+config.XplatConfig()   // ~/.xplat/config
+config.XplatProjects() // ~/.xplat/projects.yaml
+
+// Project-local paths (takes workDir)
+config.PlatSrc(workDir)  // .src/
+config.PlatBin(workDir)  // .bin/
+config.PlatData(workDir) // .data/
+config.PlatDist(workDir) // .dist/
+
+// Environment setup
+config.SetPlatEnv(workDir)      // Sets PLAT_* env vars
+config.EnvSlice(workDir)        // Returns []string for exec.Cmd.Env
+config.PathWithPlatBin(workDir) // Returns PATH with .bin/ prepended
+config.FullEnv(workDir)         // Complete environment for subprocesses
+```
+
+### 12.4 Adding New Defaults
+
+When adding new default configuration:
+
+1. **Add to `internal/config/config.go`** - This is the source of truth
+2. **Document in CLAUDE.md** - Add to this section
+3. **Reference in relevant ADR** - If the default is non-trivial, create or update an ADR

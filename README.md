@@ -156,6 +156,7 @@ Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Comm
 | Command | Description |
 |---------|-------------|
 | `xplat help` | Help about any command |
+| `xplat mcp` | MCP (Model Context Protocol) server |
 
 ## Command Reference
 
@@ -181,9 +182,7 @@ Generate the autocompletion script for the specified shell
 Generate documentation from xplat commands
 
 **Subcommands:**
-- `docs all` - Generate all documentation
-- `docs readme` - Generate README.generated.md from xplat commands
-- `docs taskfile` - Generate Taskfile.generated.yml with xplat wrapper tasks
+- `docs readme` - Generate README.md from xplat commands
 
 ### `xplat gen`
 
@@ -215,6 +214,15 @@ Inspect, validate, and bootstrap xplat.yaml manifests
 - `manifest install-all` - Install binaries from all discovered manifests
 - `manifest show` - Show manifest details
 - `manifest validate` - Validate an xplat.yaml manifest
+
+### `xplat mcp`
+
+MCP (Model Context Protocol) server
+
+**Subcommands:**
+- `mcp config` - Show MCP configuration for AI IDEs
+- `mcp list` - List tasks that would be exposed as MCP tools
+- `mcp serve` - Start MCP server (stdio or HTTP transport)
 
 ### `xplat os`
 

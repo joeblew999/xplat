@@ -207,18 +207,11 @@ func runGenEnv(cmd *cobra.Command, args []string) error {
 }
 
 func runGenTaskfile(cmd *cobra.Command, args []string) error {
-	// Load lockfile to get installed packages
+	// Load lockfile to get installed packages (optional - service tasks are always generated)
+	var pkgs []lockfile.Package
 	lf, err := lockfile.Load(genDir)
-	if err != nil {
-		return fmt.Errorf("failed to load lockfile: %w", err)
-	}
-
-	// Get packages with taskfile configuration
-	pkgs := lf.PackagesWithTaskfile()
-	if len(pkgs) == 0 {
-		fmt.Println("No installed packages with taskfile configuration found.")
-		fmt.Println("Install packages first with: xplat pkg install <package>")
-		return nil
+	if err == nil {
+		pkgs = lf.PackagesWithTaskfile()
 	}
 
 	outputPath := filepath.Join(genOutput, "Taskfile.generated.yml")
@@ -226,7 +219,11 @@ func runGenTaskfile(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Generated %s with %d package include(s)\n", outputPath, len(pkgs))
+	if len(pkgs) > 0 {
+		fmt.Printf("Generated %s with %d package include(s)\n", outputPath, len(pkgs))
+	} else {
+		fmt.Printf("Generated %s with service tasks\n", outputPath)
+	}
 	return nil
 }
 
@@ -332,31 +329,81 @@ func generateTaskfileFromLockfile(pkgs []lockfile.Package, outputPath, repoBaseU
 
 version: "3"
 
-includes:
+vars:
+  # Use installed xplat binary (from GitHub releases or local build)
+  XPLAT: xplat
+
 `)...)
 
-	for _, pkg := range pkgs {
-		if pkg.Taskfile == nil {
-			continue
+	// Add includes if there are packages
+	if len(pkgs) > 0 {
+		buf = append(buf, []byte("includes:\n")...)
+		for _, pkg := range pkgs {
+			if pkg.Taskfile == nil {
+				continue
+			}
+			ns := pkg.Taskfile.Namespace
+			if ns == "" {
+				ns = pkg.Name
+			}
+			url := pkg.Taskfile.URL
+			if url == "" {
+				// Build URL from source if not provided
+				url = fmt.Sprintf("%s/%s.git//%s", repoBaseURL, pkg.Name, pkg.Taskfile.Path)
+			}
+			buf = append(buf, []byte(fmt.Sprintf("  %s:\n    taskfile: %s\n", ns, url))...)
 		}
-		ns := pkg.Taskfile.Namespace
-		if ns == "" {
-			ns = pkg.Name
-		}
-		url := pkg.Taskfile.URL
-		if url == "" {
-			// Build URL from source if not provided
-			url = fmt.Sprintf("%s/%s.git//%s", repoBaseURL, pkg.Name, pkg.Taskfile.Path)
-		}
-		buf = append(buf, []byte(fmt.Sprintf("  %s:\n    taskfile: %s\n", ns, url))...)
+		buf = append(buf, '\n')
 	}
 
-	buf = append(buf, []byte(`
-tasks:
+	buf = append(buf, []byte(`tasks:
   default:
     desc: List available tasks
     cmds:
       - task --list
+
+  # ===========================================================================
+  # Service Commands (front and center!)
+  # ===========================================================================
+  # Start xplat as a system service with all features enabled:
+  #   - Process orchestration (process-compose)
+  #   - Task UI web dashboard
+  #   - MCP HTTP server for AI IDE integration
+
+  up:
+    desc: "Start xplat service with UI + MCP (recommended)"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui --with-mcp"
+
+  up:ui:
+    desc: "Start xplat service with UI only"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui"
+
+  up:mcp:
+    desc: "Start xplat service with MCP only"
+    cmds:
+      - "{{.XPLAT}} service start --with-mcp"
+
+  up:minimal:
+    desc: "Start xplat service (process-compose only)"
+    cmds:
+      - "{{.XPLAT}} service start"
+
+  down:
+    desc: "Stop xplat service"
+    cmds:
+      - "{{.XPLAT}} service stop"
+
+  status:
+    desc: "Show xplat service status"
+    cmds:
+      - "{{.XPLAT}} service status"
+
+  restart:
+    desc: "Restart xplat service"
+    cmds:
+      - "{{.XPLAT}} service restart"
 `)...)
 
 	return os.WriteFile(outputPath, buf, 0644)

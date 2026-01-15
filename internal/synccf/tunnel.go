@@ -431,16 +431,14 @@ func fileExists(path string) bool {
 // It handles cloudflared installation, signal handling, and graceful shutdown.
 // This is the main entry point for the CLI command.
 func RunTunnel(ctx context.Context, port int) error {
-	// Ensure cloudflared is installed
-	if err := CheckCloudflared(); err != nil {
-		log.Printf("cloudflared not found, attempting install...")
-		if err := InstallCloudflared(); err != nil {
-			return fmt.Errorf("cloudflared not available: %w", err)
-		}
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
 	}
 
 	tunnel := NewTunnel(TunnelConfig{
-		LocalPort: port,
+		LocalPort:       port,
+		CloudflaredPath: cfPath,
 	})
 
 	log.Printf("Starting cloudflared quick tunnel for localhost:%d...", port)
@@ -460,5 +458,161 @@ func RunTunnel(ctx context.Context, port int) error {
 	tunnel.Stop()
 	log.Printf("Tunnel stopped")
 
+	return nil
+}
+
+// RunNamedTunnel runs a named cloudflared tunnel with a stable hostname.
+// Named tunnels require prior setup via cloudflared tunnel login and cloudflared tunnel create.
+// The hostname is tied to your Cloudflare domain (free with CF account).
+func RunNamedTunnel(ctx context.Context, name string, port int) error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	tunnel := NewTunnel(TunnelConfig{
+		Name:            name,
+		LocalPort:       port,
+		CloudflaredPath: cfPath,
+	})
+
+	log.Printf("Starting cloudflared named tunnel '%s' for localhost:%d...", name, port)
+
+	if err := tunnel.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start tunnel: %w", err)
+	}
+
+	// For named tunnels, URL is the configured hostname
+	url := tunnel.URL()
+	if url == "" {
+		// Named tunnels don't output URL to stderr like quick tunnels
+		// The URL is the hostname configured in the tunnel
+		log.Printf("Named tunnel '%s' is running", name)
+		log.Printf("   Use your configured hostname to access")
+	} else {
+		log.Printf("Tunnel URL: %s", url)
+	}
+	log.Printf("")
+	log.Printf("Press Ctrl+C to stop the tunnel")
+
+	// Wait for context cancellation
+	<-ctx.Done()
+	tunnel.Stop()
+	log.Printf("Tunnel stopped")
+
+	return nil
+}
+
+// getCloudflaredPath returns the path to cloudflared, installing it if needed.
+func getCloudflaredPath() (string, error) {
+	info, err := GetCloudflaredInfo()
+	if err != nil {
+		log.Printf("cloudflared not found, attempting install...")
+		if err := InstallCloudflared(); err != nil {
+			return "", fmt.Errorf("cloudflared not available: %w", err)
+		}
+		// Try again after install
+		info, err = GetCloudflaredInfo()
+		if err != nil {
+			return "", fmt.Errorf("cloudflared still not found after install: %w", err)
+		}
+	}
+	return info.Path, nil
+}
+
+// LoginCloudflared runs cloudflared tunnel login to authenticate with Cloudflare.
+// This opens a browser for OAuth authentication.
+func LoginCloudflared() error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Opening browser for Cloudflare authentication...")
+	log.Printf("This will create credentials at ~/.cloudflared/cert.pem")
+
+	cmd := exec.Command(cfPath, "tunnel", "login")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	return cmd.Run()
+}
+
+// ListTunnels runs cloudflared tunnel list to show existing tunnels.
+func ListTunnels() error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(cfPath, "tunnel", "list")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// CreateTunnel creates a new named tunnel.
+func CreateTunnel(name string) error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Creating tunnel '%s'...", name)
+
+	cmd := exec.Command(cfPath, "tunnel", "create", name)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create tunnel: %w", err)
+	}
+
+	log.Printf("Tunnel '%s' created successfully", name)
+	log.Printf("")
+	log.Printf("Next steps:")
+	log.Printf("  1. Add DNS route: cloudflared tunnel route dns %s <hostname>", name)
+	log.Printf("  2. Create config: ~/.cloudflared/config.yml")
+	log.Printf("  3. Run tunnel:    xplat sync-cf tunnel --name=%s", name)
+
+	return nil
+}
+
+// DeleteTunnel deletes a named tunnel.
+func DeleteTunnel(name string) error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Deleting tunnel '%s'...", name)
+
+	cmd := exec.Command(cfPath, "tunnel", "delete", name)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// RouteTunnelDNS creates a DNS CNAME record pointing to the tunnel.
+func RouteTunnelDNS(tunnelName, hostname string) error {
+	cfPath, err := getCloudflaredPath()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Creating DNS route: %s -> tunnel '%s'", hostname, tunnelName)
+
+	cmd := exec.Command(cfPath, "tunnel", "route", "dns", tunnelName, hostname)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create DNS route: %w", err)
+	}
+
+	log.Printf("DNS route created: https://%s", hostname)
 	return nil
 }

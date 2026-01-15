@@ -12,7 +12,7 @@ require (
 	github.com/go-task/task/v3 v3.46.4
 	github.com/go-via/via v0.1.0
 	github.com/go-via/via-plugin-picocss v0.1.0
-	github.com/google/go-github/v67 v67.0.0
+	github.com/google/go-github/v81 v81.0.0
 	github.com/itchyny/gojq v0.12.18
 	github.com/kardianos/service v1.2.4
 	github.com/mark3labs/mcp-go v0.43.2

@@ -19,6 +19,53 @@ tasks:
     cmds:
       - task --list
 
+  # ===========================================================================
+  # Service Commands (front and center!)
+  # ===========================================================================
+  # Start xplat as a system service with all features enabled:
+  #   - Process orchestration (process-compose)
+  #   - Task UI web dashboard
+  #   - MCP HTTP server for AI IDE integration
+
+  up:
+    desc: "Start xplat service with UI + MCP (recommended)"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service start --with-ui --with-mcp"
+
+  up:ui:
+    desc: "Start xplat service with UI only"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service start --with-ui"
+
+  up:mcp:
+    desc: "Start xplat service with MCP only"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service start --with-mcp"
+
+  up:minimal:
+    desc: "Start xplat service (process-compose only)"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service start"
+
+  down:
+    desc: "Stop xplat service"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service stop"
+
+  status:
+    desc: "Show xplat service status"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service status"
+
+  restart:
+    desc: "Restart xplat service"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service restart"
+
+  # ===========================================================================
+  # Build and Test
+  # ===========================================================================
+
   build:
     desc: Build xplat binary
     cmds:
@@ -154,6 +201,11 @@ tasks:
     desc: "Release build orchestration"
     cmds:
       - "{{.XPLAT_LOCAL}} release {{.CLI_ARGS}}"
+
+  xplat:service:
+    desc: "System service management (install, start, stop, status)"
+    cmds:
+      - "{{.XPLAT_LOCAL}} service {{.CLI_ARGS}}"
 
   xplat:rm:
     desc: "Remove files or directories"
