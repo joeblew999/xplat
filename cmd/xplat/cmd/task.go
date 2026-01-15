@@ -61,6 +61,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -99,41 +101,84 @@ Examples:
 	RunE:               runTask,
 }
 
+// taskSorter is a function that sorts a set of task names.
+// This replicates github.com/go-task/task/v3/internal/sort.Sorter
+// since we cannot import internal packages.
+type taskSorter func(items []string, namespaces []string) []string
+
+// noSort leaves the tasks in the order they are defined.
+func noSort(items []string, _ []string) []string {
+	return items
+}
+
+// alphaNumeric sorts tasks alphabetically by name.
+func alphaNumeric(items []string, _ []string) []string {
+	slices.Sort(items)
+	return items
+}
+
+// alphaNumericWithRootTasksFirst sorts tasks alphabetically,
+// but ensures tasks without namespace (no ':') appear first.
+func alphaNumericWithRootTasksFirst(items []string, namespaces []string) []string {
+	if len(namespaces) > 0 {
+		return alphaNumeric(items, namespaces)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		iContainsColon := strings.Contains(items[i], ":")
+		jContainsColon := strings.Contains(items[j], ":")
+		if iContainsColon == jContainsColon {
+			return items[i] < items[j]
+		}
+		if !iContainsColon && jContainsColon {
+			return true
+		}
+		return false
+	})
+	return items
+}
+
 // Task-compatible flags
 // These mirror the flags defined in github.com/go-task/task/v3/internal/flags
 var (
-	taskDir         string
-	taskFile        string
-	taskForce       bool
-	taskForceAll    bool
-	taskSilent      bool
-	taskVerbose     bool
-	taskParallel    bool
-	taskDry         bool
-	taskSummary     bool
-	taskStatus      bool
-	taskList        bool
-	taskListAll     bool
-	taskListJson    bool
-	taskColor       bool
-	taskConcurrency int
-	taskOutput      string
-	taskInterval    time.Duration
-	taskWatch       bool
-	taskVersion     bool
-	taskHelp        bool
-	taskInit        bool
-	taskGlobal      bool
-	taskDownload    bool
-	taskOffline     bool
-	taskTimeout     time.Duration
-	taskYes         bool
-	taskInsecure    bool
-	taskExitCode    bool
-	taskClearCache  bool
-	taskCompletion  string
-	taskNoStatus    bool
-	taskNested      bool
+	taskDir               string
+	taskFile              string
+	taskForce             bool
+	taskForceAll          bool
+	taskSilent            bool
+	taskVerbose           bool
+	taskParallel          bool
+	taskDry               bool
+	taskSummary           bool
+	taskStatus            bool
+	taskList              bool
+	taskListAll           bool
+	taskListJson          bool
+	taskColor             bool
+	taskConcurrency       int
+	taskOutput            string
+	taskInterval          time.Duration
+	taskWatch             bool
+	taskVersion           bool
+	taskHelp              bool
+	taskInit              bool
+	taskGlobal            bool
+	taskDownload          bool
+	taskOffline           bool
+	taskTimeout           time.Duration
+	taskYes               bool
+	taskInsecure          bool
+	taskExitCode          bool
+	taskClearCache        bool
+	taskCompletion        string
+	taskNoStatus          bool
+	taskNested            bool
+	taskSort              string
+	taskDisableFuzzy      bool
+	taskTrustedHosts      []string
+	taskExpiry            time.Duration
+	taskOutputGroupBegin  string
+	taskOutputGroupEnd    string
+	taskOutputGroupError  bool
 )
 
 func init() {
@@ -174,6 +219,13 @@ func init() {
 	TaskCmd.Flags().StringVar(&taskCompletion, "completion", "", "Generates shell completion script (bash, zsh, fish, powershell)")
 	TaskCmd.Flags().BoolVar(&taskNoStatus, "no-status", false, "Ignore status when listing tasks as JSON")
 	TaskCmd.Flags().BoolVar(&taskNested, "nested", false, "Nest namespaces when listing tasks as JSON")
+	TaskCmd.Flags().StringVar(&taskSort, "sort", "", "Changes the order of tasks when listed [default|alphanumeric|none]")
+	TaskCmd.Flags().BoolVar(&taskDisableFuzzy, "disable-fuzzy", false, "Disables fuzzy matching for task names")
+	TaskCmd.Flags().StringSliceVar(&taskTrustedHosts, "trusted-hosts", nil, "List of trusted hosts for remote Taskfiles (comma-separated)")
+	TaskCmd.Flags().DurationVar(&taskExpiry, "expiry", 0, "Expiry duration for cached remote Taskfiles")
+	TaskCmd.Flags().StringVar(&taskOutputGroupBegin, "output-group-begin", "", "Message template to print before a task's grouped output")
+	TaskCmd.Flags().StringVar(&taskOutputGroupEnd, "output-group-end", "", "Message template to print after a task's grouped output")
+	TaskCmd.Flags().BoolVar(&taskOutputGroupError, "output-group-error-only", false, "Swallow output from successful tasks")
 }
 
 // runTask is the main entry point for the embedded Task runner.
@@ -188,12 +240,14 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	//   After pflag.Parse(), remainingArgs = ["build", "--some-arg"]
 	//   We lose the ability to know "--some-arg" was meant for CLI_ARGS!
 	var cliArgs string
+	var cliArgsList []string
 	argsForParsing := osArgs
 	for i, arg := range osArgs {
 		if arg == "--" {
 			argsForParsing = osArgs[:i]
 			if i+1 < len(osArgs) {
-				cliArgs = strings.Join(osArgs[i+1:], " ")
+				cliArgsList = osArgs[i+1:]
+				cliArgs = strings.Join(cliArgsList, " ")
 			}
 			break
 		}
@@ -327,16 +381,47 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	e.Concurrency = taskConcurrency
 	e.Interval = taskInterval
 
-	// Handle --output style
+	// Handle --output style and group options
 	if taskOutput != "" {
 		switch strings.ToLower(taskOutput) {
 		case "interleaved":
 			e.OutputStyle = ast.Output{Name: "interleaved"}
 		case "group":
-			e.OutputStyle = ast.Output{Name: "group"}
+			e.OutputStyle = ast.Output{
+				Name: "group",
+				Group: ast.OutputGroup{
+					Begin:     taskOutputGroupBegin,
+					End:       taskOutputGroupEnd,
+					ErrorOnly: taskOutputGroupError,
+				},
+			}
 		case "prefixed":
 			e.OutputStyle = ast.Output{Name: "prefixed"}
 		}
+	}
+
+	// Handle --disable-fuzzy
+	e.DisableFuzzy = taskDisableFuzzy
+
+	// Handle --trusted-hosts (CLI overrides defaults if specified)
+	if len(taskTrustedHosts) > 0 {
+		e.TrustedHosts = taskTrustedHosts
+	}
+
+	// Handle --expiry (CLI overrides defaults if specified)
+	if cmd.Flags().Changed("expiry") {
+		e.CacheExpiryDuration = taskExpiry
+	}
+
+	// Handle --sort (set TaskSorter based on sort mode)
+	switch strings.ToLower(taskSort) {
+	case "none":
+		e.TaskSorter = noSort
+	case "alphanumeric":
+		e.TaskSorter = alphaNumeric
+	case "default", "":
+		// Use default sorter (alphanumeric with root tasks first)
+		e.TaskSorter = alphaNumericWithRootTasksFirst
 	}
 
 	// Setup the executor (loads Taskfile, validates, etc.)
@@ -378,10 +463,12 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	}
 
 	globals.Set("CLI_ARGS", ast.Var{Value: cliArgs})
+	globals.Set("CLI_ARGS_LIST", ast.Var{Value: cliArgsList})
 	globals.Set("CLI_FORCE", ast.Var{Value: taskForce || taskForceAll})
 	globals.Set("CLI_SILENT", ast.Var{Value: taskSilent})
 	globals.Set("CLI_VERBOSE", ast.Var{Value: taskVerbose})
 	globals.Set("CLI_OFFLINE", ast.Var{Value: taskOffline})
+	globals.Set("CLI_ASSUME_YES", ast.Var{Value: e.AssumeYes})
 	e.Taskfile.Vars.Merge(globals, nil)
 
 	// Setup signal handling for graceful shutdown (Ctrl+C)

@@ -26,13 +26,13 @@ docs/adr/
 | ADR | Title | Status |
 |-----|-------|--------|
 | [ADR-001](ADR-001-kreuzberg-patterns.md) | Kreuzberg Patterns for Multi-Toolchain | Proposed |
-| [ADR-003](ADR-003-xplat-task-missing-features.md) | xplat Task Missing Features | Active |
 
 ### Accepted
 
 | ADR | Title |
 |-----|-------|
 | [ADR-002](accepted/ADR-002-task-config-remote-taskfiles.md) | Task Config & Remote Taskfiles |
+| [ADR-003](accepted/ADR-003-xplat-task-missing-features.md) | xplat Task Missing Features |
 | [ADR-004](accepted/ADR-004-gosmee-integration.md) | gosmee Integration for Webhook Relay |
 
 ## Creating New ADRs
