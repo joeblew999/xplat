@@ -29,7 +29,6 @@
 //
 // This approach provides ~99% CLI compatibility. Known limitations:
 //   - --experiments flag is not supported (rarely used)
-//   - --completion flag is not supported (users can use standalone task for this)
 //   - Some edge cases in flag validation may differ
 //
 // # Compatibility Guarantee
@@ -132,6 +131,9 @@ var (
 	taskInsecure    bool
 	taskExitCode    bool
 	taskClearCache  bool
+	taskCompletion  string
+	taskNoStatus    bool
+	taskNested      bool
 )
 
 func init() {
@@ -169,6 +171,9 @@ func init() {
 	TaskCmd.Flags().BoolVar(&taskInsecure, "insecure", false, "Allow insecure connections")
 	TaskCmd.Flags().BoolVarP(&taskExitCode, "exit-code", "x", false, "Pass-through the exit code of the task command")
 	TaskCmd.Flags().BoolVar(&taskClearCache, "clear-cache", false, "Clear remote taskfile cache")
+	TaskCmd.Flags().StringVar(&taskCompletion, "completion", "", "Generates shell completion script (bash, zsh, fish, powershell)")
+	TaskCmd.Flags().BoolVar(&taskNoStatus, "no-status", false, "Ignore status when listing tasks as JSON")
+	TaskCmd.Flags().BoolVar(&taskNested, "nested", false, "Nest namespaces when listing tasks as JSON")
 }
 
 // runTask is the main entry point for the embedded Task runner.
@@ -210,6 +215,16 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	// Handle --help
 	if taskHelp {
 		return cmd.Help()
+	}
+
+	// Handle --completion
+	if taskCompletion != "" {
+		script, err := task.Completion(taskCompletion)
+		if err != nil {
+			return err
+		}
+		fmt.Println(script)
+		return nil
 	}
 
 	// Handle --init (create new Taskfile)
@@ -335,8 +350,8 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		return os.RemoveAll(cachePath)
 	}
 
-	// Handle --list, --list-all, --json
-	listOptions := task.NewListOptions(taskList, taskListAll, taskListJson, false, false)
+	// Handle --list, --list-all, --json, --no-status, --nested
+	listOptions := task.NewListOptions(taskList, taskListAll, taskListJson, taskNoStatus, taskNested)
 	if listOptions.ShouldListTasks() {
 		if taskSilent {
 			return e.ListTaskNames(taskListAll)

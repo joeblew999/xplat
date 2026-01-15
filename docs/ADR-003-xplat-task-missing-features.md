@@ -10,8 +10,8 @@
 |---------|--------|-----------|
 | GitHub Actions annotations | ✅ Done | Added `emitCIErrorAnnotation()` |
 | `--failfast` flag | ✅ Done | Added flag and `e.Failfast` |
-| `--completion` flag | 🔄 In Progress | - |
-| `--no-status`, `--nested` | 🔄 In Progress | - |
+| `--completion` flag | ✅ Done | Added flag, uses `task.Completion()` |
+| `--no-status`, `--nested` | ✅ Done | Added flags, passed to `NewListOptions()` |
 
 ## Context
 
@@ -66,7 +66,7 @@ pflag.BoolVar(&Experiments, "experiments", false, "Lists all the available exper
 
 ---
 
-### 3. `--completion` Flag
+### 3. `--completion` Flag ✅ IMPLEMENTED
 
 **Upstream Task:** `.src/task/internal/flags/flags.go:121`
 
@@ -74,11 +74,14 @@ pflag.BoolVar(&Experiments, "experiments", false, "Lists all the available exper
 pflag.StringVar(&Completion, "completion", "", "Generates shell completion script.")
 ```
 
-And in `cmd/task/task.go:120-127`:
+**xplat:** ✅ Implemented in `cmd/xplat/cmd/task.go`
 
 ```go
-if flags.Completion != "" {
-    script, err := task.Completion(flags.Completion)
+TaskCmd.Flags().StringVar(&taskCompletion, "completion", "", "Generates shell completion script (bash, zsh, fish, powershell)")
+
+// In runTask():
+if taskCompletion != "" {
+    script, err := task.Completion(taskCompletion)
     if err != nil {
         return err
     }
@@ -87,15 +90,11 @@ if flags.Completion != "" {
 }
 ```
 
-**xplat:** Missing flag
-
-**Impact:** Users cannot generate shell completions for `xplat task`. They must use standalone `task` for this.
-
-**Recommendation:** MEDIUM priority - add `--completion` support
+**Status:** Shell completions now available via `xplat task --completion bash|zsh|fish|powershell`.
 
 ---
 
-### 4. `--no-status` and `--nested` List Options
+### 4. `--no-status` and `--nested` List Options ✅ IMPLEMENTED
 
 **Upstream Task:** `.src/task/internal/flags/flags.go:127-128`
 
@@ -104,11 +103,17 @@ pflag.BoolVar(&NoStatus, "no-status", false, "Ignore status when listing tasks a
 pflag.BoolVar(&Nested, "nested", false, "Nest namespaces when listing tasks as JSON")
 ```
 
-**xplat:** Missing flags
+**xplat:** ✅ Implemented in `cmd/xplat/cmd/task.go`
 
-**Impact:** JSON output from `xplat task --list --json` lacks these options for controlling output format.
+```go
+TaskCmd.Flags().BoolVar(&taskNoStatus, "no-status", false, "Ignore status when listing tasks as JSON")
+TaskCmd.Flags().BoolVar(&taskNested, "nested", false, "Nest namespaces when listing tasks as JSON")
 
-**Recommendation:** MEDIUM priority - add for JSON list completeness
+// In runTask():
+listOptions := task.NewListOptions(taskList, taskListAll, taskListJson, taskNoStatus, taskNested)
+```
+
+**Status:** JSON list output now supports `--no-status` and `--nested` options
 
 ---
 
@@ -268,8 +273,8 @@ specialVars.Set("CLI_ASSUME_YES", ast.Var{Value: flags.AssumeYes})
 |---------|----------|--------|--------|--------|
 | GitHub Actions annotations | HIGH | Low | CI visibility | ✅ Done |
 | `--failfast` | MEDIUM | Low | CI reliability | ✅ Done |
-| `--completion` | MEDIUM | Low | User convenience | 🔄 Next |
-| `--no-status`, `--nested` | MEDIUM | Low | JSON output | 🔄 Next |
+| `--completion` | MEDIUM | Low | User convenience | ✅ Done |
+| `--no-status`, `--nested` | MEDIUM | Low | JSON output | ✅ Done |
 | `.taskrc.yml` integration | MEDIUM | Medium | Config consistency | Pending |
 | `--experiments` | LOW | Low | Debug/info | Pending |
 | `--sort` | LOW | Low | Cosmetic | Pending |
@@ -289,15 +294,15 @@ specialVars.Set("CLI_ASSUME_YES", ast.Var{Value: flags.AssumeYes})
 1. ✅ **Add `emitCIErrorAnnotation()`** - Implemented
 2. ✅ **Add `--failfast` flag** - Implemented
 
-### Phase 2: User Experience (In Progress)
+### Phase 2: User Experience ✅ COMPLETE
 
-3. 🔄 **Add `--completion` flag** - Improve shell integration
-4. 🔄 **Add `--no-status`, `--nested` flags** - Complete JSON output
-5. **Integrate `.taskrc.yml` config** - Respect user config
+3. ✅ **Add `--completion` flag** - Shell completions for bash/zsh/fish/powershell
+4. ✅ **Add `--no-status`, `--nested` flags** - JSON list output options
+5. **Integrate `.taskrc.yml` config** - Respect user config (optional, xplat uses opinionated defaults)
 
 ### Phase 3: Completeness
 
-6. Add remaining flags for parity
+6. Add remaining flags for parity (low priority)
 
 ---
 
