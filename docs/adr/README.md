@@ -26,6 +26,7 @@ docs/adr/
 | ADR | Title | Status |
 |-----|-------|--------|
 | [ADR-001](ADR-001-kreuzberg-patterns.md) | Kreuzberg Patterns for Multi-Toolchain | Proposed |
+| [ADR-005](ADR-005-cloudflare-sync-architecture.md) | Cloudflare Sync Architecture | Proposed |
 
 ### Accepted
 
