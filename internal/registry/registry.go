@@ -131,17 +131,46 @@ func (c *Client) FetchManifest(repo string) (*Package, error) {
 		return nil, fmt.Errorf("failed to read manifest: %w", err)
 	}
 
-	var pkg Package
-	if err := yaml.Unmarshal(body, &pkg); err != nil {
+	// Parse as Manifest YAML structure (the actual xplat.yaml format)
+	var m Manifest
+	if err := yaml.Unmarshal(body, &m); err != nil {
 		return nil, fmt.Errorf("failed to parse manifest: %w", err)
 	}
 
-	// Set repo URL if not already set
-	if pkg.RepoURL == "" {
-		pkg.RepoURL = "https://" + repo
+	// Convert Manifest to Package (the registry's internal format)
+	pkg := &Package{
+		Name:        m.Name,
+		Version:     m.Version,
+		Description: m.Description,
+		License:     m.License,
+		Author:      m.Author,
+		RepoURL:     "https://" + repo,
 	}
 
-	return &pkg, nil
+	// Map binary config
+	if m.Binary != nil && m.Binary.Name != "" {
+		pkg.HasBinary = true
+		pkg.BinaryName = m.Binary.Name
+	}
+
+	// Map taskfile config
+	if m.Taskfile != nil && m.Taskfile.Path != "" {
+		pkg.TaskfilePath = m.Taskfile.Path
+	}
+
+	// Map process config (use "default" process or the single "process" field)
+	if m.Process != nil && m.Process.Command != "" {
+		pkg.Process = &ProcessConfig{
+			Command:    m.Process.Command,
+			Port:       m.Process.Port,
+			HealthPath: m.Process.HealthPath,
+			Disabled:   m.Process.Disabled,
+			DependsOn:  m.Process.DependsOn,
+			Namespace:  m.Process.Namespace,
+		}
+	}
+
+	return pkg, nil
 }
 
 // GetPackage resolves a package name and fetches its full metadata.

@@ -69,3 +69,47 @@ func (p *Package) TaskfileURL() string {
 	}
 	return "https://github.com/" + p.GitHubRepo() + ".git//" + p.TaskfilePath + "?ref=" + p.Version
 }
+
+// Manifest mirrors the xplat.yaml structure for parsing remote manifests.
+// This is a subset of manifest.Manifest to avoid import cycles.
+type Manifest struct {
+	Name        string          `yaml:"name"`
+	Version     string          `yaml:"version"`
+	Description string          `yaml:"description"`
+	Author      string          `yaml:"author"`
+	License     string          `yaml:"license"`
+	Binary      *ManifestBinary `yaml:"binary,omitempty"`
+	Taskfile    *ManifestTF     `yaml:"taskfile,omitempty"`
+	Process     *ManifestProc   `yaml:"process,omitempty"`
+}
+
+// ManifestBinary is the binary config from xplat.yaml.
+type ManifestBinary struct {
+	Name   string               `yaml:"name"`
+	Source *ManifestBinarySource `yaml:"source,omitempty"`
+}
+
+// ManifestBinarySource is the source config for binary installation.
+type ManifestBinarySource struct {
+	Go     string `yaml:"go,omitempty"`
+	GitHub *struct {
+		Repo  string `yaml:"repo"`
+		Asset string `yaml:"asset,omitempty"`
+	} `yaml:"github,omitempty"`
+}
+
+// ManifestTF is the taskfile config from xplat.yaml.
+type ManifestTF struct {
+	Path      string `yaml:"path"`
+	Namespace string `yaml:"namespace,omitempty"`
+}
+
+// ManifestProc is the process config from xplat.yaml.
+type ManifestProc struct {
+	Command    string   `yaml:"command"`
+	Port       int      `yaml:"port,omitempty"`
+	HealthPath string   `yaml:"health_path,omitempty"`
+	Disabled   bool     `yaml:"disabled,omitempty"`
+	DependsOn  []string `yaml:"depends_on,omitempty"`
+	Namespace  string   `yaml:"namespace,omitempty"`
+}
