@@ -300,71 +300,7 @@ func (app *App) setupIndexPage(c *via.Context) {
 }
 
 // renderNav renders the unified navigation header.
+// This is a wrapper around the shared RenderNav function.
 func (app *App) renderNav(activeTab ActiveTab) h.H {
-	tabStyle := func(tab ActiveTab) string {
-		base := "color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.25rem 0.25rem 0 0;"
-		if tab == activeTab {
-			return base + " background-color: #495057;"
-		}
-		return base
-	}
-
-	var tabs []h.H
-
-	// Home tab
-	tabs = append(tabs, h.A(
-		h.Href("/"),
-		h.Style(tabStyle(TabHome)),
-		h.Text("Home"),
-	))
-
-	// Tasks tab
-	if app.config.EnableTasks {
-		tabs = append(tabs, h.A(
-			h.Href("/tasks"),
-			h.Style(tabStyle(TabTasks)),
-			h.Text("Tasks"),
-		))
-	}
-
-	// Processes tab
-	if app.config.EnableProcesses {
-		tabs = append(tabs, h.A(
-			h.Href("/processes"),
-			h.Style(tabStyle(TabProcesses)),
-			h.Text("Processes"),
-		))
-	}
-
-	// Setup tab
-	if app.config.EnableSetup {
-		tabs = append(tabs, h.A(
-			h.Href("/setup"),
-			h.Style(tabStyle(TabSetup)),
-			h.Text("Setup"),
-		))
-	}
-
-	return h.Nav(
-		h.Style("background-color: #343a40; padding: 1rem; margin-bottom: 1rem;"),
-		h.Div(
-			h.Style("display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto;"),
-			h.Div(
-				h.Style("display: flex; align-items: center; gap: 1rem;"),
-				h.A(
-					h.Href("/"),
-					h.Style("color: white; text-decoration: none; font-size: 1.25rem;"),
-					h.Strong(h.Text("xplat")),
-				),
-				h.Div(
-					h.Style("display: flex; gap: 0.25rem; margin-left: 1rem;"),
-					h.Div(tabs...),
-				),
-			),
-			h.Span(
-				h.Style("color: #6c757d;"),
-				h.Text(app.config.WorkDir),
-			),
-		),
-	)
+	return RenderNav(string(activeTab), app.config.WorkDir)
 }

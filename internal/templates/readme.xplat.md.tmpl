@@ -2,56 +2,23 @@
 
 **One binary to bootstrap and run any plat-* project.**
 
-## Why?
-
 Instead of installing Task, process-compose, and various CLIs separately,
 xplat embeds them all. One binary, works on macOS/Linux/Windows.
-
-## Composability - The Key Feature
-
-**Reuse tasks and processes across projects.**
-
-xplat enables composability: install packages from other xplat projects
-and immediately use their tasks and processes in your project.
-
-```bash
-# Install a package
-xplat pkg install plat-nats --with-process
-
-# Generate includes from installed packages
-xplat gen taskfile    # Creates Taskfile.generated.yml with remote includes
-xplat gen process     # Creates pc.generated.yaml with processes
-
-# Now use tasks from the installed package!
-task nats:run         # Run tasks defined in plat-nats
-process-compose up    # Run processes including plat-nats
-```
-
-**How it works:**
-1. `xplat pkg install` downloads binaries and records package info in `xplat-lock.yaml`
-2. `xplat gen taskfile` reads the lockfile and generates remote Taskfile includes
-3. `xplat gen process` reads the lockfile and generates process-compose definitions
-
-This lets you build a platform from composable pieces - each `plat-*` project
-can expose tasks and processes that other projects can reuse.
 
 ## Quick Start
 
 ```bash
-# 1. Bootstrap a new project
+# Bootstrap a new project
 xplat manifest bootstrap
 
-# 2. Generate project files from xplat.yaml
-xplat gen all
-
-# 3. Build/test/lint (embedded Task)
+# Build/test (embedded Task)
 xplat task build
 xplat task test
 
-# 4. Run services (embedded process-compose)
-xplat process
+# Run services (embedded process-compose)
+xplat process up
 
-# 5. Install packages from registry
+# Install packages from registry
 xplat pkg install <name>
 ```
 
@@ -62,68 +29,28 @@ xplat pkg install <name>
 curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | sh
 
 # Or build from source
-xplat internal dev install
+go build -o xplat .
 ```
 
-## Architecture
+## Documentation
 
-xplat solves the problem of consistent tooling across multiple `plat-*` projects on Mac/Linux/Windows.
-
-| Component | Purpose |
-|-----------|---------|
-| **Embedded Task** | Declarative build system. Taskfile.yml defines build/test/lint. |
-| **Embedded process-compose** | Multi-process orchestration. Run app + dependencies together. |
-| **xplat.yaml manifest** | Single source of truth: language, binary, env vars, processes. |
-| **gen commands** | Generate CI, .gitignore, .env from manifest. Change manifest, regenerate. |
-| **pkg registry** | Shared tooling. Install a package = binary + taskfile + process config. |
-| **os utilities** | Cross-platform primitives (rm, cp, glob) that behave identically everywhere. |
-| **sync-gh / sync-cf** | Watch external services (GitHub, Cloudflare) for events. No vendor CLI needed. |
-
-**The pattern:**
-```
-xplat.yaml (manifest) → gen → Taskfile.yml, process-compose.yaml, CI workflow
-                       ↓
-                    xplat task build    (runs tasks)
-                    xplat process       (runs services)
-```
-
-## Sync Commands
-
-The `sync-gh` and `sync-cf` commands monitor external services without requiring vendor CLIs.
-
-**Why?** You often need to react to external events:
-- A dependency released a new version (GitHub release)
-- CI workflow completed (GitHub Actions)
-- A deploy finished (Cloudflare Pages)
-
-**How it works:**
-1. **Polling** - Periodically check APIs for changes (`sync-gh poll`, `sync-cf poll`)
-2. **Webhooks** - Receive push notifications from services (`sync-gh webhook`, `sync-cf webhook`)
-3. **Tunnels** - Expose local webhook server via Cloudflare tunnel (`sync-cf tunnel`)
-
-**Use cases:**
-- Auto-update dependencies when upstream releases
-- Trigger rebuilds when CI passes
-- Notify on deploy completion
+| Guide | Description |
+|-------|-------------|
+| [Generation Guide](docs/GENERATION.md) | How files get generated (manifest bootstrap vs gen) |
+| [Architecture](ARCHITECTURE.md) | System design and components |
+| [Manifest Design](docs/MANIFEST_DESIGN.md) | How xplat.yaml works |
+| [Actors](docs/ACTORS.md) | User personas and workflows |
 
 ## Commands
 
 {{range .Categories}}{{if .Commands}}### {{.Name}}
 
-{{if .Description}}{{.Description}}
-
-{{end}}| Command | Description |
+| Command | Description |
 |---------|-------------|
 {{range .Commands}}| `xplat {{.Name}}` | {{.Short}} |
 {{end}}
-
-{{end}}{{end}}## Command Reference
-
-{{range .AllCommands}}### `xplat {{.Name}}`
-
-{{.Short}}
-
-{{if .Subcommands}}**Subcommands:**
-{{range .Subcommands}}- `{{$.Name}} {{.Name}}` - {{.Short}}
-{{end}}
 {{end}}{{end}}
+
+---
+
+*This README is auto-generated from xplat commands. Run `xplat internal:docs readme` to regenerate.*

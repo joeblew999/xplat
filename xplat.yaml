@@ -1,0 +1,32 @@
+# xplat.yaml - Package manifest for xplat ecosystem
+apiVersion: xplat/v1
+kind: Package
+
+name: xplat
+version: main
+description: xplat package
+author: 
+license: MIT
+
+# Binary (detected from go.mod)
+binary:
+  name: xplat
+  source:
+    go: github.com/joeblew999/xplat
+
+# Taskfile (detected)
+taskfile:
+  path: Taskfile.yml
+  namespace: xplat
+
+# Uncomment to define processes for process-compose
+# processes:
+#   server:
+#     command: task run
+#     port: 8080
+
+# Uncomment to define environment variables
+# env:
+#   required:
+#     - name: API_KEY
+#       description: API key for the service

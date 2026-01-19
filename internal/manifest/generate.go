@@ -190,15 +190,21 @@ func DetectLanguage(baseDir string) string {
 	return ""
 }
 
+// WorkflowOptions configures CI workflow generation.
+type WorkflowOptions struct {
+	Language       string // go, rust, bun, or empty
+	IsExternalRepo bool   // true if binary comes from external git repo
+}
+
 // GenerateWorkflow generates a unified GitHub Actions CI workflow.
 // This creates a minimal workflow that delegates to Taskfile.
 // Uses the xplat setup action for cross-platform installation.
 // Runs on Linux, macOS, and Windows.
-// The language parameter determines which setup action to use (go, rust, bun).
-func (g *Generator) GenerateWorkflow(outputPath string, language string) error {
+func (g *Generator) GenerateWorkflow(outputPath string, opts WorkflowOptions) error {
 	content, err := templates.RenderExternal("ci.yml.tmpl", templates.CIWorkflowData{
-		Language:  normalizeLanguage(language),
-		XplatRepo: "joeblew999/xplat",
+		Language:       normalizeLanguage(opts.Language),
+		XplatRepo:      "joeblew999/xplat",
+		IsExternalRepo: opts.IsExternalRepo,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render CI workflow: %w", err)
@@ -210,22 +216,23 @@ func (g *Generator) GenerateWorkflow(outputPath string, language string) error {
 // GenerateWorkflowDir generates the workflow in .github/workflows/ci.yml
 // Auto-detects language from files if not specified in manifest.
 func (g *Generator) GenerateWorkflowDir(baseDir string) error {
-	workflowDir := baseDir + "/.github/workflows"
-	if err := os.MkdirAll(workflowDir, 0755); err != nil {
-		return fmt.Errorf("failed to create workflow directory: %w", err)
-	}
-
-	// Try to detect language from files
-	language := DetectLanguage(baseDir)
-
-	return g.GenerateWorkflow(workflowDir+"/ci.yml", language)
+	return g.GenerateWorkflowDirWithOptions(baseDir, WorkflowOptions{
+		Language: DetectLanguage(baseDir),
+	})
 }
 
 // GenerateWorkflowDirWithLanguage generates the workflow with explicit language.
 func (g *Generator) GenerateWorkflowDirWithLanguage(baseDir string, language string) error {
+	return g.GenerateWorkflowDirWithOptions(baseDir, WorkflowOptions{
+		Language: language,
+	})
+}
+
+// GenerateWorkflowDirWithOptions generates the workflow with full options.
+func (g *Generator) GenerateWorkflowDirWithOptions(baseDir string, opts WorkflowOptions) error {
 	workflowDir := baseDir + "/.github/workflows"
 	if err := os.MkdirAll(workflowDir, 0755); err != nil {
 		return fmt.Errorf("failed to create workflow directory: %w", err)
 	}
-	return g.GenerateWorkflow(workflowDir+"/ci.yml", language)
+	return g.GenerateWorkflow(workflowDir+"/ci.yml", opts)
 }

@@ -30,6 +30,10 @@ packages:
     repo: github.com/joeblew999/plat-geo
     description: Geographical system for maps and routing with GeoParquet and PMTiles support
 
+  plat-splat:
+    repo: github.com/joeblew999/plat-splat
+    description: 3D Gaussian Splat processing with Polyform
+
   # litesql ecosystem
   litesql-ha:
     repo: github.com/litesql/ha

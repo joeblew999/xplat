@@ -9,21 +9,15 @@ package web
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/go-via/via"
-	"github.com/go-via/via-plugin-picocss/picocss"
 	"github.com/go-via/via/h"
 
 	"github.com/joeblew999/xplat/internal/config"
@@ -54,97 +48,6 @@ func DefaultViaConfig() ViaConfig {
 		OpenBrowser:        config.DefaultOpenBrowser,
 		ProcessComposePort: config.DefaultProcessComposePort,
 	}
-}
-
-// StartVia starts the Via-based task UI server.
-func StartVia(ctx context.Context, cfg ViaConfig) error {
-	if cfg.WorkDir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		cfg.WorkDir = wd
-	}
-
-	url := fmt.Sprintf("http://localhost:%s", cfg.Port)
-	log.Printf("Task UI (Via) listening on %s\n", url)
-
-	if cfg.OpenBrowser {
-		go openBrowser(url)
-	}
-
-	// Setup signal handler for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-sigChan:
-			log.Println("\nShutting down...")
-			os.Exit(0)
-		case <-ctx.Done():
-			os.Exit(0)
-		}
-	}()
-
-	v := via.New()
-	v.Config(via.Options{
-		DocumentTitle: "xplat Task UI",
-		Plugins:       []via.Plugin{picocss.Default},
-		DevMode:       os.Getenv("VIA_DEV_MODE") != "false",
-		LogLvl:        via.LogLevelWarn,
-		ServerAddress: ":" + cfg.Port,
-	})
-
-	// Parse taskfile once at startup
-	tasks, err := listTasksFromFile(cfg.Taskfile, cfg.WorkDir)
-	if err != nil {
-		log.Printf("Warning: Failed to parse taskfile: %v", err)
-		tasks = []TaskInfo{}
-	}
-
-	// Create process-compose client
-	pcClient := NewProcessComposeClient(cfg.ProcessComposePort)
-
-	// API endpoint to proxy process logs (avoids CORS issues) - register before pages
-	v.HandleFunc("GET /api/process/logs/{name}", func(w http.ResponseWriter, r *http.Request) {
-		processName := r.PathValue("name")
-		if processName == "" {
-			http.Error(w, "process name required", http.StatusBadRequest)
-			return
-		}
-
-		logs, err := pcClient.GetProcessLogs(processName, 500)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"logs": logs})
-	})
-
-	// Index page - task list
-	v.Page("/", func(c *via.Context) {
-		viaTaskListPage(c, tasks, cfg)
-	})
-
-	// Processes page - process-compose status
-	v.Page("/processes", func(c *via.Context) {
-		viaProcessListPage(c, pcClient, cfg)
-	})
-
-	// Task execution pages - register one page per task
-	// Via doesn't support path parameters, so we register each task as a separate route
-	for _, task := range tasks {
-		taskName := task.Name // capture for closure
-		taskDesc := task.Description
-		v.Page("/task/"+taskName, func(c *via.Context) {
-			viaTaskExecutionPage(c, taskName, taskDesc, tasks, cfg)
-		})
-	}
-
-	v.Start()
-	return nil
 }
 
 // listTasksFromFile parses the taskfile and returns task info
@@ -190,7 +93,7 @@ func viaTaskListPage(c *via.Context, tasks []TaskInfo, cfg ViaConfig) {
 		for _, t := range tasks {
 			taskLinks = append(taskLinks,
 				h.A(
-					h.Href("/task/"+t.Name),
+					h.Href("/tasks/"+t.Name),
 					h.Style("display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color); text-decoration: none;"),
 					h.Div(
 						h.Strong(h.Text(t.Name)),
@@ -213,7 +116,7 @@ func viaTaskListPage(c *via.Context, tasks []TaskInfo, cfg ViaConfig) {
 
 		return h.Div(
 			// Header with tabs
-			viaNavHeader("tasks", cfg),
+			RenderNav("tasks", cfg.WorkDir),
 
 			// Main content
 			h.Main(
@@ -369,13 +272,13 @@ func viaTaskExecutionPage(c *via.Context, taskName, taskDesc string, tasks []Tas
 					style += " background-color: var(--pico-primary); color: white;"
 				}
 				link := h.A(
-					h.Href("/task/"+t.Name),
+					h.Href("/tasks/"+t.Name),
 					h.Style(style),
 					h.Text(displayName),
 				)
 				if isActive {
 					link = h.A(
-						h.Href("/task/"+t.Name),
+						h.Href("/tasks/"+t.Name),
 						h.Style(style),
 						h.ID("active-task"),
 						h.Text(displayName),
@@ -387,7 +290,7 @@ func viaTaskExecutionPage(c *via.Context, taskName, taskDesc string, tasks []Tas
 
 		return h.Div(
 			// Header with tabs
-			viaNavHeader("tasks", cfg),
+			RenderNav("tasks", cfg.WorkDir),
 
 			// Main content
 			h.Main(
@@ -519,16 +422,15 @@ func readLines(r io.Reader, callback func(string)) {
 	}
 }
 
-// viaNavHeader creates the navigation header with tabs.
-func viaNavHeader(activeTab string, cfg ViaConfig) h.H {
-	taskTabStyle := "color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.25rem 0.25rem 0 0;"
-	processTabStyle := taskTabStyle
-
-	if activeTab == "tasks" {
-		taskTabStyle += " background-color: #495057;"
-	}
-	if activeTab == "processes" {
-		processTabStyle += " background-color: #495057;"
+// RenderNav is the single source of truth for navigation.
+// Used by both app.go and the page functions in this file.
+func RenderNav(activeTab string, workDir string) h.H {
+	tabStyle := func(tab string) string {
+		base := "color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.25rem 0.25rem 0 0;"
+		if tab == activeTab {
+			return base + " background-color: #495057;"
+		}
+		return base
 	}
 
 	return h.Nav(
@@ -540,26 +442,35 @@ func viaNavHeader(activeTab string, cfg ViaConfig) h.H {
 				h.A(
 					h.Href("/"),
 					h.Style("color: white; text-decoration: none; font-size: 1.25rem;"),
-					h.Strong(h.Text("xplat ")),
-					h.Text("UI"),
+					h.Strong(h.Text("xplat")),
 				),
 				h.Div(
 					h.Style("display: flex; gap: 0.25rem; margin-left: 1rem;"),
 					h.A(
 						h.Href("/"),
-						h.Style(taskTabStyle),
+						h.Style(tabStyle("home")),
+						h.Text("Home"),
+					),
+					h.A(
+						h.Href("/tasks"),
+						h.Style(tabStyle("tasks")),
 						h.Text("Tasks"),
 					),
 					h.A(
 						h.Href("/processes"),
-						h.Style(processTabStyle),
+						h.Style(tabStyle("processes")),
 						h.Text("Processes"),
+					),
+					h.A(
+						h.Href("/setup"),
+						h.Style(tabStyle("setup")),
+						h.Text("Setup"),
 					),
 				),
 			),
 			h.Span(
 				h.Style("color: #6c757d;"),
-				h.Text(cfg.WorkDir),
+				h.Text(workDir),
 			),
 		),
 	)
@@ -712,7 +623,7 @@ func viaProcessListPage(c *via.Context, client *ProcessComposeClient, cfg ViaCon
 
 		return h.Div(
 			// Header with tabs
-			viaNavHeader("processes", cfg),
+			RenderNav("processes", cfg.WorkDir),
 
 			// Main content
 			h.Main(

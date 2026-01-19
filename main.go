@@ -2,6 +2,9 @@
 //
 // A single binary that provides consistent behavior across
 // macOS, Linux, and Windows for common shell operations.
+//
+// BUILD: go run . internal dev build
+// QUICK: go run . internal dev install
 package main
 
 import (

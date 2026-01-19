@@ -1,0 +1,146 @@
+version: '3'
+
+# =============================================================================
+# xplat - Cross-Platform Taskfile Bootstrapper
+# =============================================================================
+# Auto-generated from xplat commands. Do not edit directly.
+# Regenerate with: xplat docs taskfile
+# =============================================================================
+
+vars:
+  # Use installed xplat binary (from GitHub releases or local build)
+  XPLAT: xplat
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ===========================================================================
+  # Service Commands (front and center!)
+  # ===========================================================================
+  # Start xplat as a system service with all features enabled:
+  #   - Process orchestration (process-compose)
+  #   - Task UI web dashboard
+  #   - MCP HTTP server for AI IDE integration
+
+  up:
+    desc: "Start xplat service with UI + MCP (recommended)"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui --with-mcp"
+
+  up:ui:
+    desc: "Start xplat service with UI only"
+    cmds:
+      - "{{.XPLAT}} service start --with-ui"
+
+  up:mcp:
+    desc: "Start xplat service with MCP only"
+    cmds:
+      - "{{.XPLAT}} service start --with-mcp"
+
+  up:minimal:
+    desc: "Start xplat service (process-compose only)"
+    cmds:
+      - "{{.XPLAT}} service start"
+
+  down:
+    desc: "Stop xplat service"
+    cmds:
+      - "{{.XPLAT}} service stop"
+
+  status:
+    desc: "Show xplat service status"
+    cmds:
+      - "{{.XPLAT}} service status"
+
+  restart:
+    desc: "Restart xplat service"
+    cmds:
+      - "{{.XPLAT}} service restart"
+
+  # ===========================================================================
+  # xplat Command Wrappers
+  # ===========================================================================
+
+  xplat:binary:
+    desc: "Binary management commands"
+    cmds:
+      - "{{.XPLAT}} binary {{.CLI_ARGS}}"
+
+  xplat:docs:
+    desc: "Generate documentation from xplat commands"
+    cmds:
+      - "{{.XPLAT}} docs {{.CLI_ARGS}}"
+
+  xplat:gen:
+    desc: "Generate project files from YOUR local xplat.yaml"
+    cmds:
+      - "{{.XPLAT}} gen {{.CLI_ARGS}}"
+
+  xplat:manifest:
+    desc: "Inspect, validate, and bootstrap xplat.yaml manifests"
+    cmds:
+      - "{{.XPLAT}} manifest {{.CLI_ARGS}}"
+
+  xplat:mcp:
+    desc: "MCP (Model Context Protocol) server"
+    cmds:
+      - "{{.XPLAT}} mcp {{.CLI_ARGS}}"
+
+  xplat:os:
+    desc: "Cross-platform OS utilities"
+    cmds:
+      - "{{.XPLAT}} os {{.CLI_ARGS}}"
+
+  xplat:pkg:
+    desc: "Install packages from REMOTE registry (binaries, taskfiles, processes)"
+    cmds:
+      - "{{.XPLAT}} pkg {{.CLI_ARGS}}"
+
+  xplat:process:
+    desc: "Process orchestration (embedded process-compose)"
+    cmds:
+      - "{{.XPLAT}} process {{.CLI_ARGS}}"
+
+  xplat:release:
+    desc: "Release build orchestration"
+    cmds:
+      - "{{.XPLAT}} release {{.CLI_ARGS}}"
+
+  xplat:run:
+    desc: "Run a managed tool"
+    cmds:
+      - "{{.XPLAT}} run {{.CLI_ARGS}}"
+
+  xplat:service:
+    desc: "Manage xplat as a system service"
+    cmds:
+      - "{{.XPLAT}} service {{.CLI_ARGS}}"
+
+  xplat:sync-cf:
+    desc: "Cloudflare sync operations (no wrangler CLI required)"
+    cmds:
+      - "{{.XPLAT}} sync-cf {{.CLI_ARGS}}"
+
+  xplat:sync-gh:
+    desc: "GitHub sync operations (no gh CLI required)"
+    cmds:
+      - "{{.XPLAT}} sync-gh {{.CLI_ARGS}}"
+
+  xplat:task:
+    desc: "Run Taskfile tasks (embedded Task runner)"
+    cmds:
+      - "{{.XPLAT}} task {{.CLI_ARGS}}"
+
+  xplat:update:
+    desc: "Update xplat to the latest version"
+    cmds:
+      - "{{.XPLAT}} update {{.CLI_ARGS}}"
+
+  xplat:version:
+    desc: "Print xplat version"
+    cmds:
+      - "{{.XPLAT}} version {{.CLI_ARGS}}"
+

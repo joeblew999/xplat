@@ -1,0 +1,50 @@
+version: "0.5"
+processes:
+    synccf-receive:
+        command: xplat sync-cf receive --port=9091 --invalidate
+        disabled: true
+        namespace: sync
+        description: Receive Cloudflare events from Worker and invalidate Task cache
+        readiness_probe:
+            http_get:
+                scheme: http
+                host: 127.0.0.1
+                port: 9091
+                path: /health
+            initial_delay_seconds: 2
+            period_seconds: 10
+            timeout_seconds: 5
+            failure_threshold: 3
+    syncgh-poll:
+        command: xplat sync-gh poll --interval=5m --invalidate
+        disabled: true
+        namespace: sync
+        description: Poll GitHub repos for changes and invalidate Task cache
+    google:
+        command: task google:gmail:server
+        disabled: true
+        namespace: servers
+        readiness_probe:
+            http_get:
+                scheme: http
+                host: 127.0.0.1
+                port: 8087
+                path: /health
+            initial_delay_seconds: 5
+            period_seconds: 10
+            timeout_seconds: 5
+            failure_threshold: 3
+    mailerlite:
+        command: task mailerlite:server
+        disabled: true
+        namespace: servers
+        readiness_probe:
+            http_get:
+                scheme: http
+                host: 127.0.0.1
+                port: 8086
+                path: /health
+            initial_delay_seconds: 5
+            period_seconds: 10
+            timeout_seconds: 5
+            failure_threshold: 3

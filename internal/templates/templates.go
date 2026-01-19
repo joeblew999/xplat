@@ -143,8 +143,9 @@ func ListExternalTemplates() ([]string, error) {
 
 // CIWorkflowData holds values for ci.yml template.
 type CIWorkflowData struct {
-	Language  string // go, rust, bun, or empty
-	XplatRepo string // joeblew999/xplat
+	Language       string // go, rust, bun, or empty
+	XplatRepo      string // joeblew999/xplat
+	IsExternalRepo bool   // true if binary comes from external git repo (changes CI tasks)
 }
 
 // GitignoreData holds values for gitignore template.
@@ -155,10 +156,18 @@ type GitignoreData struct {
 
 // TaskfileData holds values for taskfile.yml template.
 type TaskfileData struct {
-	Name     string
-	Binary   string
-	MainPath string
-	HasTests bool
+	Name           string
+	Binary         string
+	MainPath       string
+	HasTests       bool
+	Language       string // "go" or "rust"
+	RunArgs        string // Arguments for user-facing run (e.g., "edit" for polyform)
+	ServiceRunArgs string // Arguments for service/daemon mode (e.g., "edit -launch-browser=false")
+
+	// External source repo fields (for cloning upstream projects)
+	IsExternalRepo bool   // true if binary comes from external git repo
+	SourceRepo     string // Git repo URL (e.g., "https://github.com/EliCDavis/polyform.git")
+	SourceVersion  string // Tag/branch to checkout (e.g., "v0.35.0")
 }
 
 // ReadmeData holds values for readme.md template.

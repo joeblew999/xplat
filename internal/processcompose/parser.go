@@ -54,12 +54,12 @@ type Availability struct {
 
 // ReadinessProbe configuration for health checks.
 type ReadinessProbe struct {
-	Exec                *ExecProbe `yaml:"exec"`
-	HTTPGet             *HTTPGet   `yaml:"http_get"`
-	InitialDelaySeconds int        `yaml:"initial_delay_seconds"`
-	PeriodSeconds       int        `yaml:"period_seconds"`
-	TimeoutSeconds      int        `yaml:"timeout_seconds"`
-	FailureThreshold    int        `yaml:"failure_threshold"`
+	Exec                *ExecProbe `yaml:"exec,omitempty"`
+	HTTPGet             *HTTPGet   `yaml:"http_get,omitempty"`
+	InitialDelaySeconds int        `yaml:"initial_delay_seconds,omitempty"`
+	PeriodSeconds       int        `yaml:"period_seconds,omitempty"`
+	TimeoutSeconds      int        `yaml:"timeout_seconds,omitempty"`
+	FailureThreshold    int        `yaml:"failure_threshold,omitempty"`
 }
 
 // ExecProbe for command-based health checks.

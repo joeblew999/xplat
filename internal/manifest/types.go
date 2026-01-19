@@ -32,8 +32,11 @@ func (m *Manifest) RepoName() string {
 
 // BinaryConfig defines how to install the package binary.
 type BinaryConfig struct {
-	Name   string        `yaml:"name"`
-	Source *SourceConfig `yaml:"source"`
+	Name           string        `yaml:"name"`
+	Main           string        `yaml:"main,omitempty"`             // Path to main package (e.g., "./cmd/polyform")
+	RunArgs        string        `yaml:"run_args,omitempty"`         // Arguments for user-facing run (e.g., "edit" for polyform)
+	ServiceRunArgs string        `yaml:"service_run_args,omitempty"` // Arguments for service/daemon mode (e.g., "edit -launch-browser=false")
+	Source         *SourceConfig `yaml:"source"`
 }
 
 // SourceConfig defines where to get the binary.
@@ -49,6 +52,18 @@ type SourceConfig struct {
 
 	// Direct URL (supports {{.OS}} and {{.ARCH}} templates)
 	URL string `yaml:"url,omitempty"`
+
+	// Git repository URL for cloning and building from source
+	// Use with Version to pin to a specific tag/branch
+	Repo string `yaml:"repo,omitempty"`
+
+	// Version/tag to checkout (used with Repo)
+	Version string `yaml:"version,omitempty"`
+}
+
+// IsExternalRepo returns true if this source uses git clone from external repo.
+func (s *SourceConfig) IsExternalRepo() bool {
+	return s != nil && s.Repo != ""
 }
 
 // GitHubSource defines a GitHub release source.

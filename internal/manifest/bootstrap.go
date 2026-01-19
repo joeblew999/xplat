@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/joeblew999/xplat/internal/processcompose"
 	"github.com/joeblew999/xplat/internal/taskfile"
 )
 
@@ -89,6 +91,28 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 			// Extract main path from go install path
 			tfOpts.MainPath = extractMainPath(m.Binary.Source.Go)
 		}
+		// Pass language from manifest (defaults to "go" in Generate)
+		if m.Language != "" {
+			tfOpts.Language = m.Language
+		}
+		// Pass external repo info if present
+		if m.Binary != nil && m.Binary.Source != nil && m.Binary.Source.IsExternalRepo() {
+			tfOpts.IsExternalRepo = true
+			tfOpts.SourceRepo = m.Binary.Source.Repo
+			tfOpts.SourceVersion = m.Binary.Source.Version
+			// Use Main from binary config if specified
+			if m.Binary.Main != "" {
+				tfOpts.MainPath = m.Binary.Main
+			}
+		}
+		// Pass run_args if specified
+		if m.Binary != nil && m.Binary.RunArgs != "" {
+			tfOpts.RunArgs = m.Binary.RunArgs
+		}
+		// Pass service_run_args if specified
+		if m.Binary != nil && m.Binary.ServiceRunArgs != "" {
+			tfOpts.ServiceRunArgs = m.Binary.ServiceRunArgs
+		}
 		return taskfile.Generate(taskfilePath, tfOpts)
 	}); err != nil {
 		result.Errors = append(result.Errors, fmt.Sprintf("Taskfile.yml: %v", err))
@@ -110,7 +134,14 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 	workflowPath := filepath.Join(dir, ".github", "workflows", "ci.yml")
 	if err := generateIfNeeded(workflowPath, opts, result, func() error {
 		gen := NewGenerator(nil)
-		return gen.GenerateWorkflowDir(dir)
+		wfOpts := WorkflowOptions{
+			Language: m.Language,
+		}
+		// Check if this is an external repo project
+		if m.Binary != nil && m.Binary.Source != nil && m.Binary.Source.IsExternalRepo() {
+			wfOpts.IsExternalRepo = true
+		}
+		return gen.GenerateWorkflowDirWithOptions(dir, wfOpts)
 	}); err != nil {
 		result.Errors = append(result.Errors, fmt.Sprintf(".github/workflows/ci.yml: %v", err))
 	}
@@ -136,6 +167,24 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 		}); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf(".env.example: %v", err))
 		}
+	}
+
+	// 7. Generate process-compose.yaml if manifest has processes
+	if m.HasProcesses() {
+		pcPath := filepath.Join(dir, "process-compose.yaml")
+		if err := generateIfNeeded(pcPath, opts, result, func() error {
+			return generateProcessCompose(pcPath, m)
+		}); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("process-compose.yaml: %v", err))
+		}
+	}
+
+	// 8. Generate taskfiles/Taskfile.service.yml for remote include by consumers
+	serviceTaskfilePath := filepath.Join(dir, "taskfiles", "Taskfile.service.yml")
+	if err := generateIfNeeded(serviceTaskfilePath, opts, result, func() error {
+		return taskfile.GenerateServiceTaskfile(serviceTaskfilePath, binaryName, projectName)
+	}); err != nil {
+		result.Errors = append(result.Errors, fmt.Sprintf("taskfiles/Taskfile.service.yml: %v", err))
 	}
 
 	return result, nil
@@ -203,6 +252,90 @@ func findSubstring(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// generateProcessCompose creates a process-compose.yaml from manifest processes.
+func generateProcessCompose(path string, m *Manifest) error {
+	gen := processcompose.NewGenerator(path)
+	config := processcompose.NewConfig()
+
+	// Set env_file to load .env
+	config.EnvFile = []string{".env"}
+
+	// Convert manifest processes to process-compose processes
+	for name, proc := range m.Processes {
+		// Ensure command uses xplat task prefix
+		command := proc.Command
+		if !strings.HasPrefix(command, "xplat ") {
+			// Convert "task foo:run" to "xplat task foo:run"
+			if strings.HasPrefix(command, "task ") {
+				command = "xplat " + command
+			}
+		}
+
+		pcProc := &processcompose.Process{
+			Command:    command,
+			WorkingDir: ".",
+			Disabled:   proc.Disabled,
+			Namespace:  proc.Namespace,
+			Shutdown: &processcompose.Shutdown{
+				Signal:         15, // SIGTERM
+				TimeoutSeconds: 10,
+			},
+			Availability: &processcompose.Availability{
+				Restart:        "on_failure",
+				BackoffSeconds: 5,
+			},
+		}
+
+		// Add dependencies
+		if len(proc.DependsOn) > 0 {
+			pcProc.DependsOn = make(map[string]processcompose.DepCfg)
+			for _, dep := range proc.DependsOn {
+				pcProc.DependsOn[dep] = processcompose.DepCfg{Condition: "process_healthy"}
+			}
+		}
+
+		// Add readiness probe using task health command
+		if proc.Port > 0 {
+			initialDelay := 3
+			period := 5
+			if proc.Readiness != nil {
+				if proc.Readiness.InitialDelay > 0 {
+					initialDelay = proc.Readiness.InitialDelay
+				}
+				if proc.Readiness.Period > 0 {
+					period = proc.Readiness.Period
+				}
+			}
+			pcProc.ReadinessProbe = &processcompose.ReadinessProbe{
+				Exec: &processcompose.ExecProbe{
+					Command: fmt.Sprintf("xplat task %s:health", name),
+				},
+				InitialDelaySeconds: initialDelay,
+				PeriodSeconds:       period,
+			}
+		}
+
+		config.Processes[name] = pcProc
+	}
+
+	// Write with header comment
+	header := fmt.Sprintf(`# ============================================================================
+# GENERATED FILE - DO NOT EDIT MANUALLY
+# ============================================================================
+# Generated by: xplat manifest bootstrap
+# Regenerate with: xplat manifest bootstrap --force
+# Source: https://github.com/joeblew999/xplat
+# ============================================================================
+#
+# %s Process Compose Configuration
+# Run with: xplat process up
+# Or use: xplat task up
+#
+`, m.Name)
+
+	return gen.WriteWithHeader(config, header)
 }
 
 // CheckConformity checks if a directory conforms to plat-* standards.

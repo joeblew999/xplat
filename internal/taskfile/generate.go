@@ -4,18 +4,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joeblew999/xplat/internal/templates"
 )
 
 // GenerateOptions configures Taskfile generation.
 type GenerateOptions struct {
-	Name        string // Project name (e.g., "plat-caddy")
-	Description string // Project description
-	Binary      string // Binary name (e.g., "caddy")
-	MainPath    string // Path to main.go (e.g., "./cmd/caddy")
-	HasTests    bool   // Include test task
-	HasLint     bool   // Include lint task
+	Name           string // Project name (e.g., "plat-caddy")
+	Description    string // Project description
+	Binary         string // Binary name (e.g., "caddy")
+	MainPath       string // Path to main.go (e.g., "./cmd/caddy")
+	HasTests       bool   // Include test task
+	HasLint        bool   // Include lint task
+	Language       string // "go" or "rust" (default: "go")
+	RunArgs        string // Arguments for user-facing run (e.g., "edit")
+	ServiceRunArgs string // Arguments for service/daemon mode (e.g., "edit -launch-browser=false")
+
+	// External source repo options
+	IsExternalRepo bool   // true if binary comes from external git repo
+	SourceRepo     string // Git repo URL
+	SourceVersion  string // Tag/branch to checkout
 }
 
 // DefaultOptions returns sensible defaults for a Go project.
@@ -55,6 +64,7 @@ func DefaultOptions(projectDir string) GenerateOptions {
 		MainPath: mainPath,
 		HasTests: hasTests,
 		HasLint:  true, // Always include lint
+		Language: "go", // Default to Go
 	}
 }
 
@@ -70,11 +80,23 @@ func Generate(outputPath string, opts GenerateOptions) error {
 		mainPath = "."
 	}
 
+	// Default language to "go" if not specified
+	language := opts.Language
+	if language == "" {
+		language = "go"
+	}
+
 	content, err := templates.RenderExternal("taskfile.yml.tmpl", templates.TaskfileData{
-		Name:     opts.Name,
-		Binary:   binary,
-		MainPath: mainPath,
-		HasTests: opts.HasTests,
+		Name:           opts.Name,
+		Binary:         binary,
+		MainPath:       mainPath,
+		HasTests:       opts.HasTests,
+		Language:       language,
+		RunArgs:        opts.RunArgs,
+		ServiceRunArgs: opts.ServiceRunArgs,
+		IsExternalRepo: opts.IsExternalRepo,
+		SourceRepo:     opts.SourceRepo,
+		SourceVersion:  opts.SourceVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render taskfile: %w", err)
@@ -120,6 +142,30 @@ func GenerateReadme(outputPath string, name, description string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render readme: %w", err)
+	}
+
+	return os.WriteFile(outputPath, content, 0644)
+}
+
+// GenerateServiceTaskfile creates a taskfiles/Taskfile.service.yml for remote include by consumers.
+func GenerateServiceTaskfile(outputPath string, binaryName string, projectName string) error {
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Generate binary variable name (uppercase)
+	varName := strings.ToUpper(binaryName)
+
+	content, err := templates.RenderExternal("service.taskfile.yml.tmpl", templates.ServiceTaskfileData{
+		Name:          projectName,
+		BinaryName:    binaryName,
+		BinaryVarName: varName,
+		Port:          "8080",
+		Host:          "0.0.0.0",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to render service taskfile: %w", err)
 	}
 
 	return os.WriteFile(outputPath, content, 0644)
