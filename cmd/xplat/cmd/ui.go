@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/joeblew999/xplat/internal/config"
 	web "github.com/joeblew999/xplat/internal/webui"
 )
 
@@ -26,8 +27,8 @@ The UI provides:
   - Process-compose status view (if running)
 
 Examples:
-  xplat ui                    # Start on port 3000, open browser
-  xplat ui -p 8000            # Start on port 8000
+  xplat ui                    # Start on port 8760, open browser
+  xplat ui -p 9000            # Start on port 9000
   xplat ui --no-browser       # Don't open browser (for service mode)
   xplat ui -d /path/to/project  # Use specific project directory`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -46,9 +47,9 @@ Examples:
 }
 
 func init() {
-	UICmd.Flags().StringVarP(&uiPort, "port", "p", "3000", "Port to listen on")
+	UICmd.Flags().StringVarP(&uiPort, "port", "p", config.DefaultUIPort, "Port to listen on (default 8760)")
 	UICmd.Flags().BoolVar(&uiNoBrowser, "no-browser", false, "Don't open browser on start")
 	UICmd.Flags().StringVarP(&uiTaskfile, "taskfile", "t", "", "Path to Taskfile.yml")
 	UICmd.Flags().StringVarP(&uiDir, "dir", "d", "", "Working directory")
-	UICmd.Flags().IntVar(&uiPCPort, "pc-port", 8080, "Process-compose API port")
+	UICmd.Flags().IntVar(&uiPCPort, "pc-port", config.DefaultProcessComposePort, "Process-compose API port (default 8761)")
 }

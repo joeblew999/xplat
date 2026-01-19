@@ -13,12 +13,12 @@ import (
 type ServiceConfig struct {
 	// UI enables Task UI web interface
 	UI bool `yaml:"ui,omitempty"`
-	// UIPort is the port for Task UI (default: 3000)
+	// UIPort is the port for Task UI (default: 8760)
 	UIPort string `yaml:"ui_port,omitempty"`
 
 	// MCP enables MCP HTTP server for AI IDE integration
 	MCP bool `yaml:"mcp,omitempty"`
-	// MCPPort is the port for MCP server (default: 8765)
+	// MCPPort is the port for MCP server (default: 8762)
 	MCPPort string `yaml:"mcp_port,omitempty"`
 
 	// Sync enables GitHub sync poller for Task cache invalidation
