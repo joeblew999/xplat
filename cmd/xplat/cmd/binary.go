@@ -216,7 +216,7 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed: HTTP %d, release %s-%s may not exist yet, install Go and use --source to build from source", resp.StatusCode, name, version)
+		return fmt.Errorf("download failed: HTTP %d, release %s may not exist yet, install Go and use --source to build from source", resp.StatusCode, version)
 	}
 
 	// Create output file
