@@ -72,10 +72,20 @@ tasks:
       - go build -o xplat{{exeExt}} .
 
   build:install:
-    desc: Build and install xplat to ~/.local/bin
+    desc: Build and install xplat to ~/.local/bin (ONLY location)
     cmds:
+      - task: build:clean-stale
       - mkdir -p "{{.BIN_INSTALL_DIR}}"
       - go build -o "{{.XPLAT_BIN}}" .
+      - echo "✓ Installed to {{.XPLAT_BIN}}"
+
+  build:clean-stale:
+    desc: Remove xplat from non-canonical locations
+    cmds:
+      - rm -f {{.HOME}}/go/bin/xplat 2>/dev/null || true
+      - rm -f /usr/local/bin/xplat 2>/dev/null || true
+      - rm -f /tmp/xplat* 2>/dev/null || true
+    silent: true
 
   test:
     desc: Run tests

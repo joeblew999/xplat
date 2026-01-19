@@ -360,10 +360,20 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	sb.WriteString("      - go build -o xplat{{exeExt}} .\n\n")
 
 	sb.WriteString("  build:install:\n")
-	sb.WriteString("    desc: Build and install xplat to ~/.local/bin\n")
+	sb.WriteString("    desc: Build and install xplat to ~/.local/bin (ONLY location)\n")
 	sb.WriteString("    cmds:\n")
+	sb.WriteString("      - task: build:clean-stale\n")
 	sb.WriteString("      - mkdir -p \"{{.BIN_INSTALL_DIR}}\"\n")
-	sb.WriteString("      - go build -o \"{{.XPLAT_BIN}}\" .\n\n")
+	sb.WriteString("      - go build -o \"{{.XPLAT_BIN}}\" .\n")
+	sb.WriteString("      - echo \"✓ Installed to {{.XPLAT_BIN}}\"\n\n")
+
+	sb.WriteString("  build:clean-stale:\n")
+	sb.WriteString("    desc: Remove xplat from non-canonical locations\n")
+	sb.WriteString("    cmds:\n")
+	sb.WriteString("      - rm -f {{.HOME}}/go/bin/xplat 2>/dev/null || true\n")
+	sb.WriteString("      - rm -f /usr/local/bin/xplat 2>/dev/null || true\n")
+	sb.WriteString("      - rm -f /tmp/xplat* 2>/dev/null || true\n")
+	sb.WriteString("    silent: true\n\n")
 
 	sb.WriteString("  test:\n")
 	sb.WriteString("    desc: Run tests\n")
