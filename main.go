@@ -70,9 +70,6 @@ KEY COMMANDS:
 	// P6 (Process orchestration)
 	rootCmd.AddCommand(cmd.ProcessCmd)
 
-	// P7 (Documentation generation)
-	rootCmd.AddCommand(cmd.DocsCmd)
-
 	// P8 (Generation from xplat.yaml manifest)
 	rootCmd.AddCommand(cmd.GenCmd)
 
@@ -91,6 +88,14 @@ KEY COMMANDS:
 
 	// P13 (Task UI - Web interface for running tasks)
 	rootCmd.AddCommand(cmd.UICmd)
+
+	// P14 (Internal commands for xplat developers - gen, dev, docs)
+	// Make DocsCmd a subcommand of InternalCmd
+	cmd.InternalCmd.AddCommand(cmd.DocsCmd)
+	rootCmd.AddCommand(cmd.InternalCmd)
+
+	// P15 (Setup wizard for external service configuration)
+	rootCmd.AddCommand(cmd.SetupCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

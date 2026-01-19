@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joeblew999/xplat/internal/config"
 	"github.com/rs/zerolog"
 )
 
@@ -43,16 +44,7 @@ func init() {
 
 // checkStaleBinaries warns if xplat exists in locations other than ~/.local/bin
 func checkStaleBinaries() {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return
-	}
-
-	canonical := filepath.Join(home, ".local", "bin", "xplat")
-	staleLocations := []string{
-		filepath.Join(home, "go", "bin", "xplat"),
-		"/usr/local/bin/xplat",
-	}
+	canonical := config.XplatCanonicalBin()
 
 	// Get current executable path
 	exe, err := os.Executable()
@@ -61,7 +53,7 @@ func checkStaleBinaries() {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 
-	for _, loc := range staleLocations {
+	for _, loc := range config.XplatStaleLocations() {
 		if _, err := os.Stat(loc); err == nil {
 			// Stale binary exists
 			resolved, _ := filepath.EvalSymlinks(loc)

@@ -1,6 +1,10 @@
 #!/bin/sh
 # xplat installer - auto-detects OS and architecture
 # Usage: curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | sh
+#
+# GENERATED FILE - DO NOT EDIT
+# Regenerate with: xplat internal gen install
+# Source of truth: internal/config/config.go
 
 set -e
 
@@ -31,12 +35,10 @@ if [ "$OS" = "windows" ]; then
 fi
 
 # Determine install directory
-# Prefer ~/.local/bin (XDG standard) to avoid permission issues
-# Override with INSTALL_DIR env var if set
+# Uses canonical location from config.go
 if [ -n "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
 elif [ "$OS" = "darwin" ] || [ "$OS" = "linux" ]; then
-    # Prefer ~/.local/bin (user-writable, XDG standard)
     mkdir -p "$HOME/.local/bin"
     INSTALL_DIR="$HOME/.local/bin"
 elif [ "$OS" = "windows" ]; then

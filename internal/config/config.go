@@ -92,6 +92,44 @@ const (
 	XplatTagPrefix = "xplat-"
 )
 
+// === xplat binary installation ===
+//
+// xplat ALWAYS installs to ~/.local/bin/xplat (the canonical location).
+// This is enforced by:
+//   - xplat update (self-update)
+//   - go build -o ~/.local/bin/xplat . (manual build)
+//
+// NEVER use 'go install' as it installs to ~/go/bin which causes conflicts.
+// See: docs/adr/ADR-016-single-install-location.md
+
+// XplatCanonicalBin returns the canonical xplat binary path: ~/.local/bin/xplat
+// This is the ONLY location where xplat should be installed.
+func XplatCanonicalBin() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".local", "bin", "xplat")
+	}
+	return filepath.Join(home, ".local", "bin", "xplat")
+}
+
+// XplatCanonicalDir returns the directory for the canonical xplat binary: ~/.local/bin
+func XplatCanonicalDir() string {
+	return filepath.Dir(XplatCanonicalBin())
+}
+
+// XplatStaleLocations returns paths where stale xplat binaries might exist.
+// These are checked on startup (warning) and cleaned after update.
+func XplatStaleLocations() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []string{"/usr/local/bin/xplat"}
+	}
+	return []string{
+		filepath.Join(home, "go", "bin", "xplat"),
+		"/usr/local/bin/xplat",
+	}
+}
+
 // ProcessComposeSearchOrder returns the order to search for process-compose config files.
 // Generated files are prioritized over manual files, and short names over long names.
 func ProcessComposeSearchOrder() []string {

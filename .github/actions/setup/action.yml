@@ -3,6 +3,10 @@
 # Installs xplat binary for cross-platform CI/CD.
 # Auto-detects OS and architecture.
 #
+# GENERATED FILE - DO NOT EDIT
+# Regenerate with: xplat internal gen action
+# Source of truth: internal/config/config.go
+#
 # Usage:
 #   - uses: joeblew999/xplat/.github/actions/setup@main
 #     with:
@@ -64,9 +68,11 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        curl -sL "https://github.com/joeblew999/xplat/releases/download/xplat-${{ steps.version.outputs.version }}/${{ steps.binary.outputs.binary }}" -o /usr/local/bin/xplat
-        chmod +x /usr/local/bin/xplat
-        xplat version
+        mkdir -p $HOME/.local/bin
+        curl -sL "https://github.com/joeblew999/xplat/releases/download/xplat-${{ steps.version.outputs.version }}/${{ steps.binary.outputs.binary }}" -o $HOME/.local/bin/xplat
+        chmod +x $HOME/.local/bin/xplat
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        $HOME/.local/bin/xplat version
 
     - name: Install xplat (Windows)
       if: runner.os == 'Windows'

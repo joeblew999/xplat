@@ -250,26 +250,12 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedCh
 
 // CanonicalInstallPath returns the canonical install location: ~/.local/bin/xplat
 func CanonicalInstallPath() (string, error) {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return "", fmt.Errorf("HOME environment variable not set")
-	}
-	return filepath.Join(home, ".local", "bin", "xplat"), nil
+	return config.XplatCanonicalBin(), nil
 }
 
 // CleanStaleBinaries removes xplat from non-canonical locations.
 func CleanStaleBinaries() {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return
-	}
-
-	staleLocations := []string{
-		filepath.Join(home, "go", "bin", "xplat"),
-		"/usr/local/bin/xplat",
-	}
-
-	for _, loc := range staleLocations {
+	for _, loc := range config.XplatStaleLocations() {
 		if _, err := os.Stat(loc); err == nil {
 			if err := os.Remove(loc); err == nil {
 				fmt.Printf("Removed stale xplat from %s\n", loc)
