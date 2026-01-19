@@ -88,8 +88,8 @@ tasks:
     deps: [src:clone]
     cmds:
       - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }}.BIN_DIR{{ "}}" }}'
-{{if eq .Language "go"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; go build -o "{{ "{{" }}.BIN_PATH{{ "}}" }}" {{.MainPath}}; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go build -o "{{ "{{" }}.BIN_PATH{{ "}}" }}" {{.MainPath}}{{ "{{" }}end{{ "}}" }}'
-{{else if eq .Language "rust"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; cargo build --release; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo build --release{{ "{{" }}end{{ "}}" }}'
+{{if eq .Language "go"}}      - go build -C "{{ "{{" }}.SRC_DIR{{ "}}" }}" -o "{{ "{{" }}.BIN_PATH{{ "}}" }}" {{.MainPath}}
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo build --release
       - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.SRC_DIR{{ "}}" }}/target/release/{{ "{{" }}.BINARY_FILE{{ "}}" }} {{ "{{" }}.BIN_PATH{{ "}}" }}'
 {{end}}      - '{{ "{{" }}.XPLAT{{ "}}" }} os version-file -f {{ "{{" }}.BIN_DIR{{ "}}" }}/.version -s {{ "{{" }}.VERSION{{ "}}" }}'
     status:
@@ -157,15 +157,15 @@ tasks:
     desc: Run {{.Binary}} tests
     deps: [src:clone]
     cmds:
-{{if eq .Language "go"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; go test -v ./...; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go test -v ./...{{ "{{" }}end{{ "}}" }}'
-{{else if eq .Language "rust"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; cargo test; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo test{{ "{{" }}end{{ "}}" }}'
+{{if eq .Language "go"}}      - go test -C "{{ "{{" }}.SRC_DIR{{ "}}" }}" -v ./...
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo test
 {{end}}
   deps:
     desc: Download {{.Binary}} dependencies
     deps: [src:clone]
     cmds:
-{{if eq .Language "go"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; go mod download; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go mod download{{ "{{" }}end{{ "}}" }}'
-{{else if eq .Language "rust"}}      - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Push-Location "{{ "{{" }}.SRC_DIR{{ "}}" }}"; cargo fetch; Pop-Location{{ "{{" }}else{{ "}}" }}cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo fetch{{ "{{" }}end{{ "}}" }}'
+{{if eq .Language "go"}}      - go mod download -C "{{ "{{" }}.SRC_DIR{{ "}}" }}"
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo fetch
 {{end}}
   # ===========================================================================
   # Clean - Remove generated artifacts
