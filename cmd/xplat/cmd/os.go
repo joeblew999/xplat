@@ -53,6 +53,7 @@ func init() {
 	OsCmd.AddCommand(CpCmd)
 	OsCmd.AddCommand(EnvCmd)
 	OsCmd.AddCommand(EnvsubstCmd)
+	OsCmd.AddCommand(ExistsCmd)
 	OsCmd.AddCommand(ExtractCmd)
 	OsCmd.AddCommand(FetchCmd)
 	OsCmd.AddCommand(GitCmd)
