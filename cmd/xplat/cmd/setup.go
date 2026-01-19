@@ -5,9 +5,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
+	"time"
 
+	"github.com/joeblew999/xplat/internal/config"
+	"github.com/joeblew999/xplat/internal/env"
 	"github.com/joeblew999/xplat/internal/env/web"
 	"github.com/spf13/cobra"
 )
@@ -86,10 +90,10 @@ func runEnvWizard(cmd *cobra.Command, args []string) error {
 	fmt.Println("Starting environment setup wizard...")
 	fmt.Println()
 
-	// Try to open browser
+	// Try to open browser after a small delay
 	go func() {
-		// Small delay to let server start
-		url := "https://localhost/admin/"
+		time.Sleep(500 * time.Millisecond)
+		url := fmt.Sprintf("https://localhost:%d/admin/", config.DefaultUIPortInt)
 		var err error
 		switch runtime.GOOS {
 		case "darwin":
@@ -110,29 +114,143 @@ func runEnvWizard(cmd *cobra.Command, args []string) error {
 	return web.ServeSetupGUI()
 }
 
+var envCheckDeep bool
+
+func init() {
+	envCheckCmd.Flags().BoolVar(&envCheckDeep, "deep", false, "Perform deep validation (makes API calls to verify tokens)")
+}
+
 func runEnvCheck(cmd *cobra.Command, args []string) error {
-	fmt.Println("Checking environment configuration...")
+	// Check if .env exists
+	if !env.EnvExists() {
+		fmt.Println("No .env file found.")
+		fmt.Println()
+		fmt.Println("Run 'xplat setup wizard' to configure your environment.")
+		os.Exit(1)
+	}
+
+	// Load config
+	cfg, err := env.LoadEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load .env: %w", err)
+	}
+
+	svc := env.NewService(envMockMode)
+
+	var results map[string]env.ValidationResult
+	if envCheckDeep {
+		fmt.Println("Validating environment configuration (deep)...")
+		fmt.Println()
+		results = svc.ValidateConfigDeep(cfg)
+	} else {
+		fmt.Println("Validating environment configuration (fast)...")
+		fmt.Println("(Use --deep for API token verification)")
+		fmt.Println()
+		results = svc.ValidateConfigFast(cfg)
+	}
+
+	// Display results
+	hasErrors := false
+	for _, field := range env.GetAllFieldsInOrder() {
+		result, ok := results[field.Key]
+		if !ok {
+			continue
+		}
+
+		if result.Skipped {
+			fmt.Printf("  ⚪ %s (skipped)\n", field.DisplayName)
+		} else if result.Valid {
+			fmt.Printf("  ✓ %s\n", field.DisplayName)
+		} else {
+			hasErrors = true
+			errMsg := "invalid"
+			if result.Error != nil {
+				errMsg = result.Error.Error()
+			}
+			fmt.Printf("  ✗ %s: %s\n", field.DisplayName, errMsg)
+		}
+	}
+
 	fmt.Println()
-
-	// TODO: Implement validation
-	// 1. Load .env file
-	// 2. Load manifest to get required env vars
-	// 3. Check each required var exists
-	// 4. Optionally validate API tokens
-
-	fmt.Println("(Not yet implemented - see ADR-017)")
+	if hasErrors {
+		fmt.Println("Some configuration is invalid. Run 'xplat setup wizard' to fix.")
+		os.Exit(1)
+	}
+	fmt.Println("All configuration is valid.")
 	return nil
 }
 
 func runEnvStatus(cmd *cobra.Command, args []string) error {
-	fmt.Println("Environment configuration status:")
+	// Check if .env exists
+	if !env.EnvExists() {
+		fmt.Println("No .env file found.")
+		fmt.Println()
+		fmt.Println("Run 'xplat setup wizard' to configure your environment.")
+		return nil
+	}
+
+	// Load config
+	cfg, err := env.LoadEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load .env: %w", err)
+	}
+
+	envPath, _ := env.GetEnvPath()
+	fmt.Printf("Configuration file: %s\n", envPath)
 	fmt.Println()
 
-	// TODO: Implement status display
-	// 1. Load .env file
-	// 2. Load manifest to get required/optional vars
-	// 3. Display table of configured vs missing
+	// Count configured vs missing
+	configured := 0
+	missing := 0
+	optional := 0
 
-	fmt.Println("(Not yet implemented - see ADR-017)")
+	fmt.Println("Environment variables:")
+	fmt.Println()
+
+	for _, field := range env.GetAllFieldsInOrder() {
+		value := cfg.Get(field.Key)
+		isSet := value != "" && !env.IsPlaceholder(value)
+
+		status := "✗"
+		statusText := "missing"
+
+		if isSet {
+			status = "✓"
+			// Mask sensitive values
+			if field.Key == env.KeyCloudflareAPIToken || field.Key == env.KeyClaudeAPIKey {
+				if len(value) > 8 {
+					statusText = value[:4] + "..." + value[len(value)-4:]
+				} else {
+					statusText = "****"
+				}
+			} else {
+				statusText = value
+			}
+			configured++
+		} else if !field.Validate {
+			status = "⚪"
+			statusText = "(optional)"
+			optional++
+		} else {
+			missing++
+		}
+
+		// Show required marker
+		reqMarker := ""
+		if field.Validate {
+			reqMarker = "*"
+		}
+
+		fmt.Printf("  %s %s%s: %s\n", status, field.DisplayName, reqMarker, statusText)
+	}
+
+	fmt.Println()
+	fmt.Printf("Summary: %d configured, %d missing, %d optional\n", configured, missing, optional)
+
+	if missing > 0 {
+		fmt.Println()
+		fmt.Println("Run 'xplat setup wizard' to configure missing variables.")
+	}
+
 	return nil
 }
