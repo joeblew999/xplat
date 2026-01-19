@@ -109,11 +109,19 @@ func (c *Client) LookupRepo(name string) (string, error) {
 // FetchManifest fetches the xplat.yaml from a repo.
 // repo should be like "github.com/litesql/ha"
 func (c *Client) FetchManifest(repo string) (*Package, error) {
-	// Build raw URL to xplat.yaml
-	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/main/xplat.yaml",
-		strings.TrimPrefix(repo, "github.com/"))
+	// Use GitHub API to avoid CDN caching issues with raw.githubusercontent.com
+	// The API returns fresh content immediately after pushes
+	repoPath := strings.TrimPrefix(repo, "github.com/")
+	url := fmt.Sprintf("https://api.github.com/repos/%s/contents/xplat.yaml?ref=main", repoPath)
 
-	resp, err := c.httpClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	// Request raw content directly
+	req.Header.Set("Accept", "application/vnd.github.v3.raw")
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch manifest from %s: %w", repo, err)
 	}
@@ -158,15 +166,15 @@ func (c *Client) FetchManifest(repo string) (*Package, error) {
 		pkg.TaskfilePath = m.Taskfile.Path
 	}
 
-	// Map process config (use "default" process or the single "process" field)
-	if m.Process != nil && m.Process.Command != "" {
+	// Map process config (use "default" process from map or the single "process" field)
+	if proc := m.GetDefaultProcess(); proc != nil && proc.Command != "" {
 		pkg.Process = &ProcessConfig{
-			Command:    m.Process.Command,
-			Port:       m.Process.Port,
-			HealthPath: m.Process.HealthPath,
-			Disabled:   m.Process.Disabled,
-			DependsOn:  m.Process.DependsOn,
-			Namespace:  m.Process.Namespace,
+			Command:    proc.Command,
+			Port:       proc.Port,
+			HealthPath: proc.HealthPath,
+			Disabled:   proc.Disabled,
+			DependsOn:  proc.DependsOn,
+			Namespace:  proc.Namespace,
 		}
 	}
 

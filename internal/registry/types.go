@@ -73,14 +73,33 @@ func (p *Package) TaskfileURL() string {
 // Manifest mirrors the xplat.yaml structure for parsing remote manifests.
 // This is a subset of manifest.Manifest to avoid import cycles.
 type Manifest struct {
-	Name        string          `yaml:"name"`
-	Version     string          `yaml:"version"`
-	Description string          `yaml:"description"`
-	Author      string          `yaml:"author"`
-	License     string          `yaml:"license"`
-	Binary      *ManifestBinary `yaml:"binary,omitempty"`
-	Taskfile    *ManifestTF     `yaml:"taskfile,omitempty"`
-	Process     *ManifestProc   `yaml:"process,omitempty"`
+	Name        string                    `yaml:"name"`
+	Version     string                    `yaml:"version"`
+	Description string                    `yaml:"description"`
+	Author      string                    `yaml:"author"`
+	License     string                    `yaml:"license"`
+	Binary      *ManifestBinary           `yaml:"binary,omitempty"`
+	Taskfile    *ManifestTF               `yaml:"taskfile,omitempty"`
+	Process     *ManifestProc             `yaml:"process,omitempty"`   // Singular (legacy)
+	Processes   map[string]*ManifestProc  `yaml:"processes,omitempty"` // Map format (preferred)
+}
+
+// GetDefaultProcess returns the "default" process or the first process from the map,
+// falling back to the singular Process field for backwards compatibility.
+func (m *Manifest) GetDefaultProcess() *ManifestProc {
+	// Prefer processes map
+	if len(m.Processes) > 0 {
+		// Try "default" first
+		if proc, ok := m.Processes["default"]; ok {
+			return proc
+		}
+		// Return first process
+		for _, proc := range m.Processes {
+			return proc
+		}
+	}
+	// Fall back to singular process field
+	return m.Process
 }
 
 // ManifestBinary is the binary config from xplat.yaml.

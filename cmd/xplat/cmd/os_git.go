@@ -17,10 +17,16 @@ var GitCmd = &cobra.Command{
 Works identically on macOS, Linux, and Windows without requiring
 git to be installed. Perfect for CI/CD and Docker environments.
 
+Most commands accept an optional [path] argument to work with repos
+at different locations (defaults to current directory).
+
 Examples:
+  xplat os git status              # Status of current repo
+  xplat os git add .               # Stage all changes
+  xplat os git commit -m "message" # Create commit
+  xplat os git push                # Push to origin
+  xplat os git pull                # Pull from origin
   xplat os git clone https://github.com/user/repo .src
-  xplat os git clone https://github.com/user/repo .src v1.0.0
-  xplat os git pull .src
   xplat os git checkout .src v2.0.0
   xplat os git hash .src
   xplat os git tags .src`,
@@ -185,9 +191,137 @@ var gitIsRepoCmd = &cobra.Command{
 	},
 }
 
+var gitStatusCmd = &cobra.Command{
+	Use:   "status [path]",
+	Short: "Show working tree status",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+
+		status, err := gitops.Status(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "git status: %v\n", err)
+			os.Exit(1)
+		}
+
+		if status.IsClean() {
+			fmt.Println("Nothing to commit, working tree clean")
+			return
+		}
+
+		for file, s := range status {
+			var staging, worktree string
+			switch s.Staging {
+			case 'M':
+				staging = "M"
+			case 'A':
+				staging = "A"
+			case 'D':
+				staging = "D"
+			case 'R':
+				staging = "R"
+			case 'C':
+				staging = "C"
+			default:
+				staging = " "
+			}
+			switch s.Worktree {
+			case 'M':
+				worktree = "M"
+			case 'D':
+				worktree = "D"
+			case '?':
+				worktree = "?"
+			default:
+				worktree = " "
+			}
+			fmt.Printf("%s%s %s\n", staging, worktree, file)
+		}
+	},
+}
+
+var gitAddCmd = &cobra.Command{
+	Use:   "add [path] <files...>",
+	Short: "Stage files for commit",
+	Long: `Stage files for commit. Use "." to add all changes.
+
+Examples:
+  xplat os git add .              # Add all changes in current dir
+  xplat os git add /repo .        # Add all changes in /repo
+  xplat os git add . file.go      # Add specific file`,
+	Args: cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// If only one arg and it's ".", use current dir
+		path := "."
+		pattern := args[0]
+
+		// If two args, first is path, second is pattern
+		if len(args) > 1 {
+			path = args[0]
+			pattern = args[1]
+		}
+
+		if err := gitops.Add(path, pattern); err != nil {
+			fmt.Fprintf(os.Stderr, "git add: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Staged changes")
+	},
+}
+
+var gitCommitCmd = &cobra.Command{
+	Use:   "commit [path] -m <message>",
+	Short: "Create a commit",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+
+		message, _ := cmd.Flags().GetString("message")
+		if message == "" {
+			fmt.Fprintf(os.Stderr, "git commit: message required (-m)\n")
+			os.Exit(1)
+		}
+
+		hash, err := gitops.Commit(path, message)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "git commit: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Committed %s\n", hash)
+	},
+}
+
+var gitPushCmd = &cobra.Command{
+	Use:   "push [path]",
+	Short: "Push commits to origin",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		path := "."
+		if len(args) > 0 {
+			path = args[0]
+		}
+
+		if err := gitops.Push(path); err != nil {
+			fmt.Fprintf(os.Stderr, "git push: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Pushed to origin")
+	},
+}
+
 func init() {
 	gitFetchCmd.Flags().BoolVar(&gitFetchTags, "tags", false, "Fetch tags as well")
 	gitHashCmd.Flags().BoolVar(&gitHashFull, "full", false, "Show full commit hash")
+	gitCommitCmd.Flags().StringP("message", "m", "", "Commit message")
 
 	GitCmd.AddCommand(gitCloneCmd)
 	GitCmd.AddCommand(gitPullCmd)
@@ -197,4 +331,8 @@ func init() {
 	GitCmd.AddCommand(gitTagsCmd)
 	GitCmd.AddCommand(gitBranchCmd)
 	GitCmd.AddCommand(gitIsRepoCmd)
+	GitCmd.AddCommand(gitStatusCmd)
+	GitCmd.AddCommand(gitAddCmd)
+	GitCmd.AddCommand(gitCommitCmd)
+	GitCmd.AddCommand(gitPushCmd)
 }

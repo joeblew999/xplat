@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -117,6 +118,29 @@ Requires packages to be installed first with 'xplat pkg install'.`,
 	RunE: runGenProcess,
 }
 
+var genServiceCmd = &cobra.Command{
+	Use:   "service",
+	Short: "Generate taskfiles/Taskfile.service.yml for package consumers",
+	Long: `Generate a reusable service taskfile for package consumers.
+
+This is for PACKAGE DEVELOPERS (you), not consumers.
+
+Reads your xplat.yaml and generates taskfiles/Taskfile.service.yml with
+standardized service management tasks (start, stop, status, health, restart)
+based on your binary and process configuration.
+
+This generated file is what consumers will include remotely when they run:
+  xplat pkg install <your-package>
+  xplat gen taskfile
+
+Example workflow:
+  1. Define binary and process in xplat.yaml
+  2. Run: xplat gen service
+  3. Commit taskfiles/Taskfile.service.yml to your repo
+  4. Consumers can now use your service tasks remotely`,
+	RunE: runGenService,
+}
+
 var genAllCmd = &cobra.Command{
 	Use:   "all",
 	Short: "Generate all files from manifest",
@@ -134,6 +158,7 @@ func init() {
 	GenCmd.AddCommand(genEnvCmd)
 	GenCmd.AddCommand(genTaskfileCmd)
 	GenCmd.AddCommand(genProcessCmd)
+	GenCmd.AddCommand(genServiceCmd)
 	GenCmd.AddCommand(genAllCmd)
 }
 
@@ -225,6 +250,86 @@ func runGenTaskfile(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("Generated %s with service tasks\n", outputPath)
 	}
+	return nil
+}
+
+func runGenService(cmd *cobra.Command, args []string) error {
+	m, err := loadManifestForGen()
+	if err != nil {
+		return err
+	}
+
+	// Require binary config
+	if m.Binary == nil || m.Binary.Name == "" {
+		return fmt.Errorf("xplat.yaml must have binary.name configured")
+	}
+
+	// Build service taskfile data
+	data := templates.ServiceTaskfileData{
+		Name:          m.Name,
+		BinaryName:    m.Binary.Name,
+		BinaryVarName: strings.ToUpper(m.Binary.Name),
+	}
+
+	// Get process config for port/health (use "default" or first process)
+	if m.HasProcesses() {
+		var proc *manifest.ProcessConfig
+		if p, ok := m.Processes["default"]; ok {
+			proc = &p
+		} else {
+			// Use first process
+			for _, p := range m.Processes {
+				pcopy := p
+				proc = &pcopy
+				break
+			}
+		}
+		if proc != nil {
+			if proc.Port > 0 {
+				data.Port = fmt.Sprintf("%d", proc.Port)
+			}
+			if proc.HealthPath != "" {
+				// Remove leading slash if present
+				data.HealthPath = strings.TrimPrefix(proc.HealthPath, "/")
+			}
+		}
+	}
+
+	// Get host from env config
+	if m.HasEnv() {
+		for _, opt := range m.Env.Optional {
+			if strings.HasSuffix(strings.ToUpper(opt.Name), "_HOST") {
+				data.Host = opt.Default
+				break
+			}
+		}
+	}
+	if data.Host == "" {
+		data.Host = "0.0.0.0"
+	}
+
+	// Create taskfiles directory
+	taskfilesDir := filepath.Join(genOutput, "taskfiles")
+	if err := os.MkdirAll(taskfilesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create taskfiles directory: %w", err)
+	}
+
+	outputPath := filepath.Join(taskfilesDir, "Taskfile.service.yml")
+	if _, err := os.Stat(outputPath); err == nil && !genForce {
+		return fmt.Errorf("%s already exists, use --force to overwrite", outputPath)
+	}
+
+	content, err := templates.RenderExternal("service.taskfile.yml.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render service taskfile: %w", err)
+	}
+
+	if err := os.WriteFile(outputPath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write service taskfile: %w", err)
+	}
+
+	fmt.Printf("Generated %s\n", outputPath)
+	fmt.Println("Commit this file to your repo so consumers can include it remotely.")
 	return nil
 }
 

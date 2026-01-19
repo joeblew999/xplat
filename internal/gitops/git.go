@@ -196,3 +196,86 @@ func IsRepo(path string) bool {
 	_, err := git.PlainOpen(path)
 	return err == nil
 }
+
+// Status returns the working tree status
+func Status(path string) (git.Status, error) {
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open repo: %w", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	status, err := worktree.Status()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status: %w", err)
+	}
+
+	return status, nil
+}
+
+// Add stages files for commit. Use "." to add all changes.
+func Add(path, pattern string) error {
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return fmt.Errorf("failed to open repo: %w", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	if pattern == "." {
+		// Add all changes
+		err = worktree.AddWithOptions(&git.AddOptions{All: true})
+	} else {
+		_, err = worktree.Add(pattern)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to add: %w", err)
+	}
+
+	return nil
+}
+
+// Commit creates a commit with the staged changes
+func Commit(path, message string) (string, error) {
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open repo: %w", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	hash, err := worktree.Commit(message, &git.CommitOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to commit: %w", err)
+	}
+
+	return hash.String()[:8], nil
+}
+
+// Push pushes commits to origin
+func Push(path string) error {
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return fmt.Errorf("failed to open repo: %w", err)
+	}
+
+	err = repo.Push(&git.PushOptions{
+		RemoteName: "origin",
+	})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return fmt.Errorf("failed to push: %w", err)
+	}
+
+	return nil
+}

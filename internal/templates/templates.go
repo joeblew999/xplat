@@ -215,3 +215,22 @@ type EnvVar struct {
 	Instructions string
 	Default      string
 }
+
+// ServiceTaskfileData holds values for service.taskfile.yml template.
+// This generates a reusable taskfile for package developers to expose
+// to consumers via remote includes.
+type ServiceTaskfileData struct {
+	Name          string            // Package name (e.g., "plat-geo")
+	BinaryName    string            // Binary name (e.g., "geo")
+	BinaryVarName string            // Variable name prefix (e.g., "GEO")
+	Port          string            // Default port (e.g., "8086")
+	Host          string            // Default host (e.g., "0.0.0.0")
+	HealthPath    string            // Health endpoint path without leading slash (e.g., "health")
+	ExtraVars     []ServiceExtraVar // Additional variables
+}
+
+// ServiceExtraVar represents an extra variable for the service taskfile.
+type ServiceExtraVar struct {
+	Name    string
+	Default string
+}
