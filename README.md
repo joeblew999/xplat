@@ -99,7 +99,7 @@ The `sync-gh` and `sync-cf` commands monitor external services without requiring
 **How it works:**
 1. **Polling** - Periodically check APIs for changes (`sync-gh poll`, `sync-cf poll`)
 2. **Webhooks** - Receive push notifications from services (`sync-gh webhook`, `sync-cf webhook`)
-3. **Tunnels** - Expose local webhook server via smee.io or cloudflared (`sync-gh tunnel`, `sync-cf tunnel`)
+3. **Tunnels** - Expose local webhook server via Cloudflare tunnel (`sync-cf tunnel`)
 
 **Use cases:**
 - Auto-update dependencies when upstream releases
@@ -157,6 +157,7 @@ Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Comm
 |---------|-------------|
 | `xplat help` | Help about any command |
 | `xplat mcp` | MCP (Model Context Protocol) server |
+| `xplat ui` | Start Task UI web interface |
 
 ## Command Reference
 
@@ -182,7 +183,9 @@ Generate the autocompletion script for the specified shell
 Generate documentation from xplat commands
 
 **Subcommands:**
+- `docs all` - Generate all documentation (README.md + Taskfile.yml)
 - `docs readme` - Generate README.md from xplat commands
+- `docs taskfile` - Generate Taskfile.yml command wrappers
 
 ### `xplat gen`
 
@@ -284,6 +287,7 @@ Run a managed tool
 Manage xplat as a system service
 
 **Subcommands:**
+- `service config` - Configure service settings
 - `service install` - Add current project to registry and install OS service
 - `service list` - List all registered projects
 - `service restart` - Restart the xplat service
@@ -301,7 +305,14 @@ Cloudflare sync operations (no wrangler CLI required)
 - `sync-cf check` - Check if cloudflared is installed
 - `sync-cf install` - Install cloudflared
 - `sync-cf poll` - Poll CF audit logs continuously
-- `sync-cf tunnel` - Start cloudflared quick tunnel
+- `sync-cf receive` - Receive events from CF Worker (round-trip validation)
+- `sync-cf receive-state` - Show current receive state (processed events)
+- `sync-cf tunnel` - Start cloudflared tunnel (quick or named)
+- `sync-cf tunnel-create` - Create a new named tunnel
+- `sync-cf tunnel-delete` - Delete a named tunnel
+- `sync-cf tunnel-list` - List existing named tunnels
+- `sync-cf tunnel-login` - Authenticate cloudflared with Cloudflare
+- `sync-cf tunnel-route` - Add DNS route for a tunnel
 - `sync-cf webhook` - Start CF webhook server
 - `sync-cf worker` - Manage sync-cf Cloudflare Worker
 
@@ -310,12 +321,19 @@ Cloudflare sync operations (no wrangler CLI required)
 GitHub sync operations (no gh CLI required)
 
 **Subcommands:**
+- `sync-gh discover` - Discover GitHub repos from Taskfile.yml remote includes
 - `sync-gh poll` - Poll repositories for updates continuously
+- `sync-gh poll-state` - Show current poll state (tracked repos and commit hashes)
+- `sync-gh relay` - Start webhook relay with Cloudflare tunnel (zero config real-time sync)
 - `sync-gh release` - Get latest release tag for a repository
+- `sync-gh replay` - Replay webhook deliveries from GitHub API
+- `sync-gh server` - Start a gosmee-compatible SSE server for webhook relay
+- `sync-gh sse-client` - Connect to a gosmee server and forward events to local webhook handler
 - `sync-gh state` - Capture or display GitHub repository state
-- `sync-gh tunnel` - Forward smee.io webhooks to local server
-- `sync-gh tunnel-setup` - Create smee channel and configure GitHub webhook
 - `sync-gh webhook` - Start webhook server
+- `sync-gh webhook-add` - Configure a GitHub repo to send webhooks to a URL
+- `sync-gh webhook-delete` - Delete a webhook from a GitHub repo
+- `sync-gh webhook-list` - List webhooks configured on a GitHub repo
 
 ### `xplat task`
 
@@ -323,6 +341,10 @@ Run Taskfile tasks (embedded Task runner)
 
 **Subcommands:**
 - `task tools` - Taskfile validation and formatting tools
+
+### `xplat ui`
+
+Start Task UI web interface
 
 ### `xplat update`
 
