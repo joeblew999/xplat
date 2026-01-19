@@ -33,11 +33,11 @@ vars:
   VERSION: '{{.SourceVersion}}'
   UPSTREAM: '{{.SourceRepo}}'
 
-  # xplat directory convention
-  SRC_DIR: '{{ "{{" }}.ROOT_DIR{{ "}}" }}/.src/{{.Binary}}'
-  BIN_DIR: '{{ "{{" }}.ROOT_DIR{{ "}}" }}/.bin'
-  BIN_PATH: '{{ "{{" }}.BIN_DIR{{ "}}" }}/{{ "{{" }}.BINARY_FILE{{ "}}" }}'
-  DATA_DIR: '{{ "{{" }}.ROOT_DIR{{ "}}" }}/.data'
+  # xplat directory convention (fromSlash ensures OS-native path separators)
+  SRC_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.src/{{.Binary}}") {{ "}}" }}'
+  BIN_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.bin") {{ "}}" }}'
+  BIN_PATH: '{{ "{{" }} fromSlash (print .BIN_DIR "/" .BINARY_FILE) {{ "}}" }}'
+  DATA_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.data") {{ "}}" }}'
 {{else}}  MAIN: {{.MainPath}}
 {{end}}
 env:
@@ -67,7 +67,7 @@ tasks:
     desc: Clone {{.Binary}} repository at pinned version
     run: once
     cmds:
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }}.ROOT_DIR{{ "}}" }}/.src'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} fromSlash (print .ROOT_DIR "/.src") {{ "}}" }}'
       - git clone --depth 1 --branch {{ "{{" }}.VERSION{{ "}}" }} {{ "{{" }}.UPSTREAM{{ "}}" }} {{ "{{" }}.SRC_DIR{{ "}}" }}
     status:
       - git -C {{ "{{" }}.SRC_DIR{{ "}}" }} rev-parse HEAD
@@ -189,7 +189,7 @@ tasks:
   clean:all:
     desc: Clean everything (.src, .bin, .data)
     cmds:
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os rm -rf {{ "{{" }}.ROOT_DIR{{ "}}" }}/.src {{ "{{" }}.ROOT_DIR{{ "}}" }}/.bin {{ "{{" }}.ROOT_DIR{{ "}}" }}/.data'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os rm -rf {{ "{{" }}.SRC_DIR{{ "}}" }} {{ "{{" }}.BIN_DIR{{ "}}" }} {{ "{{" }}.DATA_DIR{{ "}}" }}'
 
   # ===========================================================================
   # Info - Version and manifest information
@@ -223,8 +223,8 @@ tasks:
     desc: Build release binary for current platform
     deps: [ensure]
     cmds:
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }}.ROOT_DIR{{ "}}" }}/.releases'
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.BIN_PATH{{ "}}" }} {{ "{{" }}.ROOT_DIR{{ "}}" }}/.releases/{{ "{{" }}.BINARY{{ "}}" }}-{{ "{{" }}OS{{ "}}" }}-{{ "{{" }}ARCH{{ "}}" }}{{ "{{" }}exeExt{{ "}}" }}'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} fromSlash (print .ROOT_DIR "/.releases") {{ "}}" }}'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.BIN_PATH{{ "}}" }} {{ "{{" }} fromSlash (print .ROOT_DIR "/.releases/" .BINARY "-" OS "-" ARCH exeExt) {{ "}}" }}'
 
   release:list:
     desc: List built release binaries
