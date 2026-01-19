@@ -1,0 +1,45 @@
+# {{.Name}}
+
+{{.Description}}
+
+## Quick Start
+
+` + "```" + `bash
+# Install dependencies and build
+task build
+
+# Run tests
+task test
+
+# Run the binary
+task run
+` + "```" + `
+
+## Development
+
+` + "```" + `bash
+# See all available tasks
+task
+
+# Clean build artifacts
+task clean
+
+# Install to GOBIN
+task install
+` + "```" + `
+
+## Configuration
+
+Copy ` + "`.env.example`" + ` to ` + "`.env`" + ` and configure as needed.
+
+## xplat Integration
+
+This is a plat-* repository managed by xplat.
+
+` + "```" + `bash
+# Install via xplat
+xplat manifest install .
+
+# Bootstrap/update standard files
+xplat manifest bootstrap
+` + "```" + `

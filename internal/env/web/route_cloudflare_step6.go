@@ -250,12 +250,12 @@ func cloudflareStep6Page(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 
 				// Worker Name
 				h.Label(
-					h.For("workerName"),
+					h.Attr("for","workerName"),
 					h.Text("Worker Name"),
 				),
 				h.Input(
 					h.Type("text"),
-					h.Id("workerName"),
+					h.ID("workerName"),
 					h.Value(workerNameSignal.String()),
 					workerNameSignal.Bind(),
 					h.Placeholder("xplat-sync"),
@@ -264,13 +264,13 @@ func cloudflareStep6Page(c *via.Context, cfg *env.EnvConfig, mockMode bool) {
 
 				// Receiver Port
 				h.Label(
-					h.For("receiverPort"),
+					h.Attr("for","receiverPort"),
 					h.Style("margin-top: 1rem;"),
 					h.Text("Receiver Port"),
 				),
 				h.Input(
 					h.Type("text"),
-					h.Id("receiverPort"),
+					h.ID("receiverPort"),
 					h.Value(receiverPortSignal.String()),
 					receiverPortSignal.Bind(),
 					h.Placeholder("9091"),

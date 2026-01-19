@@ -1,0 +1,115 @@
+version: '3'
+
+# =============================================================================
+# xplat - Cross-Platform Taskfile Bootstrapper
+# =============================================================================
+# Auto-generated from xplat commands. Do not edit directly.
+# Regenerate with: xplat internal docs taskfile
+# =============================================================================
+
+vars:
+  BIN_INSTALL_DIR: '{{"{{"}}if eq OS "windows"{{"}}"}}{{"{{"}}.HOME{{"}}"}}/bin{{"{{"}}else{{"}}"}}{{"{{"}}.HOME{{"}}"}}/.local/bin{{"{{"}}end{{"}}"}}'
+  XPLAT_BIN: '{{"{{"}}.BIN_INSTALL_DIR{{"}}"}}/xplat{{"{{"}}exeExt{{"}}"}}'
+  # Local build binary (for development)
+  XPLAT_LOCAL: './xplat{{"{{"}}exeExt{{"}}"}}'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ===========================================================================
+  # Service Commands (front and center!)
+  # ===========================================================================
+  # Start xplat as a system service with all features enabled:
+  #   - Process orchestration (process-compose)
+  #   - Task UI web dashboard
+  #   - MCP HTTP server for AI IDE integration
+
+  up:
+    desc: "Start xplat service with UI + MCP (recommended)"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service start --with-ui --with-mcp"
+
+  up:ui:
+    desc: "Start xplat service with UI only"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service start --with-ui"
+
+  up:mcp:
+    desc: "Start xplat service with MCP only"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service start --with-mcp"
+
+  up:minimal:
+    desc: "Start xplat service (process-compose only)"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service start"
+
+  down:
+    desc: "Stop xplat service"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service stop"
+
+  status:
+    desc: "Show xplat service status"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service status"
+
+  restart:
+    desc: "Restart xplat service"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} service restart"
+
+  # ===========================================================================
+  # Build and Test
+  # ===========================================================================
+
+  build:
+    desc: Build xplat binary
+    cmds:
+      - go build -o xplat{{"{{"}}exeExt{{"}}"}} .
+
+  build:install:
+    desc: Build and install xplat to ~/.local/bin (ONLY location)
+    cmds:
+      - task: build:clean-stale
+      - mkdir -p "{{"{{"}}.BIN_INSTALL_DIR{{"}}"}}"
+      - go build -o "{{"{{"}}.XPLAT_BIN{{"}}"}}" .
+      - echo "Installed to {{"{{"}}.XPLAT_BIN{{"}}"}}"
+
+  build:clean-stale:
+    desc: Remove xplat from non-canonical locations
+    cmds:
+      - rm -f {{"{{"}}.HOME{{"}}"}}/go/bin/xplat 2>/dev/null || true
+      - rm -f /usr/local/bin/xplat 2>/dev/null || true
+      - rm -f /tmp/xplat* 2>/dev/null || true
+    silent: true
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./... -v
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f xplat xplat.exe
+      - rm -rf .task/
+
+  docs:
+    desc: Regenerate README.md and Taskfile.yml from code (xplat devs only)
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} internal docs all"
+
+  # ===========================================================================
+  # xplat Command Wrappers
+  # ===========================================================================
+
+{{range .Commands}}  xplat:{{.Name}}:
+    desc: "{{.Short}}"
+    cmds:
+      - "{{"{{"}}.XPLAT_LOCAL{{"}}"}} {{.Name}} {{"{{"}}.CLI_ARGS{{"}}"}}"
+
+{{end}}
