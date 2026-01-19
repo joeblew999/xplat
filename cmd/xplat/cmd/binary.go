@@ -201,10 +201,10 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Downloading %s %s from GitHub...\n", name, version)
 
 	// Build download URL using the centralized naming function
-	// Format: https://github.com/REPO/releases/download/NAME-VERSION/NAME-OS-ARCH[.exe]
+	// Format: https://github.com/REPO/releases/download/VERSION/NAME-OS-ARCH[.exe]
 	binName := binaryFilename(name, runtime.GOOS, runtime.GOARCH)
-	url := fmt.Sprintf("https://github.com/%s/releases/download/%s-%s/%s",
-		repo, name, version, binName)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+		repo, version, binName)
 
 	fmt.Printf("URL: %s\n", url)
 
