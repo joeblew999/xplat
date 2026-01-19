@@ -1,14 +1,16 @@
-# ADR-008: MCP Server - Local and CF Worker
+# ADR-008: MCP Server Library Migration
 
 ## Status
 
-**Proposed** - Local working, CF Worker planned
+**Proposed** - Evaluating official SDK
 
 ## Context
 
-xplat has a working MCP server (`xplat mcp serve`) that exposes Taskfile tasks to AI IDEs. Currently uses `mark3labs/mcp-go` for local use.
+xplat has a working MCP server (`xplat mcp serve`) that exposes Taskfile tasks to AI IDEs. Currently uses `mark3labs/mcp-go` for local use on port 8762.
 
-Goal: Run MCP on both **local** and **CF Workers** (edge).
+**Primary Goal**: Migrate to the official `modelcontextprotocol/go-sdk` for better spec compliance.
+
+**Secondary Goal**: Enable running MCP on CF Workers (edge) using the same library.
 
 ### Key Finding
 
@@ -43,7 +45,7 @@ workers.Serve(nil)
 
 ```
 xplat mcp serve              # stdio (spawned by AI IDE)
-xplat mcp serve --http       # HTTP server on :8765
+xplat mcp serve --http       # HTTP server on :8762 (config.DefaultMCPPort)
 xplat mcp serve --sse        # SSE server
 ```
 
