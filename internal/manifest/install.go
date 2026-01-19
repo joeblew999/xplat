@@ -223,6 +223,11 @@ func (i *Installer) installGitHub(name string, gh *GitHubSource, version string)
 		}
 	}
 
+	// macOS: Remove quarantine attribute to allow unsigned binary to run
+	if runtime.GOOS == "darwin" {
+		exec.Command("xattr", "-d", "com.apple.quarantine", binPath).Run()
+	}
+
 	fmt.Printf("✓ Installed %s from GitHub release\n", name)
 	return nil
 }
@@ -300,6 +305,11 @@ func (i *Installer) installURL(name, urlTemplate, version string) error {
 		if err := os.Chmod(binPath, 0755); err != nil {
 			return fmt.Errorf("chmod failed: %w", err)
 		}
+	}
+
+	// macOS: Remove quarantine attribute to allow unsigned binary to run
+	if runtime.GOOS == "darwin" {
+		exec.Command("xattr", "-d", "com.apple.quarantine", binPath).Run()
 	}
 
 	fmt.Printf("✓ Installed %s from URL\n", name)
