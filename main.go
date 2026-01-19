@@ -89,7 +89,8 @@ KEY COMMANDS:
 	// P12 (MCP - Model Context Protocol server for AI IDEs)
 	rootCmd.AddCommand(cmd.MCPCmd)
 
-	// Note: Web UI is available via `xplat dev ui` (starts process-compose + UI together)
+	// P13 (Task UI - Web interface for running tasks)
+	rootCmd.AddCommand(cmd.UICmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
