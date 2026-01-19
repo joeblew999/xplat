@@ -33,11 +33,11 @@ vars:
   VERSION: '{{.SourceVersion}}'
   UPSTREAM: '{{.SourceRepo}}'
 
-  # xplat directory convention (fromSlash ensures OS-native path separators)
-  SRC_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.src/{{.Binary}}") {{ "}}" }}'
-  BIN_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.bin") {{ "}}" }}'
-  BIN_PATH: '{{ "{{" }} fromSlash (print .BIN_DIR "/" .BINARY_FILE) {{ "}}" }}'
-  DATA_DIR: '{{ "{{" }} fromSlash (print .ROOT_DIR "/.data") {{ "}}" }}'
+  # xplat directory convention (toSlash normalizes to forward slashes for cross-platform compatibility)
+  SRC_DIR: '{{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.src/{{.Binary}}'
+  BIN_DIR: '{{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.bin'
+  BIN_PATH: '{{ "{{" }} toSlash .BIN_DIR {{ "}}" }}/{{ "{{" }}.BINARY_FILE{{ "}}" }}'
+  DATA_DIR: '{{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.data'
 {{else}}  MAIN: {{.MainPath}}
 {{end}}
 env:
@@ -67,7 +67,7 @@ tasks:
     desc: Clone {{.Binary}} repository at pinned version
     run: once
     cmds:
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} fromSlash (print .ROOT_DIR "/.src") {{ "}}" }}'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.src'
       - git clone --depth 1 --branch {{ "{{" }}.VERSION{{ "}}" }} {{ "{{" }}.UPSTREAM{{ "}}" }} {{ "{{" }}.SRC_DIR{{ "}}" }}
     status:
       - git -C {{ "{{" }}.SRC_DIR{{ "}}" }} rev-parse HEAD
@@ -223,8 +223,8 @@ tasks:
     desc: Build release binary for current platform
     deps: [ensure]
     cmds:
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} fromSlash (print .ROOT_DIR "/.releases") {{ "}}" }}'
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.BIN_PATH{{ "}}" }} {{ "{{" }} fromSlash (print .ROOT_DIR "/.releases/" .BINARY "-" OS "-" ARCH exeExt) {{ "}}" }}'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.releases'
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.BIN_PATH{{ "}}" }} {{ "{{" }} toSlash .ROOT_DIR {{ "}}" }}/.releases/{{ "{{" }}.BINARY{{ "}}" }}-{{ "{{" }}OS{{ "}}" }}-{{ "{{" }}ARCH{{ "}}" }}{{ "{{" }}exeExt{{ "}}" }}'
 
   release:list:
     desc: List built release binaries
