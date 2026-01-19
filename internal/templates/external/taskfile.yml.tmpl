@@ -75,10 +75,9 @@ tasks:
   src:update:
     desc: Fetch and checkout pinned version
     deps: [src:clone]
-    dir: '{{ "{{" }}.SRC_DIR{{ "}}" }}'
     cmds:
-      - git fetch --tags
-      - git checkout {{ "{{" }}.VERSION{{ "}}" }}
+      - git -C "{{ "{{" }}.SRC_DIR{{ "}}" }}" fetch --tags
+      - git -C "{{ "{{" }}.SRC_DIR{{ "}}" }}" checkout {{ "{{" }}.VERSION{{ "}}" }}
 
   # ===========================================================================
   # Binary Build - Compile from source
@@ -87,21 +86,12 @@ tasks:
   bin:build:
     desc: Build {{.Binary}} binary from source
     deps: [src:clone]
-    dir: '{{ "{{" }}.SRC_DIR{{ "}}" }}'
     cmds:
       - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }}.BIN_DIR{{ "}}" }}'
-{{if eq .Language "go"}}      - go build -o {{ "{{" }}.BIN_PATH{{ "}}" }} {{.MainPath}}
-{{else if eq .Language "rust"}}      - cargo build --release
-      - cp target/release/{{ "{{" }}.BINARY_FILE{{ "}}" }} {{ "{{" }}.BIN_PATH{{ "}}" }}
-{{end}}      - |
-        # Create version file for tracking
-        VERSION=$(git describe --tags --always 2>/dev/null || echo "{{ "{{" }}.VERSION{{ "}}" }}")
-        COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        cat > {{ "{{" }}.BIN_DIR{{ "}}" }}/.version << EOF
-        version: $VERSION
-        commit: $COMMIT
-        built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-        EOF
+{{if eq .Language "go"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go build -o "{{ "{{" }}.BIN_PATH{{ "}}" }}" {{.MainPath}}
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo build --release
+      - '{{ "{{" }}.XPLAT{{ "}}" }} os cp {{ "{{" }}.SRC_DIR{{ "}}" }}/target/release/{{ "{{" }}.BINARY_FILE{{ "}}" }} {{ "{{" }}.BIN_PATH{{ "}}" }}'
+{{end}}      - '{{ "{{" }}.XPLAT{{ "}}" }} os version-file -f {{ "{{" }}.BIN_DIR{{ "}}" }}/.version -s {{ "{{" }}.VERSION{{ "}}" }}'
     status:
       - '{{ "{{" }}if eq OS "windows"{{ "}}" }}Test-Path "{{ "{{" }}.BIN_PATH{{ "}}" }}"{{ "{{" }}else{{ "}}" }}test -f "{{ "{{" }}.BIN_PATH{{ "}}" }}"{{ "{{" }}end{{ "}}" }}'
 
@@ -166,18 +156,16 @@ tasks:
   test:
     desc: Run {{.Binary}} tests
     deps: [src:clone]
-    dir: '{{ "{{" }}.SRC_DIR{{ "}}" }}'
     cmds:
-{{if eq .Language "go"}}      - go test -v ./...
-{{else if eq .Language "rust"}}      - cargo test
+{{if eq .Language "go"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go test -v ./...
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo test
 {{end}}
   deps:
     desc: Download {{.Binary}} dependencies
     deps: [src:clone]
-    dir: '{{ "{{" }}.SRC_DIR{{ "}}" }}'
     cmds:
-{{if eq .Language "go"}}      - go mod download
-{{else if eq .Language "rust"}}      - cargo fetch
+{{if eq .Language "go"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && go mod download
+{{else if eq .Language "rust"}}      - cd "{{ "{{" }}.SRC_DIR{{ "}}" }}" && cargo fetch
 {{end}}
   # ===========================================================================
   # Clean - Remove generated artifacts
