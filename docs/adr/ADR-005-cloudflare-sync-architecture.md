@@ -2,7 +2,47 @@
 
 ## Status
 
-**Proposed** - Needs analysis and decision
+**Active** - Decision made, implementation in progress
+
+## Decision
+
+**Option 1: Worker-Centric** - Keep the CF Worker as the primary event receiver, add a local receiver (`xplat sync-cf receive`) to complete the round-trip.
+
+## Primary Use Case: Round-Trip Validation
+
+The Cloudflare sync system enables **round-trip validation** for the xplat setup wizards:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Round-Trip Validation Flow                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. User runs setup wizard (internal/env/web/):                            │
+│     - Step 1: Configure API token                                          │
+│     - Step 2: Select account                                               │
+│     - Step 3: Choose domain                                                │
+│     - Step 4: Create/select Pages project                                  │
+│     - Step 5: Attach custom domain                                         │
+│     - Step 6: Enable event notifications (NEW)                             │
+│                                                                             │
+│  2. User deploys site:                                                     │
+│     - xplat env deploy → builds Hugo → uploads to Pages                    │
+│                                                                             │
+│  3. Cloudflare sends event to Worker:                                      │
+│     - Pages deploy hook fires                                              │
+│     - Worker normalizes and forwards to SYNC_ENDPOINT                      │
+│                                                                             │
+│  4. Local receiver validates:                                              │
+│     - "Deploy succeeded for project X"                                     │
+│     - Can trigger cache invalidation, notifications, etc.                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why this matters:**
+- Setup wizards modify CF state (create projects, add domains, deploy)
+- Round-trip validation confirms those operations succeeded
+- Real-time feedback is important for developer experience
 
 ## Context
 
@@ -195,6 +235,27 @@ The `syncgh` package (GitHub sync) is more mature:
 - Requires always-running local process
 - Tunnel URL changes on restart (need to update CF webhook configs)
 
+**Tunnel URL Auto-Discovery Enhancement:**
+
+The tunnel URL issue can be solved using the SignTools pattern (see ADR-007). When cloudflared starts with `-metrics localhost:51881`, we can scrape the metrics endpoint to auto-discover the public URL:
+
+```go
+// Auto-discover tunnel URL from cloudflared metrics
+var publicUrlRegex = regexp.MustCompile(
+    `cloudflared_tunnel_user_hostnames_counts{userHostname="(.+)"}`)
+
+func GetTunnelURL(metricsHost string) (string, error) {
+    resp, _ := http.Get(fmt.Sprintf("http://%s/metrics", metricsHost))
+    data, _ := io.ReadAll(resp.Body)
+    if matches := publicUrlRegex.FindStringSubmatch(string(data)); len(matches) > 0 {
+        return matches[1], nil  // e.g., "https://xxx.trycloudflare.com"
+    }
+    return "", ErrTunnelNotFound
+}
+```
+
+This eliminates manual URL configuration - xplat can auto-detect the tunnel URL and programmatically register it with Cloudflare webhook endpoints.
+
 ### Option 3: Polling-Only (Simplest)
 
 **Remove both Worker and webhooks, just poll.**
@@ -275,53 +336,84 @@ sync:
 
 ---
 
-## Recommendation
+## Decision Rationale
 
-**Start with Option 1 (Worker-Centric) because:**
+**Why Option 1 (Worker-Centric):**
 
-1. Worker is already built and deployed
-2. Matches the "edge does the work" philosophy
-3. Can evolve to Option 4 later if needed
+1. **Worker already exists** - `workers/sync-cf/` is built, just needs a receiver
+2. **Edge does the work** - Worker normalizes events from multiple CF sources
+3. **Supports round-trip validation** - See events from things you just configured
+4. **Real-time feedback** - Instant notification when deploys complete
+5. **No local tunnel required** - CF sends to Worker → Worker sends to your tunnel
 
-**Immediate action items:**
+**Why NOT the other options:**
 
-1. Add `xplat sync-cf receive` - receives Worker's forwarded events
-2. Add cache invalidation callback (mirror syncgh pattern)
-3. Add state persistence for tracking processed events
-4. Document the Worker → Local flow
+- **Option 2 (Direct)**: Requires cloudflared binary and stable tunnel URL
+- **Option 3 (Polling)**: Not real-time, polling delay breaks validation UX
+- **Option 4 (Hybrid)**: Over-engineering for now, can add later if needed
+
+## Immediate Action Items
+
+1. ✅ **Add `xplat sync-cf receive` command** - HTTP server that receives Worker events
+2. ✅ **Wire up event callbacks** - OnPagesDeploy, OnAlert, OnLogpush, OnAny
+3. ✅ **Add state persistence** - `~/.xplat/cache/synccf-receive-state.json`
+4. ✅ **Add Task cache invalidation** - `--invalidate` flag clears `.task/remote/` on Pages deploy
+5. ✅ **Add Step 6 to wizard** - Event Notifications setup in web UI
+6. ✅ **Wire .env config to CLI** - `sync-cf receive` and `sync-cf tunnel` use receiver port from .env
+7. ⬜ **Document the flow** - How to deploy Worker + configure SYNC_ENDPOINT
+8. ⬜ **Add Worker deployment API** - Deploy Worker via Cloudflare API (no wrangler needed)
 
 **Future consideration:**
 
 - Add polling as fallback when Worker/tunnel isn't available
-- Consider Option 4 (hybrid) if users need different modes
+- Consider hybrid mode if users need different approaches
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Wire Up Worker → Local
+### Phase 1: Wire Up Worker → Local ✅ COMPLETE
 
-1. [ ] Add `xplat sync-cf receive` command
-2. [ ] Parse Worker's Event format (already normalized)
-3. [ ] Add `OnEvent` callback registration
-4. [ ] Add Task cache invalidation callback
+1. [x] Add `xplat sync-cf receive` command
+2. [x] Parse Worker's Event format (already normalized)
+3. [x] Add `OnEvent` callback registration (OnPagesDeploy, OnAlert, OnLogpush, OnAny)
+4. [x] Add Task cache invalidation callback (`synccf.TaskCacheInvalidator`)
 
-### Phase 2: State & Persistence
+### Phase 2: State & Persistence ✅ COMPLETE
 
-1. [ ] Add `~/.xplat/cache/synccf-state.json`
-2. [ ] Track processed event IDs to avoid duplicates
-3. [ ] Add `xplat sync-cf status` to show state
+1. [x] Add `~/.xplat/cache/synccf-receive-state.json`
+2. [x] Track processed event IDs to avoid duplicates (by event key)
+3. [x] Add `xplat sync-cf receive-state` to show state
 
-### Phase 3: Process Compose Integration
+### Phase 3: Web UI Integration ✅ COMPLETE
 
-1. [ ] Add synccf-receive to process-compose example
+1. [x] Add Step 6 (Event Notifications) to Cloudflare wizard
+2. [x] Add environment variables: `CLOUDFLARE_WORKER_NAME`, `CLOUDFLARE_SYNC_ENDPOINT`, `CLOUDFLARE_RECEIVER_PORT`
+3. [x] Wire .env config to CLI commands (receiver and tunnel use port from .env)
+
+### Phase 4: Process Compose Integration
+
+1. [x] Add synccf-receive to process-compose example
 2. [ ] Document Worker deployment + local receiver setup
 
-### Phase 4: Polish
+### Phase 5: Polish
 
-1. [ ] Add metrics/observability
-2. [ ] Add health check endpoint
-3. [ ] Consider polling fallback
+1. [x] Add health check endpoint (`/health`)
+2. [x] Add status endpoint (`/status` shows event count, last event time)
+3. [ ] Add metrics/observability
+4. [ ] Consider polling fallback
+
+### Phase 6: Worker Deployment (Future)
+
+Worker deployment via Cloudflare API (no wrangler) requires:
+1. [ ] Add Worker API endpoints to `internal/env/constants.go`
+2. [ ] Create multipart form upload for Worker script
+3. [ ] Handle Worker bindings (SYNC_ENDPOINT environment variable)
+4. [ ] Wire deployment to Step 6 UI "Deploy Worker" button
+
+**Note:** Currently using wrangler CLI for Worker deployment (`xplat sync-cf worker deploy`).
+The Cloudflare Workers API uses multipart form uploads with metadata, which is more complex
+than the simple REST calls used for Pages. Consider keeping wrangler dependency for now.
 
 ---
 
@@ -331,3 +423,4 @@ sync:
 - synccf package: `internal/synccf/`
 - syncgh package: `internal/syncgh/` (reference implementation)
 - ADR-004: gosmee integration (similar pattern for GitHub)
+- ADR-007: Cloudflare tunnel patterns (SignTools metrics scraping for URL auto-discovery)

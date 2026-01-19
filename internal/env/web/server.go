@@ -125,7 +125,7 @@ func serveSetupGUIWithOptions(mockMode bool) {
 		homePage(c, loadConfig(), mockMode)
 	})
 
-	// Cloudflare setup wizard - 5 steps
+	// Cloudflare setup wizard - 6 steps
 	v.Page("/cloudflare", func(c *via.Context) {
 		cloudflarePage(c, loadConfig(), mockMode)
 	})
@@ -148,6 +148,10 @@ func serveSetupGUIWithOptions(mockMode bool) {
 
 	v.Page("/cloudflare/step5", func(c *via.Context) {
 		cloudflareStep5Page(c, loadConfig(), mockMode)
+	})
+
+	v.Page("/cloudflare/step6", func(c *via.Context) {
+		cloudflareStep6Page(c, loadConfig(), mockMode)
 	})
 
 	v.Page("/claude", func(c *via.Context) {

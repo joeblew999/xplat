@@ -138,5 +138,6 @@ func init() {
 		&Step3Info,
 		&Step4Info,
 		&Step5Info,
+		&Step6Info,
 	}
 }

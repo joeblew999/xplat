@@ -30,14 +30,17 @@ func GetTestEnvFile() string {
 
 // Environment variable keys used throughout the codebase
 const (
-	KeyCloudflareAPIToken     = "CLOUDFLARE_API_TOKEN"
-	KeyCloudflareAPITokenName = "CLOUDFLARE_API_TOKEN_NAME"
-	KeyCloudflareAccountID    = "CLOUDFLARE_ACCOUNT_ID"
-	KeyCloudflareDomain       = "CLOUDFLARE_DOMAIN"
-	KeyCloudflareZoneID       = "CLOUDFLARE_ZONE_ID"
-	KeyCloudflarePageProject  = "CLOUDFLARE_PAGE_PROJECT_NAME"
-	KeyClaudeAPIKey           = "CLAUDE_API_KEY"
-	KeyClaudeWorkspaceName    = "CLAUDE_WORKSPACE_NAME"
+	KeyCloudflareAPIToken      = "CLOUDFLARE_API_TOKEN"
+	KeyCloudflareAPITokenName  = "CLOUDFLARE_API_TOKEN_NAME"
+	KeyCloudflareAccountID     = "CLOUDFLARE_ACCOUNT_ID"
+	KeyCloudflareDomain        = "CLOUDFLARE_DOMAIN"
+	KeyCloudflareZoneID        = "CLOUDFLARE_ZONE_ID"
+	KeyCloudflarePageProject   = "CLOUDFLARE_PAGE_PROJECT_NAME"
+	KeyCloudflareWorkerName    = "CLOUDFLARE_WORKER_NAME"
+	KeyCloudflareSyncEndpoint  = "CLOUDFLARE_SYNC_ENDPOINT"
+	KeyCloudflareReceiverPort  = "CLOUDFLARE_RECEIVER_PORT"
+	KeyClaudeAPIKey            = "CLAUDE_API_KEY"
+	KeyClaudeWorkspaceName     = "CLAUDE_WORKSPACE_NAME"
 )
 
 // Placeholder values used in .env.example and validation
@@ -48,14 +51,17 @@ const (
 
 // EnvConfig holds environment configuration
 type EnvConfig struct {
-	CloudflareToken     string
-	CloudflareTokenName string
-	CloudflareAccount   string
-	CloudflareDomain    string
-	CloudflareZoneID    string
-	CloudflareProject   string
-	ClaudeAPIKey        string
-	ClaudeWorkspace     string
+	CloudflareToken        string
+	CloudflareTokenName    string
+	CloudflareAccount      string
+	CloudflareDomain       string
+	CloudflareZoneID       string
+	CloudflareProject      string
+	CloudflareWorkerName   string
+	CloudflareSyncEndpoint string
+	CloudflareReceiverPort string
+	ClaudeAPIKey           string
+	ClaudeWorkspace        string
 }
 
 // FieldInfo holds metadata about an environment variable field
@@ -76,6 +82,9 @@ var envFieldsInOrder = []FieldInfo{
 	{Key: KeyCloudflareDomain, Default: "your-domain.com", Description: "Cloudflare domain name for Hugo site", DisplayName: "Cloudflare Domain", SyncToGitHub: true, Validate: false},
 	{Key: KeyCloudflareZoneID, Default: "your-zone-id", Description: "Cloudflare Zone ID for the domain", DisplayName: "Cloudflare Zone ID", SyncToGitHub: true, Validate: false},
 	{Key: KeyCloudflarePageProject, Default: "your-project-name", Description: "Cloudflare Pages project name", DisplayName: "Cloudflare Pages Project", SyncToGitHub: true, Validate: true},
+	{Key: KeyCloudflareWorkerName, Default: "xplat-sync", Description: "Cloudflare Worker name for event sync", DisplayName: "Cloudflare Worker Name", SyncToGitHub: false, Validate: false},
+	{Key: KeyCloudflareSyncEndpoint, Default: "", Description: "Sync endpoint URL (tunnel URL for event forwarding)", DisplayName: "Sync Endpoint URL", SyncToGitHub: false, Validate: false},
+	{Key: KeyCloudflareReceiverPort, Default: "9091", Description: "Local receiver port for sync events", DisplayName: "Receiver Port", SyncToGitHub: false, Validate: false},
 	{Key: KeyClaudeAPIKey, Default: "your-api-key-here", Description: "Claude API key (required for translation)", DisplayName: "Claude API Key", SyncToGitHub: false, Validate: true},
 	{Key: KeyClaudeWorkspaceName, Default: "", Description: "Claude workspace name", DisplayName: "Claude Workspace Name", SyncToGitHub: false, Validate: true},
 }
@@ -148,6 +157,12 @@ func (cfg *EnvConfig) Get(key string) string {
 		return cfg.CloudflareZoneID
 	case KeyCloudflarePageProject:
 		return cfg.CloudflareProject
+	case KeyCloudflareWorkerName:
+		return cfg.CloudflareWorkerName
+	case KeyCloudflareSyncEndpoint:
+		return cfg.CloudflareSyncEndpoint
+	case KeyCloudflareReceiverPort:
+		return cfg.CloudflareReceiverPort
 	case KeyClaudeAPIKey:
 		return cfg.ClaudeAPIKey
 	case KeyClaudeWorkspaceName:
@@ -171,6 +186,12 @@ func (cfg *EnvConfig) Set(key, value string) bool {
 		cfg.CloudflareZoneID = value
 	case KeyCloudflarePageProject:
 		cfg.CloudflareProject = value
+	case KeyCloudflareWorkerName:
+		cfg.CloudflareWorkerName = value
+	case KeyCloudflareSyncEndpoint:
+		cfg.CloudflareSyncEndpoint = value
+	case KeyCloudflareReceiverPort:
+		cfg.CloudflareReceiverPort = value
 	case KeyClaudeAPIKey:
 		cfg.ClaudeAPIKey = value
 	case KeyClaudeWorkspaceName:

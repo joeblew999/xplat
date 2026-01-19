@@ -9,9 +9,31 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joeblew999/xplat/internal/env"
 	"github.com/joeblew999/xplat/internal/synccf"
 	"github.com/spf13/cobra"
 )
+
+// getReceiverPort returns the port for the receiver server.
+// Priority: CLI flag > .env file > default
+func getReceiverPort(flagValue string) string {
+	// CLI flag takes precedence
+	if flagValue != "" && flagValue != "9091" {
+		return flagValue
+	}
+
+	// Try to load from .env
+	cfg, err := env.LoadEnv()
+	if err == nil && cfg != nil {
+		port := cfg.Get(env.KeyCloudflareReceiverPort)
+		if port != "" && port != "9091" {
+			return port
+		}
+	}
+
+	// Return flag value (which may be the default)
+	return flagValue
+}
 
 // SyncCFCmd is the parent command for Cloudflare sync operations
 var SyncCFCmd = &cobra.Command{
@@ -23,6 +45,8 @@ Works identically on macOS, Linux, and Windows.
 Designed to run as part of xplat service for continuous syncing.
 
 Commands:
+  receive        Receive events from CF Worker (round-trip validation)
+  receive-state  Show current receive state
   auth           Set up R2 credentials interactively
   tunnel         Start cloudflared tunnel (quick or named)
   tunnel-login   Authenticate cloudflared with Cloudflare
@@ -42,6 +66,12 @@ Environment:
   R2_ACCESS_KEY       R2 API access key
   R2_SECRET_KEY       R2 API secret key
 
+Round-Trip Validation (recommended):
+  1. Deploy CF Worker:  xplat sync-cf worker deploy
+  2. Start receiver:    xplat sync-cf receive --port=9091
+  3. Start tunnel:      xplat sync-cf tunnel 9091
+  4. Configure SYNC_ENDPOINT on Worker to tunnel URL
+
 Quick Tunnel (random URL, no account needed):
   xplat sync-cf tunnel 8080
 
@@ -52,6 +82,7 @@ Named Tunnel (stable URL, requires CF account + domain):
   4. xplat sync-cf tunnel --name=webhook  # Run with stable URL
 
 Examples:
+  xplat sync-cf receive --port=9091
   xplat sync-cf auth
   xplat sync-cf check
   xplat sync-cf tunnel 8080
@@ -63,6 +94,98 @@ Examples:
 
 var syncCFTunnelName string
 var syncCFTunnelPort string
+var syncCFReceivePort string
+var syncCFReceiveInvalidate bool
+
+var syncCFReceiveCmd = &cobra.Command{
+	Use:   "receive",
+	Short: "Receive events from CF Worker (round-trip validation)",
+	Long: `Start an HTTP server to receive events forwarded by the CF Worker.
+
+This completes the round-trip validation flow:
+  1. CF Worker receives events from Cloudflare services
+  2. Worker normalizes and forwards to SYNC_ENDPOINT (this receiver)
+  3. Receiver logs events and can trigger cache invalidation
+
+Architecture:
+  Cloudflare → CF Worker → Tunnel → this receiver → callbacks
+
+The receiver supports these event types:
+  - pages_deploy: Pages deploy hooks (triggers cache invalidation with --invalidate)
+  - alert: Notification webhooks
+  - logpush: Logpush HTTP destination batches
+
+Examples:
+  # Start receiver on default port
+  xplat sync-cf receive
+
+  # Start receiver with Task cache invalidation
+  xplat sync-cf receive --invalidate
+
+  # Start receiver with custom port
+  xplat sync-cf receive --port=9091
+
+  # Start receiver + tunnel together
+  xplat sync-cf receive --port=9091 --invalidate &
+  xplat sync-cf tunnel 9091`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get port from flag or .env
+		port := getReceiverPort(syncCFReceivePort)
+
+		callbacks := synccf.ReceiveCallbacks{
+			OnAny: synccf.DefaultLogCallback(),
+		}
+
+		if syncCFReceiveInvalidate {
+			workDir, _ := os.Getwd()
+			log.Printf("Task cache invalidation enabled for: %s", workDir)
+			callbacks.OnPagesDeploy = synccf.TaskCacheInvalidator(workDir)
+		}
+
+		return synccf.RunReceiveServer(port, callbacks)
+	},
+}
+
+var syncCFReceiveStateCmd = &cobra.Command{
+	Use:   "receive-state",
+	Short: "Show current receive state (processed events)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		state, err := synccf.LoadReceiveState()
+		if err != nil {
+			return err
+		}
+
+		if state.UpdatedAt.IsZero() {
+			log.Printf("No events received yet. Run 'xplat sync-cf receive' first.")
+			return nil
+		}
+
+		log.Printf("Receive state:")
+		log.Printf("  Updated: %s", state.UpdatedAt.Format(time.RFC3339))
+		log.Printf("  Last event: %s", state.LastEventTime.Format(time.RFC3339))
+		log.Printf("  Events processed: %d", len(state.ProcessedEvents))
+
+		// Show recent events
+		if len(state.ProcessedEvents) > 0 {
+			log.Printf("")
+			log.Printf("Recent events:")
+			count := 0
+			for key, event := range state.ProcessedEvents {
+				if count >= 10 {
+					log.Printf("  ... and %d more", len(state.ProcessedEvents)-10)
+					break
+				}
+				log.Printf("  [%s] %s on %s (at %s)",
+					event.Type, event.Action, event.Resource,
+					event.ProcessedAt.Format(time.RFC3339))
+				_ = key
+				count++
+			}
+		}
+
+		return nil
+	},
+}
 
 var syncCFTunnelCmd = &cobra.Command{
 	Use:   "tunnel [port]",
@@ -83,13 +206,20 @@ Examples:
   xplat sync-cf tunnel --name=webhook --port=8080  # Named tunnel`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		port := 9090
+		// Get port from flag > args > .env > default
+		port := 9091 // default for sync receiver
 		if syncCFTunnelPort != "" {
 			if p, err := strconv.Atoi(syncCFTunnelPort); err == nil && p > 0 {
 				port = p
 			}
 		} else if len(args) > 0 {
 			if p, err := strconv.Atoi(args[0]); err == nil && p > 0 {
+				port = p
+			}
+		} else {
+			// Try to get from .env
+			receiverPort := getReceiverPort("9091")
+			if p, err := strconv.Atoi(receiverPort); err == nil && p > 0 {
 				port = p
 			}
 		}
@@ -307,6 +437,10 @@ var syncCFWorkerRunCmd = &cobra.Command{
 }
 
 func init() {
+	// Receive flags
+	syncCFReceiveCmd.Flags().StringVar(&syncCFReceivePort, "port", "9091", "Receive server port")
+	syncCFReceiveCmd.Flags().BoolVar(&syncCFReceiveInvalidate, "invalidate", false, "Invalidate Task cache on Pages deploy events")
+
 	syncCFPollCmd.Flags().StringVar(&syncCFPollInterval, "interval", "1m", "Poll interval")
 	syncCFWebhookCmd.Flags().StringVar(&syncCFWebhookPort, "port", "9090", "Webhook server port")
 
@@ -318,6 +452,8 @@ func init() {
 	SyncCFCmd.AddCommand(syncCFCheckCmd)
 	SyncCFCmd.AddCommand(syncCFInstallCmd)
 	SyncCFCmd.AddCommand(syncCFPollCmd)
+	SyncCFCmd.AddCommand(syncCFReceiveCmd)
+	SyncCFCmd.AddCommand(syncCFReceiveStateCmd)
 	SyncCFCmd.AddCommand(syncCFTunnelCmd)
 	SyncCFCmd.AddCommand(syncCFTunnelCreateCmd)
 	SyncCFCmd.AddCommand(syncCFTunnelDeleteCmd)
