@@ -1,9 +1,5 @@
 version: '3'
 
-
-includes:
-  plat-geo:
-    taskfile: https://github.com/joeblew999/plat-geo.git//Taskfile.yml?ref=dev
 # =============================================================================
 # xplat - Cross-Platform Taskfile Bootstrapper
 # =============================================================================
