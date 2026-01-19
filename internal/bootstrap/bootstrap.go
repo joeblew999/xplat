@@ -14,7 +14,9 @@
 package bootstrap
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
 )
@@ -34,4 +36,38 @@ func init() {
 		logLevel = zerolog.InfoLevel
 	}
 	zerolog.SetGlobalLevel(logLevel)
+
+	// Check for stale xplat binaries in non-canonical locations
+	checkStaleBinaries()
+}
+
+// checkStaleBinaries warns if xplat exists in locations other than ~/.local/bin
+func checkStaleBinaries() {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return
+	}
+
+	canonical := filepath.Join(home, ".local", "bin", "xplat")
+	staleLocations := []string{
+		filepath.Join(home, "go", "bin", "xplat"),
+		"/usr/local/bin/xplat",
+	}
+
+	// Get current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+
+	for _, loc := range staleLocations {
+		if _, err := os.Stat(loc); err == nil {
+			// Stale binary exists
+			resolved, _ := filepath.EvalSymlinks(loc)
+			if resolved != exe && loc != canonical {
+				fmt.Fprintf(os.Stderr, "⚠️  Stale xplat at %s (run: rm %s)\n", loc, loc)
+			}
+		}
+	}
 }
