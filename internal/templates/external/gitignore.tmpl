@@ -36,6 +36,14 @@ coverage.html
 # OS
 .DS_Store
 Thumbs.db
+
+# Node/Bun
+node_modules/
+bun.lock
+
+# Build artifacts
+.releases/
+dist/
 {{if .Patterns}}
 # Project-specific patterns
 {{range .Patterns}}{{.}}
