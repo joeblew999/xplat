@@ -30,54 +30,58 @@ This is:
 
 ## Implementation
 
-### 1. Standardized Install Task
+### 1. `xplat update` Always Installs to Canonical Location
 
-The generated Taskfile should only use one location:
-
-```yaml
-vars:
-  XPLAT_BIN: '{{.HOME}}/.local/bin/xplat{{exeExt}}'
-
-tasks:
-  build:install:
-    desc: Build and install xplat
-    cmds:
-      - mkdir -p "{{.HOME}}/.local/bin"
-      - go build -o "{{.XPLAT_BIN}}" .
-```
-
-### 2. Clean Install Script
-
-Before installing, remove any stale binaries:
-
-```bash
-# Remove from all known locations
-rm -f ~/go/bin/xplat
-rm -f /usr/local/bin/xplat
-rm -f /tmp/xplat*
-
-# Install to canonical location
-mkdir -p ~/.local/bin
-cp ./xplat ~/.local/bin/xplat
-```
-
-### 3. PATH Check
-
-xplat should warn if `~/.local/bin` is not in PATH:
+The updater now always installs to `~/.local/bin/xplat` regardless of where the current binary is running from:
 
 ```go
-func checkPath() {
+// internal/updater/updater.go
+func CanonicalInstallPath() (string, error) {
     home := os.Getenv("HOME")
-    localBin := filepath.Join(home, ".local", "bin")
-    if !strings.Contains(os.Getenv("PATH"), localBin) {
-        fmt.Fprintf(os.Stderr, "Warning: %s is not in PATH\n", localBin)
+    return filepath.Join(home, ".local", "bin", "xplat"), nil
+}
+```
+
+### 2. Automatic Cleanup on Update
+
+After installing, `xplat update` removes stale binaries from non-canonical locations:
+
+```go
+func CleanStaleBinaries() {
+    staleLocations := []string{
+        filepath.Join(home, "go", "bin", "xplat"),
+        "/usr/local/bin/xplat",
+    }
+    for _, loc := range staleLocations {
+        os.Remove(loc) // Silently clean up
     }
 }
 ```
 
-### 4. No More go install
+### 3. Startup Warning
 
-Avoid `go install` which puts binaries in `~/go/bin`. Use explicit build + copy.
+Bootstrap init warns if stale binaries exist (see `internal/bootstrap/bootstrap.go`):
+
+```
+⚠️  Stale xplat at /Users/joe/go/bin/xplat (run: rm /Users/joe/go/bin/xplat)
+```
+
+### 4. Taskfile for xplat Developers
+
+The generated Taskfile includes `build:clean-stale` which removes stale binaries before installing:
+
+```yaml
+build:install:
+  desc: Build and install xplat to ~/.local/bin (ONLY location)
+  cmds:
+    - task: build:clean-stale
+    - mkdir -p ~/.local/bin
+    - go build -o ~/.local/bin/xplat .
+```
+
+### 5. No More go install
+
+Avoid `go install` which puts binaries in `~/go/bin`. Use `xplat update` or `task build:install`.
 
 ## Migration
 

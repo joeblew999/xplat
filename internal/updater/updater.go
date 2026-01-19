@@ -248,7 +248,38 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedCh
 	return nil
 }
 
+// CanonicalInstallPath returns the canonical install location: ~/.local/bin/xplat
+func CanonicalInstallPath() (string, error) {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return "", fmt.Errorf("HOME environment variable not set")
+	}
+	return filepath.Join(home, ".local", "bin", "xplat"), nil
+}
+
+// CleanStaleBinaries removes xplat from non-canonical locations.
+func CleanStaleBinaries() {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return
+	}
+
+	staleLocations := []string{
+		filepath.Join(home, "go", "bin", "xplat"),
+		"/usr/local/bin/xplat",
+	}
+
+	for _, loc := range staleLocations {
+		if _, err := os.Stat(loc); err == nil {
+			if err := os.Remove(loc); err == nil {
+				fmt.Printf("Removed stale xplat from %s\n", loc)
+			}
+		}
+	}
+}
+
 // Update performs a self-update of the xplat binary.
+// Always installs to ~/.local/bin/xplat regardless of where current binary is running from.
 func Update(ctx context.Context, currentVersion string, force bool) (newVersion string, err error) {
 	release, err := GetLatestRelease(ctx)
 	if err != nil {
@@ -272,18 +303,24 @@ func Update(ctx context.Context, currentVersion string, force bool) (newVersion 
 		fmt.Fprintf(os.Stderr, "Warning: %s not found, skipping verification\n", config.XplatChecksumFile)
 	}
 
-	execPath, err := os.Executable()
+	// Always install to canonical location
+	installPath, err := CanonicalInstallPath()
 	if err != nil {
-		return "", fmt.Errorf("failed to get executable path: %w", err)
-	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve executable path: %w", err)
-	}
-
-	if err := DownloadAndReplace(ctx, downloadURL, execPath, expectedChecksum); err != nil {
 		return "", err
 	}
+
+	// Ensure directory exists
+	installDir := filepath.Dir(installPath)
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create install directory: %w", err)
+	}
+
+	if err := DownloadAndReplace(ctx, downloadURL, installPath, expectedChecksum); err != nil {
+		return "", err
+	}
+
+	// Clean up any stale binaries in other locations
+	CleanStaleBinaries()
 
 	return latestVersion, nil
 }
