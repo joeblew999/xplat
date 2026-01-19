@@ -62,32 +62,45 @@ cd ~/workspace/go/src/github.com/joeblew999/xplat
 # Make code changes
 vim cmd/xplat/cmd/some_feature.go
 
-# Build (compiles everything into single binary)
-go build -o xplat .
+# Full build with generation (recommended):
+xplat internal dev build
+
+# Quick build only:
+xplat internal dev install
+
+# Or if xplat is not installed yet (bootstrap):
+go build . && ./xplat internal dev build
 
 # Test
 go test ./...
 
 # Regenerate xplat's own documentation from code
-./xplat docs all
-
-# Install locally for testing
-cp xplat ~/.local/bin/
+xplat internal:docs all
 
 # Release to users
 xplat release
 ```
 
+**NEVER use `go install`** - it installs to `~/go/bin` which causes conflicts.
+See: `docs/adr/ADR-016-single-install-location.md`
+
+**Internal commands:**
+- `xplat internal dev build` - Full build with file generation
+- `xplat internal dev install` - Quick build only
+- `xplat internal dev info` - Show configuration values
+- `xplat internal gen all` - Regenerate install.sh and CI action
+- `xplat internal:docs all` - Regenerate README.md and Taskfile.yml
+
 **Key insight:** A single `go build` produces the entire xplat binary with all features embedded:
 - MCP server (AI IDE integration)
 - Task UI (web interface)
-- Docs generator (`xplat docs` - for xplat's own docs)
+- Docs generator (`xplat internal:docs` - for xplat's own docs)
 - Gen commands (`xplat gen` - for user project files)
 - Task runner (from go-task)
 - Process-compose (service orchestration)
 - OS utilities (cross-platform rm, cp, etc.)
 
-**Note:** `xplat docs` generates xplat's own README/Taskfile. `xplat gen` generates files for user projects.
+**Note:** `xplat internal:docs` generates xplat's own README/Taskfile. `xplat gen` generates files for user projects.
 
 ---
 
@@ -155,7 +168,10 @@ xplat release
 cd ~/workspace/plat-cms
 
 # Install xplat binary (one time)
-# Download from releases or: go install github.com/joeblew999/xplat@latest
+curl -fsSL https://raw.githubusercontent.com/joeblew999/xplat/main/install.sh | bash
+
+# Or download manually from releases:
+# https://github.com/joeblew999/xplat/releases
 
 # If xplat.yaml was updated, regenerate files
 xplat gen all
@@ -190,12 +206,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Install xplat
-      - name: Install xplat
-        run: |
-          curl -L https://github.com/joeblew999/xplat/releases/latest/download/xplat-linux-amd64 -o xplat
-          chmod +x xplat
-          sudo mv xplat /usr/local/bin/
+      # Install xplat using the setup action (installs to ~/.local/bin)
+      - uses: joeblew999/xplat/.github/actions/setup@main
 
       # Use xplat tasks
       - name: Build
@@ -238,8 +250,9 @@ xplat service start    # As part of service (with UI + process-compose)
 
 | Command | xplat Dev | Package Dev | End User | Purpose |
 |---------|-----------|-------------|----------|---------|
-| `go build` | ✅ | - | - | Build xplat binary |
-| `xplat docs all` | ✅ | - | - | Regenerate xplat's own docs |
+| `xplat internal dev build` | ✅ | - | - | Build and install xplat from source |
+| `xplat internal gen all` | ✅ | - | - | Regenerate install.sh and CI action |
+| `xplat internal:docs all` | ✅ | - | - | Regenerate xplat's own docs |
 | `xplat gen all` | - | ✅ | ✅ | Generate project files from xplat.yaml |
 | `xplat manifest` | - | ✅ | - | Bootstrap/validate package manifest |
 | `xplat release` | ✅ | ✅ | - | Create releases |

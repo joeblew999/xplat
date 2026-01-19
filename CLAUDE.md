@@ -12,13 +12,21 @@ xplat/
 └── .data/               # Runtime data (gitignored)
 ```
 
-**To build xplat:**
+**To build and install xplat:**
 ```bash
-go build .                    # Creates ./xplat binary
-go build -o /tmp/xplat .      # Build to specific location
+# Full build with generation (recommended):
+xplat internal dev build
+
+# Quick build only:
+xplat internal dev install
+
+# If xplat is not installed yet (bootstrap):
+go build . && ./xplat internal dev build
 ```
 
-**DO NOT use `go build ./cmd/xplat/...`** - main.go is in the root, not in cmd/.
+**NEVER use `go install`** - it installs to `~/go/bin` which causes conflicts.
+
+See: `docs/adr/ADR-016-single-install-location.md`
 
 ---
 
@@ -502,10 +510,12 @@ tasks:
 
 **Single main.go in root:** The xplat binary has a single `main.go` in the repository root. All commands are defined in `cmd/xplat/cmd/` as cobra subcommands.
 
-**Build locations:**
-- Local dev: `go build -o xplat .` (or `task build`) → outputs to `./xplat`
-- Install: `task build:install` → outputs to `~/.local/bin/xplat`
+**Build and install:**
+```bash
+xplat internal dev build
+```
 
+**NEVER use `go install`** - it installs to `~/go/bin` which causes conflicts.
 Do NOT build to `.bin/` - that directory is for subsystem binaries (nats, telegraf, etc.), not the xplat binary itself.
 
 **Set GOWORK at subsystem level:**

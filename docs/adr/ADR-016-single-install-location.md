@@ -30,35 +30,51 @@ This is:
 
 ## Implementation
 
-### 1. `xplat update` Always Installs to Canonical Location
+### 1. Centralized Configuration
 
-The updater now always installs to `~/.local/bin/xplat` regardless of where the current binary is running from:
+All install paths are defined in `internal/config/config.go`:
+
+```go
+// XplatCanonicalBin returns the canonical xplat binary path: ~/.local/bin/xplat
+func XplatCanonicalBin() string {
+    home, _ := os.UserHomeDir()
+    return filepath.Join(home, ".local", "bin", "xplat")
+}
+
+// XplatStaleLocations returns paths where stale xplat binaries might exist.
+func XplatStaleLocations() []string {
+    home, _ := os.UserHomeDir()
+    return []string{
+        filepath.Join(home, "go", "bin", "xplat"),
+        "/usr/local/bin/xplat",
+    }
+}
+```
+
+### 2. `xplat update` Always Installs to Canonical Location
+
+The updater uses the config to install to the canonical location:
 
 ```go
 // internal/updater/updater.go
 func CanonicalInstallPath() (string, error) {
-    home := os.Getenv("HOME")
-    return filepath.Join(home, ".local", "bin", "xplat"), nil
+    return config.XplatCanonicalBin(), nil
 }
 ```
 
-### 2. Automatic Cleanup on Update
+### 3. Automatic Cleanup on Update
 
 After installing, `xplat update` removes stale binaries from non-canonical locations:
 
 ```go
 func CleanStaleBinaries() {
-    staleLocations := []string{
-        filepath.Join(home, "go", "bin", "xplat"),
-        "/usr/local/bin/xplat",
-    }
-    for _, loc := range staleLocations {
+    for _, loc := range config.XplatStaleLocations() {
         os.Remove(loc) // Silently clean up
     }
 }
 ```
 
-### 3. Startup Warning
+### 4. Startup Warning
 
 Bootstrap init warns if stale binaries exist (see `internal/bootstrap/bootstrap.go`):
 
@@ -66,22 +82,47 @@ Bootstrap init warns if stale binaries exist (see `internal/bootstrap/bootstrap.
 ⚠️  Stale xplat at /Users/joe/go/bin/xplat (run: rm /Users/joe/go/bin/xplat)
 ```
 
-### 4. Taskfile for xplat Developers
+### 5. Installation by Actor
 
-The generated Taskfile includes `build:clean-stale` which removes stale binaries before installing:
+| Actor | Command | Notes |
+|-------|---------|-------|
+| **xplat Developer** | `xplat internal dev build` | Builds from source, regenerates files, installs to canonical location |
+| **End User** | `curl -fsSL .../install.sh \| bash` | Downloads release, installs to `~/.local/bin` |
+| **CI** | `uses: joeblew999/xplat/.github/actions/setup@main` | See ACTORS.md for GitHub Actions example |
 
-```yaml
-build:install:
-  desc: Build and install xplat to ~/.local/bin (ONLY location)
-  cmds:
-    - task: build:clean-stale
-    - mkdir -p ~/.local/bin
-    - go build -o ~/.local/bin/xplat .
+**For xplat developers:**
+```bash
+# Full build with generation (recommended):
+xplat internal dev build
+
+# Quick build only:
+xplat internal dev install
+
+# Or if xplat not installed yet (bootstrap):
+go build . && ./xplat internal dev build
 ```
 
-### 5. No More go install
+### 6. Self-Generation
 
-Avoid `go install` which puts binaries in `~/go/bin`. Use `xplat update` or `task build:install`.
+Install scripts and CI actions are generated from `config.go`:
+
+```bash
+# Generate all self-managed files:
+xplat internal gen all
+
+# Generate individual files:
+xplat internal gen install   # install.sh
+xplat internal gen action    # .github/actions/setup/action.yml
+```
+
+Generated files include a header:
+```
+# GENERATED FILE - DO NOT EDIT
+# Regenerate with: xplat internal:gen <type>
+# Source of truth: internal/config/config.go
+```
+
+**NEVER use `go install`** - it installs to `~/go/bin` which causes conflicts.
 
 ## Migration
 
