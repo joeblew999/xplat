@@ -29,10 +29,18 @@ runs:
       id: version
       shell: bash
       run: |
+        set +e  # Don't exit on error for version detection
         VERSION="${{ "{{" }} inputs.version {{ "}}" }}"
         if [ "$VERSION" = "latest" ]; then
-          VERSION=$(curl -sL https://api.github.com/repos/{{.Repo}}/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/{{.TagPrefix}}//')
+          RELEASE_JSON=$(curl -sL https://api.github.com/repos/{{.Repo}}/releases/latest)
+          VERSION=$(echo "$RELEASE_JSON" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/{{.TagPrefix}}//')
+          if [ -z "$VERSION" ]; then
+            echo "Failed to get latest version. API response:"
+            echo "$RELEASE_JSON" | head -20
+            exit 1
+          fi
         fi
+        set -e
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Installing xplat $VERSION"
 
