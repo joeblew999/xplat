@@ -76,19 +76,46 @@ func (i *Installer) Install(m *Manifest) error {
 		return fmt.Errorf("failed to create install directory: %w", err)
 	}
 
-	// Install based on source type
-	switch {
-	case bin.Source.Go != "":
-		return i.installGo(bin.Name, bin.Source.Go, m.Version)
-	case bin.Source.GitHub != nil:
-		return i.installGitHub(bin.Name, bin.Source.GitHub, m.Version)
-	case bin.Source.NPM != "":
-		return i.installNPM(bin.Name, bin.Source.NPM, m.Version)
-	case bin.Source.URL != "":
-		return i.installURL(bin.Name, bin.Source.URL, m.Version)
-	default:
-		return fmt.Errorf("no valid source type in manifest")
+	// Install with fallback chain: Go → GitHub → NPM → URL
+	// Each source is tried if configured, falling back to next on failure
+
+	// Try Go install if configured and Go is available
+	if bin.Source.Go != "" {
+		if _, err := exec.LookPath("go"); err == nil {
+			if err := i.installGo(bin.Name, bin.Source.Go, m.Version); err == nil {
+				return nil
+			} else if i.verbose {
+				fmt.Printf("  Go install failed: %v, trying fallback...\n", err)
+			}
+		} else if i.verbose {
+			fmt.Printf("  Go not found, trying fallback...\n")
+		}
 	}
+
+	// Fallback to GitHub releases
+	if bin.Source.GitHub != nil {
+		if err := i.installGitHub(bin.Name, bin.Source.GitHub, m.Version); err == nil {
+			return nil
+		} else if i.verbose {
+			fmt.Printf("  GitHub download failed: %v, trying fallback...\n", err)
+		}
+	}
+
+	// Fallback to NPM
+	if bin.Source.NPM != "" {
+		if err := i.installNPM(bin.Name, bin.Source.NPM, m.Version); err == nil {
+			return nil
+		} else if i.verbose {
+			fmt.Printf("  NPM install failed: %v, trying fallback...\n", err)
+		}
+	}
+
+	// Fallback to direct URL
+	if bin.Source.URL != "" {
+		return i.installURL(bin.Name, bin.Source.URL, m.Version)
+	}
+
+	return fmt.Errorf("all installation methods failed or no sources configured")
 }
 
 // binaryPath returns the full path for an installed binary.
