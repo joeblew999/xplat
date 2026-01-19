@@ -105,8 +105,8 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) runUI() {
-	// Build UI command args (Via mode is now the only mode)
-	args := []string{"ui", "--no-browser", "-p", p.uiPort}
+	// Use unified 'up' command with --no-browser for service mode
+	args := []string{"up", "--no-browser", "-p", p.uiPort}
 
 	p.uiCmd = exec.Command(p.xplatBin, args...)
 	p.uiCmd.Dir = p.workDir
@@ -114,9 +114,9 @@ func (p *program) runUI() {
 	p.uiCmd.Stderr = os.Stderr
 	p.uiCmd.Env = config.FullEnv(p.workDir)
 
-	log.Printf("Starting Task UI on port %s...", p.uiPort)
+	log.Printf("Starting xplat UI on port %s...", p.uiPort)
 	if err := p.uiCmd.Run(); err != nil {
-		log.Printf("Task UI exited: %v", err)
+		log.Printf("xplat UI exited: %v", err)
 	}
 }
 

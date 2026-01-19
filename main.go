@@ -50,6 +50,7 @@ KEY COMMANDS:
 	rootCmd.AddCommand(cmd.VersionCmd)
 	rootCmd.AddCommand(cmd.UpdateCmd)
 	rootCmd.AddCommand(cmd.RunCmd)
+	rootCmd.AddCommand(cmd.UpCmd) // Unified web UI - the main entry point
 
 	// P1 (OS utilities - grouped under 'os' subcommand)
 	// cat, cp, env, envsubst, extract, fetch, git, glob, jq, mkdir, mv, rm, touch, version-file, which

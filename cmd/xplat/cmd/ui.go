@@ -15,11 +15,15 @@ var uiTaskfile string
 var uiDir string
 var uiPCPort int
 
-// UICmd starts the Task UI web interface
+// UICmd starts the Task UI web interface.
+// Deprecated: Use 'xplat up' instead for the unified experience.
 var UICmd = &cobra.Command{
-	Use:   "ui",
-	Short: "Start Task UI web interface",
+	Use:        "ui",
+	Short:      "Start Task UI web interface (use 'xplat up' for unified UI)",
+	Deprecated: "use 'xplat up' for the unified xplat UI with tasks, processes, and setup",
 	Long: `Start a web-based UI for running Taskfile tasks.
+
+DEPRECATED: This command is deprecated. Use 'xplat up' instead for the unified UI.
 
 The UI provides:
   - List of all available tasks from Taskfile.yml
@@ -27,22 +31,29 @@ The UI provides:
   - Process-compose status view (if running)
 
 Examples:
-  xplat ui                    # Start on port 8760, open browser
-  xplat ui -p 9000            # Start on port 9000
-  xplat ui --no-browser       # Don't open browser (for service mode)
-  xplat ui -d /path/to/project  # Use specific project directory`,
+  xplat up                      # Unified UI (recommended)
+  xplat ui                      # Legacy: Start on port 8760
+  xplat ui -p 9000              # Start on port 9000
+  xplat ui --no-browser         # Don't open browser`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := web.DefaultViaConfig()
+		// Use the unified app but with setup disabled (backward compat)
+		cfg := web.DefaultAppConfig()
 		cfg.Port = uiPort
 		cfg.OpenBrowser = !uiNoBrowser
 		cfg.ProcessComposePort = uiPCPort
+		cfg.EnableSetup = false // Legacy mode: no setup wizard
 		if uiTaskfile != "" {
 			cfg.Taskfile = uiTaskfile
 		}
 		if uiDir != "" {
 			cfg.WorkDir = uiDir
 		}
-		return web.StartVia(context.Background(), cfg)
+
+		app, err := web.NewApp(cfg)
+		if err != nil {
+			return err
+		}
+		return app.Start(context.Background())
 	},
 }
 
