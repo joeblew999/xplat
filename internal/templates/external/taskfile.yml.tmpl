@@ -66,11 +66,11 @@ tasks:
   src:clone:
     desc: Clone {{.Binary}} repository at pinned version
     run: once
-    vars:
-      CLONE_CMD: git clone --depth 1 --branch {{ "{{" }}.VERSION{{ "}}" }} {{ "{{" }}.UPSTREAM{{ "}}" }} {{ "{{" }}.SRC_DIR{{ "}}" }}
     cmds:
       - '{{ "{{" }}.XPLAT{{ "}}" }} os mkdir -p {{ "{{" }}.ROOT_DIR{{ "}}" }}/.src'
-      - '{{ "{{" }}.XPLAT{{ "}}" }} os exists {{ "{{" }}.SRC_DIR{{ "}}" }}/.git || {{ "{{" }}.CLONE_CMD{{ "}}" }}'
+      - git clone --depth 1 --branch {{ "{{" }}.VERSION{{ "}}" }} {{ "{{" }}.UPSTREAM{{ "}}" }} {{ "{{" }}.SRC_DIR{{ "}}" }}
+    status:
+      - git -C {{ "{{" }}.SRC_DIR{{ "}}" }} rev-parse HEAD
 
   src:update:
     desc: Fetch and checkout pinned version
