@@ -70,7 +70,7 @@ STDIO MODE (default):
     }
 
 HTTP MODE:
-  xplat mcp serve --http           # Uses default port :8765
+  xplat mcp serve --http           # Uses default port :8762
   xplat mcp serve --http :9000     # Custom port
 
   Environment: XPLAT_MCP_PORT=9000
@@ -80,7 +80,7 @@ HTTP MODE:
       "mcp": {
         "xplat": {
           "type": "http",
-          "url": "http://localhost:8765/mcp"
+          "url": "http://localhost:8762/mcp"
         }
       }
     }
@@ -465,7 +465,7 @@ They fill gaps in Task's shell interpreter for cross-platform Taskfiles.
 CORE COMMANDS:
   xplat task [task...]     Run Taskfile tasks (embedded Task runner)
   xplat process            Run services (embedded process-compose)
-  xplat gen all            Generate files from xplat.yaml manifest
+  xplat ui                 Web UI for tasks (:8760)
   xplat pkg install <pkg>  Install package from registry
 
 OS UTILITIES (use 'xplat os <cmd>'):
@@ -481,9 +481,16 @@ MCP SERVER:
   xplat mcp list           List exposed MCP tools
   xplat mcp config         Show config for AI IDEs
 
-DOCUMENTATION:
-  xplat docs readme        Generate README.md from commands
-  xplat docs taskfile      Generate Taskfile.generated.yml
+DOCUMENTATION (for xplat developers only):
+  xplat internal:docs all       Generate xplat's README.md + Taskfile.yml
+  xplat internal:docs readme    Generate README.md from commands
+  xplat internal:docs taskfile  Generate Taskfile.yml wrappers
+
+FILE GENERATION (for plat-* repos):
+  xplat gen all            Generate all files from xplat.yaml manifest
+  xplat gen taskfile       Generate Taskfile.yml
+  xplat gen process        Generate process-compose.yaml
+  xplat gen ci             Generate CI workflow
 
 SYNC (external service monitoring):
   xplat sync-gh            GitHub sync (releases, CI, issues)
