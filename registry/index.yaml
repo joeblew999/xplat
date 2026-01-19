@@ -26,6 +26,10 @@ packages:
     repo: github.com/joeblew999/plat-garage
     description: Garage storage platform
 
+  plat-geo:
+    repo: github.com/joeblew999/plat-geo
+    description: Geographical system for maps and routing with GeoParquet and PMTiles support
+
   # litesql ecosystem
   litesql-ha:
     repo: github.com/litesql/ha
