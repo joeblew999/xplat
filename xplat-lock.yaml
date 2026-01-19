@@ -1,0 +1,14 @@
+# xplat-lock.yaml - Tracks installed packages
+# Do not edit manually. Regenerate with: xplat pkg install
+
+version: "1"
+updated: 2026-01-19T14:09:09.299939+07:00
+packages:
+    plat-geo:
+        name: plat-geo
+        version: dev
+        source: registry:plat-geo
+        installed_at: 2026-01-19T14:09:09.299938+07:00
+        binary:
+            name: geo
+            path: /Users/apple/.local/bin/geo

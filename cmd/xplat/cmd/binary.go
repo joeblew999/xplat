@@ -203,8 +203,19 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 	// Build download URL using the centralized naming function
 	// Format: https://github.com/REPO/releases/download/VERSION/NAME-OS-ARCH[.exe]
 	binName := binaryFilename(name, runtime.GOOS, runtime.GOARCH)
-	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
-		repo, version, binName)
+
+	// Handle "dev" version by using latest release
+	downloadVersion := version
+	var url string
+	if version == "" || version == "dev" {
+		// Use GitHub's special "latest" redirect URL
+		url = fmt.Sprintf("https://github.com/%s/releases/latest/download/%s",
+			repo, binName)
+		downloadVersion = "latest"
+	} else {
+		url = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+			repo, version, binName)
+	}
 
 	fmt.Printf("URL: %s\n", url)
 
@@ -238,7 +249,7 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 
-	fmt.Printf("OK: %s %s installed (%d bytes)\n", name, version, written)
+	fmt.Printf("OK: %s %s installed (%d bytes)\n", name, downloadVersion, written)
 	fmt.Printf("    Installed to: %s\n", binPath)
 
 	return nil
