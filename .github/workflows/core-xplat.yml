@@ -13,11 +13,13 @@ on:
       - 'cmd/**'
       - 'internal/**'
       - '.github/workflows/core-xplat.yml'
+      - '.github/actions/setup/**'
   pull_request:
     paths:
       - '*.go'
       - 'cmd/**'
       - 'internal/**'
+      - '.github/actions/setup/**'
   workflow_dispatch:
 
 jobs:
@@ -49,6 +51,21 @@ jobs:
 
       - name: Run Go tests
         run: go test -v ./...
+
+      - name: Verify generated files are up-to-date
+        if: runner.os == 'Linux'
+        run: |
+          echo "Regenerating files from templates..."
+          ./xplat internal gen all
+
+          echo "Checking for uncommitted changes..."
+          if ! git diff --exit-code; then
+            echo ""
+            echo "ERROR: Generated files are out of sync with templates!"
+            echo "Run 'xplat internal gen all' locally and commit the changes."
+            exit 1
+          fi
+          echo "✓ Generated files are up-to-date"
 
       - name: Test xplat commands (Unix)
         if: runner.os != 'Windows'
