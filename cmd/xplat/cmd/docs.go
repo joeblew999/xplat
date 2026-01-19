@@ -13,17 +13,20 @@ import (
 )
 
 // DocsCmd generates documentation from xplat commands.
+// This is an INTERNAL command for xplat developers only.
+// Users of plat-* repos should use 'xplat gen' instead.
 var DocsCmd = &cobra.Command{
-	Use:   "docs",
-	Short: "Generate documentation from xplat commands",
-	Long: `Generate documentation from xplat's command structure.
+	Use:   "internal:docs",
+	Short: "Generate xplat's own documentation (for xplat developers)",
+	Long: `Generate xplat's own README.md and Taskfile.yml from its command structure.
 
-This keeps documentation in sync with the actual code.
+This is for xplat developers only - NOT for plat-* repos.
+If you're working in a plat-* repo, use 'xplat gen all' instead.
 
 Examples:
-  xplat docs all         # Generate README.md + Taskfile.yml
-  xplat docs readme      # Generate README.md only
-  xplat docs taskfile    # Generate Taskfile.yml only`,
+  xplat internal:docs all         # Generate README.md + Taskfile.yml
+  xplat internal:docs readme      # Generate README.md only
+  xplat internal:docs taskfile    # Generate Taskfile.yml only`,
 }
 
 var docsReadmeCmd = &cobra.Command{
@@ -374,9 +377,9 @@ func runDocsTaskfile(cmd *cobra.Command, args []string) error {
 	sb.WriteString("      - rm -rf .task/\n\n")
 
 	sb.WriteString("  docs:\n")
-	sb.WriteString("    desc: Regenerate README.md and Taskfile.yml from code\n")
+	sb.WriteString("    desc: Regenerate README.md and Taskfile.yml from code (xplat devs only)\n")
 	sb.WriteString("    cmds:\n")
-	sb.WriteString("      - \"{{.XPLAT_LOCAL}} docs all\"\n\n")
+	sb.WriteString("      - \"{{.XPLAT_LOCAL}} internal:docs all\"\n\n")
 
 	// Command wrappers
 	sb.WriteString("  # ===========================================================================\n")

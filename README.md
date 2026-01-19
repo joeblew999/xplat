@@ -148,7 +148,6 @@ Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Comm
 | Command | Description |
 |---------|-------------|
 | `xplat completion` | Generate the autocompletion script for the specified shell |
-| `xplat docs` | Generate documentation from xplat commands |
 | `xplat os` | Cross-platform OS utilities |
 
 ### Other
@@ -156,6 +155,7 @@ Monitor GitHub and Cloudflare for events (releases, CI, deploys). See [Sync Comm
 | Command | Description |
 |---------|-------------|
 | `xplat help` | Help about any command |
+| `xplat internal:docs` | Generate xplat's own documentation (for xplat developers) |
 | `xplat mcp` | MCP (Model Context Protocol) server |
 | `xplat ui` | Start Task UI web interface |
 
@@ -178,15 +178,6 @@ Generate the autocompletion script for the specified shell
 - `completion powershell` - Generate the autocompletion script for powershell
 - `completion zsh` - Generate the autocompletion script for zsh
 
-### `xplat docs`
-
-Generate documentation from xplat commands
-
-**Subcommands:**
-- `docs all` - Generate all documentation (README.md + Taskfile.yml)
-- `docs readme` - Generate README.md from xplat commands
-- `docs taskfile` - Generate Taskfile.yml command wrappers
-
 ### `xplat gen`
 
 Generate project files from YOUR local xplat.yaml
@@ -202,6 +193,15 @@ Generate project files from YOUR local xplat.yaml
 ### `xplat help`
 
 Help about any command
+
+### `xplat internal:docs`
+
+Generate xplat's own documentation (for xplat developers)
+
+**Subcommands:**
+- `internal:docs all` - Generate all documentation (README.md + Taskfile.yml)
+- `internal:docs readme` - Generate README.md from xplat commands
+- `internal:docs taskfile` - Generate Taskfile.yml command wrappers
 
 ### `xplat manifest`
 

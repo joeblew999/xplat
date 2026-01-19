@@ -89,9 +89,9 @@ tasks:
       - rm -rf .task/
 
   docs:
-    desc: Regenerate README.md and Taskfile.yml from code
+    desc: Regenerate README.md and Taskfile.yml from code (xplat devs only)
     cmds:
-      - "{{.XPLAT_LOCAL}} docs all"
+      - "{{.XPLAT_LOCAL}} internal:docs all"
 
   # ===========================================================================
   # xplat Command Wrappers
@@ -102,15 +102,15 @@ tasks:
     cmds:
       - "{{.XPLAT_LOCAL}} binary {{.CLI_ARGS}}"
 
-  xplat:docs:
-    desc: "Generate documentation from xplat commands"
-    cmds:
-      - "{{.XPLAT_LOCAL}} docs {{.CLI_ARGS}}"
-
   xplat:gen:
     desc: "Generate project files from YOUR local xplat.yaml"
     cmds:
       - "{{.XPLAT_LOCAL}} gen {{.CLI_ARGS}}"
+
+  xplat:internal:docs:
+    desc: "Generate xplat's own documentation (for xplat developers)"
+    cmds:
+      - "{{.XPLAT_LOCAL}} internal:docs {{.CLI_ARGS}}"
 
   xplat:manifest:
     desc: "Inspect, validate, and bootstrap xplat.yaml manifests"
