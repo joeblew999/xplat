@@ -56,20 +56,18 @@ tasks:
 
   # ===========================================================================
   # Release Commands (called by CI on tags)
+  # CI runs on each platform (ubuntu, macos, windows), so we build for current platform
   # ===========================================================================
 
   release:build:
-    desc: Build release binaries for all platforms
+    desc: Build release binary for current platform
     cmds:
       - mkdir -p .releases
-{{if eq .Language "go"}}      - GOOS=linux GOARCH=amd64 go build -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-linux-amd64 {{ "{{" }} .MAIN {{ "}}" }}
-      - GOOS=linux GOARCH=arm64 go build -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-linux-arm64 {{ "{{" }} .MAIN {{ "}}" }}
-      - GOOS=darwin GOARCH=amd64 go build -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-darwin-amd64 {{ "{{" }} .MAIN {{ "}}" }}
-      - GOOS=darwin GOARCH=arm64 go build -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-darwin-arm64 {{ "{{" }} .MAIN {{ "}}" }}
-      - GOOS=windows GOARCH=amd64 go build -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-windows-amd64.exe {{ "{{" }} .MAIN {{ "}}" }}
-{{else if eq .Language "rust"}}      - cargo build --release --target x86_64-unknown-linux-gnu
-      - cargo build --release --target aarch64-unknown-linux-gnu
-      - cargo build --release --target x86_64-apple-darwin
-      - cargo build --release --target aarch64-apple-darwin
-      - cargo build --release --target x86_64-pc-windows-msvc
+{{if eq .Language "go"}}      - go build -ldflags="-s -w" -o .releases/{{ "{{" }} .BINARY {{ "}}" }}-{{ "{{" }} OS {{ "}}" }}-{{ "{{" }} ARCH {{ "}}" }}{{ "{{" }} exeExt {{ "}}" }} {{ "{{" }} .MAIN {{ "}}" }}
+{{else if eq .Language "rust"}}      - cargo build --release
+      - cp target/release/{{ "{{" }} .BINARY {{ "}}" }}{{ "{{" }} exeExt {{ "}}" }} .releases/{{ "{{" }} .BINARY {{ "}}" }}-{{ "{{" }} OS {{ "}}" }}-{{ "{{" }} ARCH {{ "}}" }}{{ "{{" }} exeExt {{ "}}" }}
 {{end}}
+  release:list:
+    desc: List built release binaries
+    cmds:
+      - ls -la .releases/ 2>/dev/null || echo "No releases built yet"
