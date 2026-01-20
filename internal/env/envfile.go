@@ -240,7 +240,7 @@ func LoadEnv() (*EnvConfig, error) {
 		}
 		return nil, fmt.Errorf("failed to open .env: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

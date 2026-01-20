@@ -1,0 +1,72 @@
+# Demo: Diamond dependency pattern
+# Run with: xplat process demo diamond
+#
+# Shows diamond pattern common in web apps:
+#
+#        web
+#       /   \
+#    api     worker
+#       \   /
+#         db
+#
+version: "0.5"
+
+processes:
+  web:
+    command: |
+      echo "Web server starting on :8080..."
+      while true; do
+        echo "[web] $(date +%H:%M:%S) Handling requests..."
+        sleep 3
+      done
+    depends_on:
+      api:
+        condition: process_healthy
+      worker:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 2
+
+  api:
+    command: |
+      echo "API server starting on :3000..."
+      while true; do
+        echo "[api] $(date +%H:%M:%S) Serving API..."
+        sleep 4
+      done
+    depends_on:
+      db:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  worker:
+    command: |
+      echo "Worker starting..."
+      while true; do
+        echo "[worker] $(date +%H:%M:%S) Processing jobs..."
+        sleep 6
+      done
+    depends_on:
+      db:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  db:
+    command: |
+      echo "Database starting on :5432..."
+      while true; do
+        echo "[db] $(date +%H:%M:%S) Accepting connections..."
+        sleep 5
+      done
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1

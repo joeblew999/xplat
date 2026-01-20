@@ -1,0 +1,75 @@
+# Mixed graph with regular processes, scheduled, and disabled
+# For testing graph visualization with different process types
+version: "0.5"
+
+processes:
+  # Regular long-running services
+  web:
+    command: "task web:run"
+    depends_on:
+      api:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8080
+        path: /health
+
+  api:
+    command: "task api:run"
+    depends_on:
+      db:
+        condition: process_healthy
+      cache:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 3000
+        path: /health
+
+  db:
+    command: "task db:run"
+    readiness_probe:
+      exec:
+        command: "task db:health"
+
+  cache:
+    command: "task cache:run"
+    readiness_probe:
+      exec:
+        command: "task cache:health"
+
+  # Scheduled processes
+  backup:
+    command: "task backup:run"
+    schedule:
+      cron: "0 2 * * *"
+      timezone: "UTC"
+
+  cleanup:
+    command: "task cleanup:run"
+    schedule:
+      interval: "1h"
+      run_on_start: false
+
+  metrics-collector:
+    command: "task metrics:collect"
+    schedule:
+      interval: "30s"
+      run_on_start: true
+
+  # Disabled process
+  legacy-worker:
+    command: "task legacy:run"
+    disabled: true
+    depends_on:
+      db:
+        condition: process_healthy
+
+  # Disabled scheduled process
+  old-report:
+    command: "task report:old"
+    disabled: true
+    schedule:
+      cron: "0 6 * * *"

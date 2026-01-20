@@ -1,0 +1,124 @@
+# Invalid scheduled processes for testing lint rules
+# Each process has a specific validation error
+version: "0.5"
+
+processes:
+  # Missing both cron and interval
+  empty-schedule:
+    command: "echo missing schedule type"
+    schedule: {}
+
+  # Has both cron and interval (conflict)
+  both-types:
+    command: "echo conflicting config"
+    schedule:
+      cron: "0 * * * *"
+      interval: "5m"
+
+  # Invalid cron - only 4 fields
+  cron-4-fields:
+    command: "echo bad cron"
+    schedule:
+      cron: "0 * * *"
+
+  # Invalid cron - 6 fields
+  cron-6-fields:
+    command: "echo bad cron"
+    schedule:
+      cron: "0 * * * * *"
+
+  # Invalid cron - minute out of range
+  cron-minute-60:
+    command: "echo bad minute"
+    schedule:
+      cron: "60 * * * *"
+
+  # Invalid cron - hour out of range
+  cron-hour-24:
+    command: "echo bad hour"
+    schedule:
+      cron: "0 24 * * *"
+
+  # Invalid cron - day 0
+  cron-day-0:
+    command: "echo bad day"
+    schedule:
+      cron: "0 0 0 * *"
+
+  # Invalid cron - day 32
+  cron-day-32:
+    command: "echo bad day"
+    schedule:
+      cron: "0 0 32 * *"
+
+  # Invalid cron - month 0
+  cron-month-0:
+    command: "echo bad month"
+    schedule:
+      cron: "0 0 1 0 *"
+
+  # Invalid cron - month 13
+  cron-month-13:
+    command: "echo bad month"
+    schedule:
+      cron: "0 0 1 13 *"
+
+  # Invalid cron - weekday 8
+  cron-weekday-8:
+    command: "echo bad weekday"
+    schedule:
+      cron: "0 0 * * 8"
+
+  # Invalid cron - range start > end
+  cron-bad-range:
+    command: "echo bad range"
+    schedule:
+      cron: "0 0 * * 5-1"
+
+  # Invalid cron - step of 0
+  cron-step-0:
+    command: "echo bad step"
+    schedule:
+      cron: "*/0 * * * *"
+
+  # Invalid cron - non-numeric
+  cron-non-numeric:
+    command: "echo bad value"
+    schedule:
+      cron: "abc * * * *"
+
+  # Invalid interval - missing unit
+  interval-no-unit:
+    command: "echo bad interval"
+    schedule:
+      interval: "30"
+
+  # Invalid interval - invalid unit
+  interval-bad-unit:
+    command: "echo bad interval"
+    schedule:
+      interval: "30x"
+
+  # Invalid interval - days not supported
+  interval-days:
+    command: "echo bad interval"
+    schedule:
+      interval: "1d"
+
+  # Scheduled process with readiness probe (warning)
+  schedule-with-probe:
+    command: "echo scheduled"
+    schedule:
+      interval: "5m"
+    readiness_probe:
+      exec:
+        command: "true"
+
+  # Scheduled process depending on healthy (warning)
+  schedule-depends-healthy:
+    command: "echo depends"
+    schedule:
+      interval: "5m"
+    depends_on:
+      other:
+        condition: process_healthy

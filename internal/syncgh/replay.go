@@ -283,7 +283,7 @@ func (r *Replayer) replayDelivery(ctx context.Context, hd *github.HookDelivery) 
 		result.Error = fmt.Errorf("failed to send request: %w", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	result.StatusCode = resp.StatusCode
 

@@ -84,7 +84,7 @@ func runEnvsubst(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to open file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 	}
 
@@ -113,7 +113,7 @@ func runEnvsubst(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create output file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		output = f
 	} else {
 		output = os.Stdout
@@ -161,7 +161,7 @@ func substituteRestricted(content string, vars []string) (string, error) {
 	// Set only allowed vars
 	for _, v := range vars {
 		if val, ok := env[v]; ok {
-			os.Setenv(v, val)
+			_ = os.Setenv(v, val)
 		}
 	}
 
@@ -170,7 +170,7 @@ func substituteRestricted(content string, vars []string) (string, error) {
 
 	// Restore all env vars
 	for k, v := range env {
-		os.Setenv(k, v)
+		_ = os.Setenv(k, v)
 	}
 
 	if err != nil {
@@ -186,7 +186,7 @@ func loadEnvFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -214,7 +214,7 @@ func loadEnvFile(path string) error {
 			}
 		}
 
-		os.Setenv(key, value)
+		_ = os.Setenv(key, value)
 	}
 
 	return scanner.Err()

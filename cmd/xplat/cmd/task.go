@@ -101,11 +101,6 @@ Examples:
 	RunE:               runTask,
 }
 
-// taskSorter is a function that sorts a set of task names.
-// This replicates github.com/go-task/task/v3/internal/sort.Sorter
-// since we cannot import internal packages.
-type taskSorter func(items []string, namespaces []string) []string
-
 // noSort leaves the tasks in the order they are defined.
 func noSort(items []string, _ []string) []string {
 	return items
@@ -321,12 +316,12 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 	if workDir != "" {
 		config.SetPlatEnv(workDir)
 		// Also update PATH to include PLAT_BIN and XPLAT_BIN
-		os.Setenv("PATH", config.PathWithPlatBin(workDir))
+		_ = os.Setenv("PATH", config.PathWithPlatBin(workDir))
 	}
 
 	// Enable remote taskfiles experiment by default in xplat
 	// This allows projects to include taskfiles from URLs
-	os.Setenv("TASK_X_REMOTE_TASKFILES", "1")
+	_ = os.Setenv("TASK_X_REMOTE_TASKFILES", "1")
 	experiments.Parse(workDir)
 
 	// Create and configure the Executor

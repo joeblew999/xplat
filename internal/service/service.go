@@ -263,7 +263,7 @@ func (p *program) checkAndUpdate() {
 
 	// Restart by exiting - the service manager will restart us
 	if p.cmd != nil && p.cmd.Process != nil {
-		p.cmd.Process.Signal(os.Interrupt)
+		_ = p.cmd.Process.Signal(os.Interrupt)
 	}
 	os.Exit(0)
 }
@@ -275,16 +275,16 @@ func (p *program) Stop(s service.Service) error {
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
 		// Send SIGTERM/SIGINT to gracefully stop
-		p.cmd.Process.Signal(os.Interrupt)
+		_ = p.cmd.Process.Signal(os.Interrupt)
 	}
 	if p.uiCmd != nil && p.uiCmd.Process != nil {
-		p.uiCmd.Process.Signal(os.Interrupt)
+		_ = p.uiCmd.Process.Signal(os.Interrupt)
 	}
 	if p.mcpCmd != nil && p.mcpCmd.Process != nil {
-		p.mcpCmd.Process.Signal(os.Interrupt)
+		_ = p.mcpCmd.Process.Signal(os.Interrupt)
 	}
 	if p.syncCmd != nil && p.syncCmd.Process != nil {
-		p.syncCmd.Process.Signal(os.Interrupt)
+		_ = p.syncCmd.Process.Signal(os.Interrupt)
 	}
 	return nil
 }

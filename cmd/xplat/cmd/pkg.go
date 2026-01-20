@@ -303,8 +303,8 @@ func runPkgList(cmd *cobra.Command, args []string) error {
 	})
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tREPO\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t----\t-----------")
+	_, _ = fmt.Fprintln(w, "NAME\tREPO\tDESCRIPTION")
+	_, _ = fmt.Fprintln(w, "----\t----\t-----------")
 
 	for _, pkg := range packages {
 		// Truncate description
@@ -313,7 +313,7 @@ func runPkgList(cmd *cobra.Command, args []string) error {
 			desc = desc[:47] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\n", pkg.Name, pkg.Repo, desc)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", pkg.Name, pkg.Repo, desc)
 	}
 
 	return w.Flush()

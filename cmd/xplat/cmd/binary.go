@@ -224,7 +224,7 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: HTTP %d, release %s may not exist yet, install Go and use --source to build from source", resp.StatusCode, version)
@@ -235,12 +235,12 @@ func runBinaryInstall(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	// Copy content
 	written, err := io.Copy(out, resp.Body)
 	if err != nil {
-		os.Remove(binPath) // Clean up partial download
+		_ = os.Remove(binPath) // Clean up partial download
 		return fmt.Errorf("download incomplete: %w", err)
 	}
 
@@ -261,13 +261,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err

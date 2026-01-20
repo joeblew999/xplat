@@ -22,10 +22,10 @@ type CFCredentials struct {
 
 // RunAuth runs the interactive authentication flow for Cloudflare
 func RunAuth(w io.Writer) error {
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Cloudflare Authentication Setup")
-	fmt.Fprintln(w, "================================")
-	fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Cloudflare Authentication Setup")
+	_, _ = fmt.Fprintln(w, "================================")
+	_, _ = fmt.Fprintln(w, "")
 
 	// Try to detect existing values from environment
 	existingAccountID := getExistingEnv("CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID")
@@ -36,10 +36,10 @@ func RunAuth(w io.Writer) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// Step 1: Get Account ID
-	fmt.Fprintln(w, "Step 1: Account ID")
-	fmt.Fprintln(w, "  Find your Account ID in the Cloudflare dashboard URL:")
-	fmt.Fprintln(w, "  https://dash.cloudflare.com/<ACCOUNT_ID>/...")
-	fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Step 1: Account ID")
+	_, _ = fmt.Fprintln(w, "  Find your Account ID in the Cloudflare dashboard URL:")
+	_, _ = fmt.Fprintln(w, "  https://dash.cloudflare.com/<ACCOUNT_ID>/...")
+	_, _ = fmt.Fprintln(w, "")
 
 	accountID := promptWithDefault(w, reader, "CF_ACCOUNT_ID", existingAccountID)
 	if accountID == "" {
@@ -47,25 +47,25 @@ func RunAuth(w io.Writer) error {
 	}
 
 	// Step 2: API Token (optional but recommended)
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Step 2: API Token (optional)")
-	fmt.Fprintln(w, "  For general Cloudflare API access (Workers, Pages, DNS, etc.)")
-	fmt.Fprintln(w, "  Create at: https://dash.cloudflare.com/profile/api-tokens")
-	fmt.Fprintln(w, "")
-	openBrowser("https://dash.cloudflare.com/profile/api-tokens")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Step 2: API Token (optional)")
+	_, _ = fmt.Fprintln(w, "  For general Cloudflare API access (Workers, Pages, DNS, etc.)")
+	_, _ = fmt.Fprintln(w, "  Create at: https://dash.cloudflare.com/profile/api-tokens")
+	_, _ = fmt.Fprintln(w, "")
+	_ = openBrowser("https://dash.cloudflare.com/profile/api-tokens")
 
 	apiToken := promptWithDefault(w, reader, "CF_API_TOKEN", existingAPIToken)
 
 	// Step 3: R2 Credentials
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Step 3: R2 Credentials")
-	fmt.Fprintln(w, "  For R2 object storage access (S3-compatible)")
-	fmt.Fprintln(w, "  Create at: R2 > Manage R2 API Tokens")
-	fmt.Fprintln(w, "")
-	openBrowser(fmt.Sprintf("https://dash.cloudflare.com/%s/r2/api-tokens", accountID))
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Step 3: R2 Credentials")
+	_, _ = fmt.Fprintln(w, "  For R2 object storage access (S3-compatible)")
+	_, _ = fmt.Fprintln(w, "  Create at: R2 > Manage R2 API Tokens")
+	_, _ = fmt.Fprintln(w, "")
+	_ = openBrowser(fmt.Sprintf("https://dash.cloudflare.com/%s/r2/api-tokens", accountID))
 
-	fmt.Fprintln(w, "  Create a token with 'Object Read & Write' permission")
-	fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "  Create a token with 'Object Read & Write' permission")
+	_, _ = fmt.Fprintln(w, "")
 
 	r2AccessKey := promptWithDefault(w, reader, "R2_ACCESS_KEY", existingR2Access)
 	r2SecretKey := promptWithDefault(w, reader, "R2_SECRET_KEY", existingR2Secret)
@@ -78,38 +78,38 @@ func RunAuth(w io.Writer) error {
 	}
 
 	// Validate
-	fmt.Fprintln(w, "")
-	fmt.Fprint(w, "Validating credentials... ")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprint(w, "Validating credentials... ")
 
 	if err := validateCredentials(creds); err != nil {
-		fmt.Fprintln(w, "WARNING")
-		fmt.Fprintf(w, "  %v\n", err)
-		fmt.Fprintln(w, "  Continuing anyway...")
+		_, _ = fmt.Fprintln(w, "WARNING")
+		_, _ = fmt.Fprintf(w, "  %v\n", err)
+		_, _ = fmt.Fprintln(w, "  Continuing anyway...")
 	} else {
-		fmt.Fprintln(w, "OK")
+		_, _ = fmt.Fprintln(w, "OK")
 	}
 
 	// Save to .env
-	fmt.Fprint(w, "Saving to .env... ")
+	_, _ = fmt.Fprint(w, "Saving to .env... ")
 	if err := saveAllCredentialsToEnv(creds); err != nil {
-		fmt.Fprintln(w, "FAILED")
+		_, _ = fmt.Fprintln(w, "FAILED")
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
-	fmt.Fprintln(w, "OK")
+	_, _ = fmt.Fprintln(w, "OK")
 
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Authentication complete!")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Credentials saved to .env:")
-	fmt.Fprintf(w, "  CF_ACCOUNT_ID=%s\n", accountID)
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Authentication complete!")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Credentials saved to .env:")
+	_, _ = fmt.Fprintf(w, "  CF_ACCOUNT_ID=%s\n", accountID)
 	if apiToken != "" {
-		fmt.Fprintf(w, "  CF_API_TOKEN=%s...%s\n", apiToken[:4], apiToken[len(apiToken)-4:])
+		_, _ = fmt.Fprintf(w, "  CF_API_TOKEN=%s...%s\n", apiToken[:4], apiToken[len(apiToken)-4:])
 	}
 	if r2AccessKey != "" {
-		fmt.Fprintf(w, "  R2_ACCESS_KEY=%s...\n", r2AccessKey[:8])
-		fmt.Fprintln(w, "  R2_SECRET_KEY=****")
+		_, _ = fmt.Fprintf(w, "  R2_ACCESS_KEY=%s...\n", r2AccessKey[:8])
+		_, _ = fmt.Fprintln(w, "  R2_SECRET_KEY=****")
 	}
-	fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "")
 
 	return nil
 }
@@ -136,9 +136,9 @@ func promptWithDefault(w io.Writer, reader *bufio.Reader, name, defaultVal strin
 				displayVal = "****"
 			}
 		}
-		fmt.Fprintf(w, "  %s [%s]: ", name, displayVal)
+		_, _ = fmt.Fprintf(w, "  %s [%s]: ", name, displayVal)
 	} else {
-		fmt.Fprintf(w, "  %s: ", name)
+		_, _ = fmt.Fprintf(w, "  %s: ", name)
 	}
 
 	input, _ := reader.ReadString('\n')
@@ -190,7 +190,7 @@ func verifyAPIToken(accountID, apiToken string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 401 {
 		return fmt.Errorf("invalid token (401 Unauthorized)")

@@ -1,0 +1,31 @@
+# Linear dependency chain for graph testing
+# p1 -> p2 -> p3 -> p4 -> p5
+version: "0.5"
+
+processes:
+  process1:
+    command: "task p1:run"
+    depends_on:
+      process2:
+        condition: process_healthy
+
+  process2:
+    command: "task p2:run"
+    depends_on:
+      process3:
+        condition: process_healthy
+
+  process3:
+    command: "task p3:run"
+    depends_on:
+      process4:
+        condition: process_healthy
+
+  process4:
+    command: "task p4:run"
+    depends_on:
+      process5:
+        condition: process_healthy
+
+  process5:
+    command: "task p5:run"

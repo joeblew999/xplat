@@ -25,6 +25,7 @@ Checks performed:
   - env-substitution:  Secrets should use ${VAR} substitution
   - env-file:          env_file should be configured if using ${VAR}
   - readiness-probe:   Processes should have readiness probes
+  - schedule-config:   Validates scheduled process config (cron/interval) [v1.87.0+]
 
 If no files specified, auto-detects process-compose config in current directory.
 

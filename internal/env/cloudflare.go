@@ -72,7 +72,7 @@ func ValidateCloudflareToken(token string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to verify token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -109,7 +109,7 @@ func ValidateCloudflareToken(token string) (string, error) {
 		// Can't fetch details - return without name
 		return "", nil
 	}
-	defer tokenResp.Body.Close()
+	defer func() { _ = tokenResp.Body.Close() }()
 
 	tokenBody, err := io.ReadAll(tokenResp.Body)
 	if err != nil {
@@ -152,7 +152,7 @@ func ValidateCloudflareAccount(token, accountID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to verify account: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -225,7 +225,7 @@ func GetCloudflareAccounts(token string) (accountID, accountName string, err err
 	if err != nil {
 		return "", "", fmt.Errorf("failed to fetch accounts: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -290,7 +290,7 @@ func ListZones(token, accountID string) ([]Zone, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch zones: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -369,7 +369,7 @@ func ListPagesProjects(token, accountID string) ([]PagesProject, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Pages projects: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -418,7 +418,7 @@ func DeletePagesProject(token, accountID, projectName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete Pages project: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -473,7 +473,7 @@ func ListPagesDomains(token, accountID, projectName string) ([]PagesDomain, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -537,7 +537,7 @@ func AddPagesDomain(token, accountID, projectName, domainName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to add domain: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -594,7 +594,7 @@ func DeletePagesDomain(token, accountID, projectName, domainName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete domain: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

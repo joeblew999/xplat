@@ -24,6 +24,19 @@ type ProcessInfo struct {
 	SystemTime string `json:"system_time"`
 }
 
+// GraphNode represents a process in the dependency graph (v1.87.0+).
+type GraphNode struct {
+	Name      string   `json:"name"`
+	Status    string   `json:"status"`
+	DependsOn []string `json:"depends_on,omitempty"`
+	Condition string   `json:"condition,omitempty"` // e.g., "healthy", "started"
+}
+
+// ProcessGraph represents the dependency graph response (v1.87.0+).
+type ProcessGraph struct {
+	Nodes []GraphNode `json:"nodes"`
+}
+
 // ProcessState represents the response from /processes endpoint.
 type ProcessState struct {
 	Data []ProcessInfo `json:"data"`
@@ -51,7 +64,7 @@ func (c *ProcessComposeClient) IsRunning() bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -61,7 +74,7 @@ func (c *ProcessComposeClient) ListProcesses() ([]ProcessInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to process-compose: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("process-compose returned status %d", resp.StatusCode)
@@ -91,7 +104,7 @@ func (c *ProcessComposeClient) StartProcess(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to start process: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -112,7 +125,7 @@ func (c *ProcessComposeClient) StopProcess(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to stop process: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -133,7 +146,7 @@ func (c *ProcessComposeClient) RestartProcess(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to restart process: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -150,7 +163,7 @@ func (c *ProcessComposeClient) GetProcessLogs(name string, limit int) (string, e
 	if err != nil {
 		return "", fmt.Errorf("failed to get logs: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to get logs: status %d", resp.StatusCode)
@@ -162,24 +175,73 @@ func (c *ProcessComposeClient) GetProcessLogs(name string, limit int) (string, e
 	}
 
 	// Parse the log response - process-compose returns JSON with logs field
-	// The logs field contains a JSON array of log lines as a string
+	// The logs field is a JSON array of log lines
 	var logResp struct {
-		Logs string `json:"logs"`
+		Logs []string `json:"logs"`
 	}
 	if err := json.Unmarshal(body, &logResp); err != nil {
 		// If not JSON, return raw body
 		return string(body), nil
 	}
 
-	// The logs field is itself a JSON array string - parse it
-	var logLines []string
-	if err := json.Unmarshal([]byte(logResp.Logs), &logLines); err != nil {
-		// If not a JSON array, return as-is
-		return logResp.Logs, nil
+	// Join log lines with newlines
+	return strings.Join(logResp.Logs, "\n"), nil
+}
+
+// GetGraph retrieves the dependency graph from process-compose.
+// Returns the graph with process nodes and their dependencies.
+func (c *ProcessComposeClient) GetGraph() (*ProcessGraph, error) {
+	resp, err := c.client.Get(c.BaseURL + "/graph")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get graph: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("graph endpoint not available")
 	}
 
-	// Join log lines with newlines
-	return strings.Join(logLines, "\n"), nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get graph: status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read graph response: %w", err)
+	}
+
+	var graph ProcessGraph
+	if err := json.Unmarshal(body, &graph); err != nil {
+		return nil, fmt.Errorf("failed to parse graph response: %w", err)
+	}
+
+	return &graph, nil
+}
+
+// GetGraphFormat retrieves the dependency graph in JSON format.
+// The process-compose API returns JSON at /graph endpoint.
+func (c *ProcessComposeClient) GetGraphFormat(format string) (string, error) {
+	// Process-compose graph endpoint only returns JSON
+	resp, err := c.client.Get(c.BaseURL + "/graph")
+	if err != nil {
+		return "", fmt.Errorf("failed to get graph: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("graph endpoint not available")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to get graph: status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read graph response: %w", err)
+	}
+
+	return string(body), nil
 }
 
 // getStatusColor returns a color for the process status.

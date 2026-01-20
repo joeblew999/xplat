@@ -175,7 +175,7 @@ func (s *SSEServer) Run() error {
 func (s *SSEServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Gosmee-Version", "xplat-1.0")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"version": "xplat-1.0",
 	})
@@ -190,7 +190,7 @@ func (s *SSEServer) handleNewChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	url := fmt.Sprintf("%s/%s", publicURL, channel)
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintln(w, url)
+	_, _ = fmt.Fprintln(w, url)
 }
 
 // handleIndex shows channel information.
@@ -215,7 +215,7 @@ func (s *SSEServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head><title>xplat SSE Server - %s</title></head>
 <body>
@@ -260,7 +260,7 @@ func (s *SSEServer) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send connected message (gosmee format)
-	fmt.Fprintf(w, "data: %s\n\n", `{"message":"connected"}`)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"message":"connected"}`)
 	flusher.Flush()
 
 	// Subscribe to channel
@@ -268,7 +268,7 @@ func (s *SSEServer) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer s.broker.Unsubscribe(channel, subscriber)
 
 	// Send ready message
-	fmt.Fprintf(w, "data: %s\n\n", `{"message":"ready"}`)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"message":"ready"}`)
 	flusher.Flush()
 
 	log.Printf("SSE: Client connected to channel %s", channel)
@@ -288,12 +288,12 @@ func (s *SSEServer) handleSSE(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 
 		case <-ticker.C:
 			// Keepalive
-			fmt.Fprint(w, ": keepalive\n\n")
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		}
 	}
@@ -380,7 +380,7 @@ func (s *SSEServer) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Gosmee-Version", "xplat-1.0")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":  http.StatusAccepted,
 		"channel": channel,
 		"message": "ok",
@@ -436,7 +436,7 @@ func (s *SSEServer) validateHMAC(body []byte, signature, prefix string) bool {
 func randomChannelID() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 12)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	for i := range b {
 		b[i] = charset[int(b[i])%len(charset)]
 	}

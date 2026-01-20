@@ -32,6 +32,16 @@ type Process struct {
 	ReadinessProbe *ReadinessProbe   `yaml:"readiness_probe,omitempty"`
 	LivenessProbe  *ReadinessProbe   `yaml:"liveness_probe,omitempty"`
 	Namespace      string            `yaml:"namespace,omitempty"`
+	Schedule       *Schedule         `yaml:"schedule,omitempty"` // v1.87.0: cron/interval scheduling
+}
+
+// Schedule defines process scheduling (process-compose v1.87.0+).
+type Schedule struct {
+	Cron          string `yaml:"cron,omitempty"`           // Cron expression (5 fields)
+	Timezone      string `yaml:"timezone,omitempty"`       // Timezone for cron
+	Interval      string `yaml:"interval,omitempty"`       // Go duration (e.g., "30s")
+	RunOnStart    bool   `yaml:"run_on_start,omitempty"`   // Run immediately on startup
+	MaxConcurrent int    `yaml:"max_concurrent,omitempty"` // Max simultaneous executions
 }
 
 // DepCfg represents a dependency configuration.

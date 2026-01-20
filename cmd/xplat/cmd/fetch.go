@@ -66,7 +66,7 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
@@ -91,7 +91,7 @@ func downloadToFile(reader io.Reader, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("cannot create file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	written, err := io.Copy(f, reader)
 	if err != nil {
@@ -108,8 +108,8 @@ func downloadAndExtract(reader io.Reader, url, filename string) error {
 	if err != nil {
 		return fmt.Errorf("cannot create temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	// Download to temp file
 	written, err := io.Copy(tmpFile, reader)
@@ -141,7 +141,7 @@ func downloadAndExtract(reader io.Reader, url, filename string) error {
 	}
 
 	// For zip-like formats, use the file directly
-	var extractReader io.Reader = input
+	extractReader := input
 	if _, seekable := input.(io.Seeker); !seekable {
 		extractReader = tmpFile
 	}
@@ -193,13 +193,13 @@ func extractFetchedArchive(ctx context.Context, ex archives.Extractor, reader io
 		if err != nil {
 			return fmt.Errorf("cannot open file in archive: %w", err)
 		}
-		defer src.Close()
+		defer func() { _ = src.Close() }()
 
 		dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
 		if err != nil {
 			return fmt.Errorf("cannot create file: %w", err)
 		}
-		defer dst.Close()
+		defer func() { _ = dst.Close() }()
 
 		if _, err := io.Copy(dst, src); err != nil {
 			return fmt.Errorf("cannot write file: %w", err)

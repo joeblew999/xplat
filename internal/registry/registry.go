@@ -70,7 +70,7 @@ func (c *Client) FetchIndex() (*Index, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch index: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("index returned HTTP %d", resp.StatusCode)
@@ -125,7 +125,7 @@ func (c *Client) FetchManifest(repo string) (*Package, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch manifest from %s: %w", repo, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("no xplat.yaml found in %s", repo)

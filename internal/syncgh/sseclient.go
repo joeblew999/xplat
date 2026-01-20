@@ -171,7 +171,7 @@ func (c *SSEClient) forwardToTarget(msg *sseMessage) error {
 	if err != nil {
 		return fmt.Errorf("failed to forward to target: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -303,7 +303,7 @@ func (c *SSEClient) startHealthServer() {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"ok","server":"%s"}`, c.config.ServerURL)
+		_, _ = fmt.Fprintf(w, `{"status":"ok","server":"%s"}`, c.config.ServerURL)
 	})
 
 	addr := fmt.Sprintf(":%d", c.config.HealthPort)
@@ -351,7 +351,7 @@ func (c *SSEClient) connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("SSE connection failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

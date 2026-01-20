@@ -9,8 +9,8 @@ import (
 func TestPollState(t *testing.T) {
 	// Create temp dir for test
 	tmpDir := t.TempDir()
-	os.Setenv("XPLAT_HOME", tmpDir)
-	defer os.Unsetenv("XPLAT_HOME")
+	_ = os.Setenv("XPLAT_HOME", tmpDir)
+	defer func() { _ = os.Unsetenv("XPLAT_HOME") }()
 
 	// Test 1: Load empty state (file doesn't exist)
 	state, err := LoadPollState()
@@ -94,8 +94,8 @@ func TestTaskCacheInvalidatorCallback(t *testing.T) {
 
 	// Create fake Task cache
 	cacheDir := filepath.Join(tmpDir, ".task", "remote")
-	os.MkdirAll(cacheDir, 0755)
-	os.WriteFile(filepath.Join(cacheDir, "test.yml"), []byte("test"), 0644)
+	_ = os.MkdirAll(cacheDir, 0755)
+	_ = os.WriteFile(filepath.Join(cacheDir, "test.yml"), []byte("test"), 0644)
 
 	// Get the callback
 	callback := TaskCacheInvalidator(tmpDir)

@@ -48,7 +48,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var alert AlertPayload
 	if err := json.Unmarshal(body, &alert); err != nil {
@@ -96,7 +96,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.client.emit(r.Context(), event)
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "OK")
+	_, _ = fmt.Fprintf(w, "OK")
 }
 
 // HandleWebhook returns an http.HandlerFunc for use with standard routers
@@ -132,7 +132,7 @@ func (h *LogpushHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var entries []map[string]interface{}
 	if err := json.Unmarshal(body, &entries); err != nil {
@@ -159,7 +159,7 @@ func (h *LogpushHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.client.emit(r.Context(), event)
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "OK")
+	_, _ = fmt.Fprintf(w, "OK")
 }
 
 // HandleLogpush returns an http.HandlerFunc for Logpush webhooks
@@ -188,7 +188,7 @@ func RunWebhookServer(port string, accountID, apiToken, webhookSecret string) er
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK")
+		_, _ = fmt.Fprintf(w, "OK")
 	})
 
 	if accountID != "" && apiToken != "" {

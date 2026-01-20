@@ -84,7 +84,7 @@ func ValidateClaudeAPIKey(apiKey string) error {
 	if err != nil {
 		return fmt.Errorf("failed to make API request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

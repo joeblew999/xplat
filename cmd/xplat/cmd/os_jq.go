@@ -73,7 +73,7 @@ func runJq(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("cannot open file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 	} else {
 		input = os.Stdin

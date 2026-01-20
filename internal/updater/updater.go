@@ -43,7 +43,7 @@ func GetLatestRelease(ctx context.Context) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
@@ -113,7 +113,7 @@ func FetchChecksums(ctx context.Context, url string) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch checksums: HTTP %d", resp.StatusCode)
@@ -172,7 +172,7 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedCh
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
@@ -195,22 +195,22 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedCh
 	writer := io.MultiWriter(tmpFile, hasher)
 
 	if _, err := io.Copy(writer, resp.Body); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Verify checksum
 	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
 	if expectedChecksum != "" && actualChecksum != expectedChecksum {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
 	}
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return err
 	}
 
@@ -218,30 +218,30 @@ func DownloadAndReplace(ctx context.Context, downloadURL, targetPath, expectedCh
 	if runtime.GOOS == "windows" {
 		// Windows: can't delete running exe, so rename it first
 		oldPath := targetPath + ".old"
-		os.Remove(oldPath)
+		_ = os.Remove(oldPath)
 		if err := os.Rename(targetPath, oldPath); err != nil {
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 			return err
 		}
 		if err := os.Rename(tmpPath, targetPath); err != nil {
-			os.Rename(oldPath, targetPath) // Restore on failure
-			os.Remove(tmpPath)
+			_ = os.Rename(oldPath, targetPath) // Restore on failure
+			_ = os.Remove(tmpPath)
 			return err
 		}
-		os.Remove(oldPath)
+		_ = os.Remove(oldPath)
 	} else {
 		// Unix: atomic rename is safe even with running binary
 		// The old inode stays valid for running processes until they exit
 		// First remove the old file (unlinks it, but running processes keep their fd)
-		os.Remove(targetPath)
+		_ = os.Remove(targetPath)
 		// Then rename new file into place
 		if err := os.Rename(tmpPath, targetPath); err != nil {
 			// If rename fails (e.g., cross-device), fall back to copy
 			if err := copyFile(tmpPath, targetPath); err != nil {
-				os.Remove(tmpPath)
+				_ = os.Remove(tmpPath)
 				return err
 			}
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 		}
 	}
 
@@ -316,13 +316,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return err

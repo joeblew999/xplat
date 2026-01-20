@@ -61,7 +61,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cannot open archive: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Get file info for size
 	info, err := f.Stat()
@@ -85,12 +85,12 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	// For seekable input, we need to handle the reader properly
 	// The Identify function may have consumed some bytes, so we need
 	// to use the returned input which handles this
-	var reader io.Reader = input
+	reader := input
 
 	// If the format supports seeking (like zip), use the file directly
 	if _, ok := format.(archives.Decompressor); !ok {
 		// For zip-like formats that need random access, seek back to start
-		f.Seek(0, io.SeekStart)
+		_, _ = f.Seek(0, io.SeekStart)
 		reader = f
 	}
 
@@ -178,14 +178,14 @@ func extractArchive(ctx context.Context, ex archives.Extractor, reader io.Reader
 		if err != nil {
 			return fmt.Errorf("cannot open file in archive: %w", err)
 		}
-		defer src.Close()
+		defer func() { _ = src.Close() }()
 
 		// Create destination file
 		dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
 		if err != nil {
 			return fmt.Errorf("cannot create file: %w", err)
 		}
-		defer dst.Close()
+		defer func() { _ = dst.Close() }()
 
 		// Copy content
 		if _, err := io.Copy(dst, src); err != nil {

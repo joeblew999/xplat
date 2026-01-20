@@ -52,7 +52,7 @@ func TestCpPreservesPermissions(t *testing.T) {
 	// Copy with otiai10/copy (which xplat uses)
 	// The library preserves permissions by default
 	srcContent, _ := os.ReadFile(src)
-	os.WriteFile(dst, srcContent, srcMode)
+	_ = os.WriteFile(dst, srcContent, srcMode)
 
 	dstInfo, err := os.Stat(dst)
 	if err != nil {
@@ -115,12 +115,12 @@ func TestCpOverwrite(t *testing.T) {
 	dst := filepath.Join(tmpDir, "dest.txt")
 
 	// Create source and destination with different content
-	os.WriteFile(src, []byte("new content"), 0644)
-	os.WriteFile(dst, []byte("old content"), 0644)
+	_ = os.WriteFile(src, []byte("new content"), 0644)
+	_ = os.WriteFile(dst, []byte("old content"), 0644)
 
 	// Copy (should overwrite)
 	content, _ := os.ReadFile(src)
-	os.WriteFile(dst, content, 0644)
+	_ = os.WriteFile(dst, content, 0644)
 
 	// Verify overwrite
 	result, _ := os.ReadFile(dst)
@@ -134,13 +134,13 @@ func TestCpToDirectory(t *testing.T) {
 	src := filepath.Join(tmpDir, "source.txt")
 	dstDir := filepath.Join(tmpDir, "destdir")
 
-	os.WriteFile(src, []byte("content"), 0644)
-	os.Mkdir(dstDir, 0755)
+	_ = os.WriteFile(src, []byte("content"), 0644)
+	_ = os.Mkdir(dstDir, 0755)
 
 	// When destination is a directory, copy into it
 	dst := filepath.Join(dstDir, filepath.Base(src))
 	content, _ := os.ReadFile(src)
-	os.WriteFile(dst, content, 0644)
+	_ = os.WriteFile(dst, content, 0644)
 
 	// Verify file is inside directory
 	if _, err := os.Stat(dst); err != nil {

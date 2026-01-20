@@ -158,8 +158,8 @@ func (t *Tunnel) Stop() {
 
 	if t.cmd != nil && t.cmd.Process != nil {
 		log.Printf("sync-cf: stopping tunnel")
-		t.cmd.Process.Kill()
-		t.cmd.Wait()
+		_ = t.cmd.Process.Kill()
+		_ = t.cmd.Wait()
 	}
 
 	t.running = false
@@ -263,7 +263,7 @@ func GetLatestCloudflaredVersion() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to check latest version: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var release struct {
 		TagName string `json:"tag_name"`
@@ -294,7 +294,7 @@ func InstallCloudflared() error {
 	if err != nil {
 		return fmt.Errorf("failed to download cloudflared: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download cloudflared: HTTP %d", resp.StatusCode)
@@ -324,7 +324,7 @@ func InstallCloudflared() error {
 		if err != nil {
 			return fmt.Errorf("failed to create binary: %w", err)
 		}
-		defer out.Close()
+		defer func() { _ = out.Close() }()
 
 		if _, err := io.Copy(out, resp.Body); err != nil {
 			return fmt.Errorf("failed to write binary: %w", err)
@@ -379,7 +379,7 @@ func extractCloudflaredTgz(r io.Reader, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tmpFile := filepath.Join(tmpDir, "cloudflared.tgz")
 	out, err := os.Create(tmpFile)
@@ -388,10 +388,10 @@ func extractCloudflaredTgz(r io.Reader, destPath string) error {
 	}
 
 	if _, err := io.Copy(out, r); err != nil {
-		out.Close()
+		_ = out.Close()
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
-	out.Close()
+	_ = out.Close()
 
 	// Extract with tar
 	cmd := exec.Command("tar", "-xzf", tmpFile, "-C", tmpDir)
@@ -410,13 +410,13 @@ func extractCloudflaredTgz(r io.Reader, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	_, err = io.Copy(dst, src)
 	return err

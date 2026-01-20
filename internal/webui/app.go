@@ -95,7 +95,7 @@ func (app *App) Start(ctx context.Context) error {
 	log.Printf("xplat UI listening on %s\n", url)
 
 	if app.config.OpenBrowser {
-		go openBrowser(url)
+		go func() { _ = openBrowser(url) }()
 	}
 
 	// Setup signal handler for graceful shutdown
@@ -188,7 +188,79 @@ func (app *App) registerRoutes() {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"logs": logs})
+			_ = json.NewEncoder(w).Encode(map[string]string{"logs": logs})
+		})
+
+		// API endpoint to start a process (proxy to process-compose)
+		app.via.HandleFunc("POST /api/process/start/{name}", func(w http.ResponseWriter, r *http.Request) {
+			processName := r.PathValue("name")
+			if processName == "" {
+				http.Error(w, "process name required", http.StatusBadRequest)
+				return
+			}
+
+			if err := app.pcClient.StartProcess(processName); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+		})
+
+		// API endpoint to stop a process (proxy to process-compose)
+		app.via.HandleFunc("POST /api/process/stop/{name}", func(w http.ResponseWriter, r *http.Request) {
+			processName := r.PathValue("name")
+			if processName == "" {
+				http.Error(w, "process name required", http.StatusBadRequest)
+				return
+			}
+
+			if err := app.pcClient.StopProcess(processName); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
+		})
+
+		// API endpoint to restart a process (proxy to process-compose)
+		app.via.HandleFunc("POST /api/process/restart/{name}", func(w http.ResponseWriter, r *http.Request) {
+			processName := r.PathValue("name")
+			if processName == "" {
+				http.Error(w, "process name required", http.StatusBadRequest)
+				return
+			}
+
+			if err := app.pcClient.RestartProcess(processName); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "restarted"})
+		})
+
+		// API endpoint for dependency graph (v1.87.0+)
+		app.via.HandleFunc("GET /api/process/graph", func(w http.ResponseWriter, r *http.Request) {
+			format := r.URL.Query().Get("format")
+			if format == "" {
+				format = "json"
+			}
+
+			graphData, err := app.pcClient.GetGraphFormat(format)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if format == "json" {
+				w.Header().Set("Content-Type", "application/json")
+			} else {
+				w.Header().Set("Content-Type", "text/plain")
+			}
+			_, _ = w.Write([]byte(graphData))
 		})
 	}
 

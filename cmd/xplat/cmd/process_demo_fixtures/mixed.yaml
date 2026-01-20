@@ -1,0 +1,129 @@
+# Demo: Mixed services with scheduled jobs and disabled processes
+# Run with: xplat process demo mixed
+#
+# Shows a realistic production setup:
+# - Core services (db, cache, api, web)
+# - Background workers
+# - Scheduled jobs (backup, cleanup)
+# - Disabled services (debug-tools)
+#
+version: "0.5"
+
+processes:
+  # Core infrastructure
+  db:
+    command: |
+      echo "PostgreSQL starting on :5432..."
+      while true; do
+        echo "[db] $(date +%H:%M:%S) Database ready, connections: $((RANDOM % 50 + 10))"
+        sleep 5
+      done
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 2
+
+  cache:
+    command: |
+      echo "Redis starting on :6379..."
+      while true; do
+        echo "[cache] $(date +%H:%M:%S) Cache hit rate: $((RANDOM % 30 + 70))%"
+        sleep 4
+      done
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  # Application services
+  api:
+    command: |
+      echo "API server starting on :3000..."
+      while true; do
+        echo "[api] $(date +%H:%M:%S) Requests: $((RANDOM % 100 + 50))/s, Latency: $((RANDOM % 50 + 10))ms"
+        sleep 3
+      done
+    depends_on:
+      db:
+        condition: process_healthy
+      cache:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 2
+
+  web:
+    command: |
+      echo "Web frontend starting on :8080..."
+      while true; do
+        echo "[web] $(date +%H:%M:%S) Active users: $((RANDOM % 500 + 100))"
+        sleep 3
+      done
+    depends_on:
+      api:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 2
+
+  # Background workers
+  worker-email:
+    command: |
+      echo "Email worker starting..."
+      while true; do
+        echo "[worker-email] $(date +%H:%M:%S) Sent $((RANDOM % 20)) emails"
+        sleep 10
+      done
+    depends_on:
+      db:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  worker-jobs:
+    command: |
+      echo "Job worker starting..."
+      while true; do
+        echo "[worker-jobs] $(date +%H:%M:%S) Processed $((RANDOM % 50)) jobs, queue: $((RANDOM % 100))"
+        sleep 8
+      done
+    depends_on:
+      db:
+        condition: process_healthy
+      cache:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  # Scheduled processes (v1.87.0+)
+  backup:
+    command: |
+      echo "[backup] $(date +%H:%M:%S) Starting database backup..."
+      sleep 2
+      echo "[backup] $(date +%H:%M:%S) Backup completed: backup-$(date +%Y%m%d-%H%M%S).sql"
+    schedule:
+      interval: "30s"  # Every 30 seconds for demo (normally would be "0 2 * * *")
+
+  cleanup:
+    command: |
+      echo "[cleanup] $(date +%H:%M:%S) Cleaning old logs..."
+      sleep 1
+      echo "[cleanup] $(date +%H:%M:%S) Removed $((RANDOM % 100)) old files"
+    schedule:
+      interval: "45s"  # Every 45 seconds for demo
+
+  # Disabled service (for debugging)
+  debug-tools:
+    command: |
+      echo "Debug tools starting..."
+      while true; do
+        echo "[debug-tools] $(date +%H:%M:%S) Monitoring..."
+        sleep 2
+      done
+    disabled: true

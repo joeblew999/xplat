@@ -286,7 +286,7 @@ func StopCaddy() error {
 	if err != nil {
 		return fmt.Errorf("failed to send stop request to Caddy admin API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check HTTP status code
 	if resp.StatusCode != http.StatusOK {
@@ -313,7 +313,7 @@ func IsAdminAPIAvailable() bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 
@@ -325,7 +325,7 @@ func CheckServiceHealth(service ServiceConfig) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 
@@ -344,7 +344,7 @@ func CheckHTTPSHealth(httpsURL string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode, nil
 }

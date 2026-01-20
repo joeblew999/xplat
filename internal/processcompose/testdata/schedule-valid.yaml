@@ -1,0 +1,54 @@
+# Valid scheduled processes for testing
+# Tests cron and interval configurations
+version: "0.5"
+
+processes:
+  # Cron-based schedules
+  daily-backup:
+    command: "task backup:run"
+    schedule:
+      cron: "0 2 * * *"  # Daily at 2am
+      timezone: "UTC"
+      run_on_start: false
+
+  every-5-minutes:
+    command: "task metrics:collect"
+    schedule:
+      cron: "*/5 * * * *"  # Every 5 minutes
+
+  weekdays-9am:
+    command: "task report:generate"
+    schedule:
+      cron: "0 9 * * 1-5"  # Weekdays at 9am
+      timezone: "America/New_York"
+
+  monthly-cleanup:
+    command: "task cleanup:run"
+    schedule:
+      cron: "0 0 1 * *"  # First of each month at midnight
+
+  # Interval-based schedules
+  health-check:
+    command: "task health:check"
+    schedule:
+      interval: "30s"
+      run_on_start: true
+
+  cache-refresh:
+    command: "task cache:refresh"
+    schedule:
+      interval: "5m"
+
+  hourly-sync:
+    command: "task sync:run"
+    schedule:
+      interval: "1h"
+      max_concurrent: 1
+
+  # Complex interval
+  frequent-poll:
+    command: "task poll:run"
+    schedule:
+      interval: "1m30s"  # 90 seconds
+      run_on_start: true
+      max_concurrent: 2

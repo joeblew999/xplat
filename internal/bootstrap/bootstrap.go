@@ -27,7 +27,7 @@ func init() {
 	level := os.Getenv("PC_LOG_LEVEL")
 	if level == "" {
 		level = "info"
-		os.Setenv("PC_LOG_LEVEL", level)
+		_ = os.Setenv("PC_LOG_LEVEL", level)
 	}
 
 	// Set zerolog's global level directly to suppress debug logs during init

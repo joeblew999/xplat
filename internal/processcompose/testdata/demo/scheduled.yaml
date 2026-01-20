@@ -1,0 +1,71 @@
+# Demo: Scheduled processes (v1.87.0+)
+# Run with: xplat process demo scheduled
+#
+# Shows different scheduling patterns:
+# - Cron-based schedules
+# - Interval-based schedules
+#
+version: "0.5"
+
+processes:
+  # Interval-based schedules (good for demos - runs frequently)
+  heartbeat:
+    command: |
+      echo "[heartbeat] $(date +%H:%M:%S) System alive - uptime: $(uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1}')"
+    schedule:
+      interval: "10s"
+
+  metrics-collector:
+    command: |
+      echo "[metrics] $(date +%H:%M:%S) CPU: $((RANDOM % 30 + 10))%, Memory: $((RANDOM % 40 + 30))%, Disk: $((RANDOM % 20 + 60))%"
+    schedule:
+      interval: "15s"
+
+  log-rotate:
+    command: |
+      echo "[log-rotate] $(date +%H:%M:%S) Rotating logs..."
+      sleep 1
+      echo "[log-rotate] $(date +%H:%M:%S) Rotated $((RANDOM % 5 + 1)) log files"
+    schedule:
+      interval: "30s"
+
+  health-check:
+    command: |
+      echo "[health] $(date +%H:%M:%S) Checking services..."
+      sleep 1
+      services=("db" "cache" "api" "web")
+      for svc in "${services[@]}"; do
+        echo "[health] $(date +%H:%M:%S) $svc: OK"
+      done
+    schedule:
+      interval: "20s"
+
+  # Cron-based schedules (for realistic examples - won't trigger in short demos)
+  daily-backup:
+    command: |
+      echo "[daily-backup] $(date +%H:%M:%S) Starting daily backup..."
+      sleep 2
+      echo "[daily-backup] $(date +%H:%M:%S) Daily backup completed"
+    schedule:
+      cron: "0 2 * * *"  # 2 AM daily
+
+  weekly-report:
+    command: |
+      echo "[weekly-report] $(date +%H:%M:%S) Generating weekly report..."
+      sleep 3
+      echo "[weekly-report] $(date +%H:%M:%S) Report sent to admin@example.com"
+    schedule:
+      cron: "0 9 * * 1"  # Monday 9 AM
+
+  # One long-running service to keep process-compose active
+  scheduler-monitor:
+    command: |
+      echo "Scheduler monitor starting..."
+      while true; do
+        echo "[monitor] $(date +%H:%M:%S) Scheduled tasks running normally"
+        sleep 30
+      done
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1

@@ -200,10 +200,10 @@ func runCommand(name string, args ...string) CommandOutput {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create log file: %v\n", err)
 	}
 	if logFile != nil {
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 		// Write header to log file
-		fmt.Fprintf(logFile, "=== Command: %s %v ===\n", name, args)
-		fmt.Fprintf(logFile, "=== Started: %s ===\n\n", time.Now().Format(time.RFC3339))
+		_, _ = fmt.Fprintf(logFile, "=== Command: %s %v ===\n", name, args)
+		_, _ = fmt.Fprintf(logFile, "=== Started: %s ===\n\n", time.Now().Format(time.RFC3339))
 	}
 
 	// Create pipes for stdout and stderr
@@ -248,7 +248,7 @@ func runCommand(name string, args ...string) CommandOutput {
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fmt.Fprintln(multiWriter, line)
+			_, _ = fmt.Fprintln(multiWriter, line)
 		}
 	}()
 
@@ -257,7 +257,7 @@ func runCommand(name string, args ...string) CommandOutput {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fmt.Fprintln(multiWriter, line)
+			_, _ = fmt.Fprintln(multiWriter, line)
 		}
 	}()
 
@@ -270,16 +270,16 @@ func runCommand(name string, args ...string) CommandOutput {
 	err = <-done
 
 	// Ensure all output is read
-	io.Copy(multiWriter, stdoutPipe)
-	io.Copy(multiWriter, stderrPipe)
+	_, _ = io.Copy(multiWriter, stdoutPipe)
+	_, _ = io.Copy(multiWriter, stderrPipe)
 
 	// Write footer to log file
 	if logFile != nil {
-		fmt.Fprintf(logFile, "\n=== Finished: %s ===\n", time.Now().Format(time.RFC3339))
+		_, _ = fmt.Fprintf(logFile, "\n=== Finished: %s ===\n", time.Now().Format(time.RFC3339))
 		if err != nil {
-			fmt.Fprintf(logFile, "=== Exit Status: FAILED ===\n")
+			_, _ = fmt.Fprintf(logFile, "=== Exit Status: FAILED ===\n")
 		} else {
-			fmt.Fprintf(logFile, "=== Exit Status: SUCCESS ===\n")
+			_, _ = fmt.Fprintf(logFile, "=== Exit Status: SUCCESS ===\n")
 		}
 	}
 

@@ -64,7 +64,7 @@ func NewReceiveHandler() *ReceiveHandler {
 
 	// Try to load existing state
 	if data, err := os.ReadFile(statePath); err == nil {
-		json.Unmarshal(data, state)
+		_ = json.Unmarshal(data, state)
 	}
 
 	return &ReceiveHandler{
@@ -114,7 +114,7 @@ func (h *ReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var event WorkerEvent
 	if err := json.Unmarshal(body, &event); err != nil {
@@ -133,7 +133,7 @@ func (h *ReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if alreadyProcessed {
 		log.Printf("sync-cf receive: skipping duplicate event: %s", eventKey)
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "OK (duplicate)")
+		_, _ = fmt.Fprint(w, "OK (duplicate)")
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *ReceiveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.saveState()
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "OK")
+	_, _ = fmt.Fprint(w, "OK")
 }
 
 func (h *ReceiveHandler) saveState() {
@@ -214,7 +214,7 @@ func (h *ReceiveHandler) saveState() {
 	defer h.mu.RUnlock()
 
 	// Ensure directory exists
-	os.MkdirAll(filepath.Dir(h.statePath), 0755)
+	_ = os.MkdirAll(filepath.Dir(h.statePath), 0755)
 
 	data, err := json.MarshalIndent(h.state, "", "  ")
 	if err != nil {
@@ -261,14 +261,14 @@ func RunReceiveServer(port string, callbacks ReceiveCallbacks) error {
 	// Health endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "OK")
+		_, _ = fmt.Fprint(w, "OK")
 	})
 
 	// Status endpoint
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		state := handler.GetState()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"service":          "xplat-sync-cf-receive",
 			"updated_at":       state.UpdatedAt,
 			"last_event_time":  state.LastEventTime,

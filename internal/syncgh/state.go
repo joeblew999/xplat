@@ -150,20 +150,20 @@ func LoadState(dir string) (*State, error) {
 	// Read workflow runs
 	runsPath := filepath.Join(dir, "workflow-runs.json")
 	if data, err := os.ReadFile(runsPath); err == nil {
-		json.Unmarshal(data, &state.WorkflowRuns)
+		_ = json.Unmarshal(data, &state.WorkflowRuns)
 	}
 
 	// Read pages builds
 	buildsPath := filepath.Join(dir, "pages-builds.json")
 	if data, err := os.ReadFile(buildsPath); err == nil {
-		json.Unmarshal(data, &state.PagesBuilds)
+		_ = json.Unmarshal(data, &state.PagesBuilds)
 	}
 
 	// Read latest release
 	releasePath := filepath.Join(dir, "latest-release.json")
 	if data, err := os.ReadFile(releasePath); err == nil {
 		state.LatestRelease = &Release{}
-		json.Unmarshal(data, state.LatestRelease)
+		_ = json.Unmarshal(data, state.LatestRelease)
 	}
 
 	return state, nil

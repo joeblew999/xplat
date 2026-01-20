@@ -160,6 +160,17 @@ type ProcessInput struct {
 	HealthPath  string
 	HTTPS       bool
 	Readiness   *ReadinessConfig
+	Schedule    *ScheduleConfig // v1.87.0: cron/interval scheduling
+}
+
+// ScheduleConfig holds schedule configuration for cron/interval processes.
+// Added in process-compose v1.87.0.
+type ScheduleConfig struct {
+	Cron          string // Cron expression (5 fields: minute hour day month weekday)
+	Timezone      string // Timezone for cron (e.g., "UTC", "America/New_York")
+	Interval      string // Go duration (e.g., "30s", "5m", "1h")
+	RunOnStart    bool   // Run immediately when process-compose starts
+	MaxConcurrent int    // Max simultaneous executions (default: 1)
 }
 
 // ReadinessConfig holds readiness probe timing configuration.
@@ -211,6 +222,17 @@ func ProcessFromInput(input *ProcessInput) *Process {
 			proc.ReadinessProbe.PeriodSeconds = 10
 			proc.ReadinessProbe.TimeoutSeconds = 5
 			proc.ReadinessProbe.FailureThreshold = 3
+		}
+	}
+
+	// Add schedule if configured (v1.87.0+)
+	if input.Schedule != nil {
+		proc.Schedule = &Schedule{
+			Cron:          input.Schedule.Cron,
+			Timezone:      input.Schedule.Timezone,
+			Interval:      input.Schedule.Interval,
+			RunOnStart:    input.Schedule.RunOnStart,
+			MaxConcurrent: input.Schedule.MaxConcurrent,
 		}
 	}
 

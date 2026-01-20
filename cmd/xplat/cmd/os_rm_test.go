@@ -91,8 +91,8 @@ func TestRmMultiplePaths(t *testing.T) {
 	file2 := filepath.Join(tmpDir, "file2.txt")
 
 	// Create test files
-	os.WriteFile(file1, []byte("1"), 0644)
-	os.WriteFile(file2, []byte("2"), 0644)
+	_ = os.WriteFile(file1, []byte("1"), 0644)
+	_ = os.WriteFile(file2, []byte("2"), 0644)
 
 	// Remove both
 	for _, f := range []string{file1, file2} {

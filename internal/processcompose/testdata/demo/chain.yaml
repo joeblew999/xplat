@@ -1,0 +1,65 @@
+# Demo: Linear dependency chain
+# Run with: xplat process demo chain
+#
+# Shows a linear chain of processes that stay running:
+#   step-1 -> step-2 -> step-3 -> step-4 -> step-5
+#
+version: "0.5"
+
+processes:
+  step-1:
+    command: |
+      echo "Step 1 starting..."
+      while true; do echo "[step-1] $(date +%H:%M:%S) Running..."; sleep 5; done
+    depends_on:
+      step-2:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  step-2:
+    command: |
+      echo "Step 2 starting..."
+      while true; do echo "[step-2] $(date +%H:%M:%S) Processing..."; sleep 5; done
+    depends_on:
+      step-3:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  step-3:
+    command: |
+      echo "Step 3 starting..."
+      while true; do echo "[step-3] $(date +%H:%M:%S) Working..."; sleep 5; done
+    depends_on:
+      step-4:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  step-4:
+    command: |
+      echo "Step 4 starting..."
+      while true; do echo "[step-4] $(date +%H:%M:%S) Active..."; sleep 5; done
+    depends_on:
+      step-5:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1
+
+  step-5:
+    command: |
+      echo "Step 5 (base) starting..."
+      while true; do echo "[step-5] $(date +%H:%M:%S) Base service ready"; sleep 5; done
+    readiness_probe:
+      exec:
+        command: "true"
+      initial_delay_seconds: 1

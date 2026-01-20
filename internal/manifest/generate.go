@@ -105,6 +105,16 @@ func (g *Generator) GenerateProcessCompose(outputPath string) error {
 					FailureThreshold: p.Readiness.FailureThreshold,
 				}
 			}
+			// v1.87.0: Support scheduled processes (cron/interval)
+			if p.Schedule != nil {
+				input.Schedule = &processcompose.ScheduleConfig{
+					Cron:          p.Schedule.Cron,
+					Timezone:      p.Schedule.Timezone,
+					Interval:      p.Schedule.Interval,
+					RunOnStart:    p.Schedule.RunOnStart,
+					MaxConcurrent: p.Schedule.MaxConcurrent,
+				}
+			}
 
 			proc := processcompose.ProcessFromInputWithAvailability(input, "on_failure")
 			config.Processes[processName] = proc

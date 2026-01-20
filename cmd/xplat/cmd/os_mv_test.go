@@ -71,8 +71,8 @@ func TestMvIntoDirectory(t *testing.T) {
 	dstDir := filepath.Join(tmpDir, "destdir")
 
 	// Create source and destination directory
-	os.WriteFile(src, []byte("content"), 0644)
-	os.Mkdir(dstDir, 0755)
+	_ = os.WriteFile(src, []byte("content"), 0644)
+	_ = os.Mkdir(dstDir, 0755)
 
 	// Move file into directory
 	dst := filepath.Join(dstDir, filepath.Base(src))
@@ -97,8 +97,8 @@ func TestMvOverwrite(t *testing.T) {
 	dst := filepath.Join(tmpDir, "dest.txt")
 
 	// Create source and destination
-	os.WriteFile(src, []byte("new"), 0644)
-	os.WriteFile(dst, []byte("old"), 0644)
+	_ = os.WriteFile(src, []byte("new"), 0644)
+	_ = os.WriteFile(dst, []byte("old"), 0644)
 
 	// Move (overwrites destination)
 	if err := os.Rename(src, dst); err != nil {

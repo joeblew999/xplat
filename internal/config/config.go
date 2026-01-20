@@ -236,10 +236,10 @@ func PlatDist(workDir string) string {
 // SetPlatEnv sets the PLAT_* environment variables for a working directory.
 // Call this before running tasks to inject the standard paths.
 func SetPlatEnv(workDir string) {
-	os.Setenv("PLAT_SRC", PlatSrc(workDir))
-	os.Setenv("PLAT_BIN", PlatBin(workDir))
-	os.Setenv("PLAT_DATA", PlatData(workDir))
-	os.Setenv("PLAT_DIST", PlatDist(workDir))
+	_ = os.Setenv("PLAT_SRC", PlatSrc(workDir))
+	_ = os.Setenv("PLAT_BIN", PlatBin(workDir))
+	_ = os.Setenv("PLAT_DATA", PlatData(workDir))
+	_ = os.Setenv("PLAT_DIST", PlatDist(workDir))
 }
 
 // EnvSlice returns the PLAT_* environment variables as a slice for exec.Cmd.Env

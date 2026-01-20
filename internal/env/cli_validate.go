@@ -101,7 +101,7 @@ func RunValidateDeep() int {
 // printValidationTableHeader prints the table header
 func printValidationTableHeader() {
 	headerColor := color.New(color.FgCyan, color.Bold)
-	headerColor.Printf("%-35s %-15s %s\n", "Field", "Status", "Error")
+	_, _ = headerColor.Printf("%-35s %-15s %s\n", "Field", "Status", "Error")
 	fmt.Println("------------------------------------------------------------------------------------")
 }
 
@@ -110,11 +110,11 @@ func printValidationRow(field, status, errorMsg string, statusColor color.Attrib
 	fieldColor := color.New(color.FgWhite)
 	statusColorObj := color.New(statusColor)
 
-	fieldColor.Printf("%-35s ", field)
-	statusColorObj.Printf("%-15s ", status)
+	_, _ = fieldColor.Printf("%-35s ", field)
+	_, _ = statusColorObj.Printf("%-15s ", status)
 
 	if errorMsg != "-" {
-		color.New(color.FgRed).Println(errorMsg)
+		_, _ = color.New(color.FgRed).Println(errorMsg)
 	} else {
 		fmt.Println(errorMsg)
 	}

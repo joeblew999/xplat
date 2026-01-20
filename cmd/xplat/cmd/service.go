@@ -490,7 +490,7 @@ func runServiceList(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tENABLED\tPATH\tCONFIG")
+	_, _ = fmt.Fprintln(w, "NAME\tENABLED\tPATH\tCONFIG")
 
 	searchOrder := config.ProcessComposeSearchOrder()
 	for _, name := range names {
@@ -510,9 +510,9 @@ func runServiceList(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", name, enabled, proj.Path, configFile)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", name, enabled, proj.Path, configFile)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	fmt.Println()
 	fmt.Printf("Registry: %s\n", config.XplatProjects())

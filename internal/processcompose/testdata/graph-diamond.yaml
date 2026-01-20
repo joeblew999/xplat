@@ -1,0 +1,33 @@
+# Diamond dependency pattern for graph testing
+#
+#       web
+#      /   \
+#   api     worker
+#      \   /
+#        db
+#
+version: "0.5"
+
+processes:
+  web:
+    command: "task web:run"
+    depends_on:
+      api:
+        condition: process_healthy
+      worker:
+        condition: process_healthy
+
+  api:
+    command: "task api:run"
+    depends_on:
+      db:
+        condition: process_healthy
+
+  worker:
+    command: "task worker:run"
+    depends_on:
+      db:
+        condition: process_healthy
+
+  db:
+    command: "task db:run"

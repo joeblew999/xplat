@@ -3,7 +3,9 @@ package processcompose
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Severity indicates how serious a violation is.
@@ -287,6 +289,11 @@ func (r ReadinessProbeRule) Check(pc *ProcessCompose) []Violation {
 			continue
 		}
 
+		// Skip scheduled processes - they run periodically, not continuously
+		if proc.Schedule != nil {
+			continue
+		}
+
 		if !proc.HasReadinessProbe() {
 			violations = append(violations, Violation{
 				File:     pc.Path,
@@ -299,6 +306,221 @@ func (r ReadinessProbeRule) Check(pc *ProcessCompose) []Violation {
 	}
 
 	return violations
+}
+
+// ScheduleConfigRule validates scheduled process configuration (v1.87.0+).
+type ScheduleConfigRule struct{}
+
+func (r ScheduleConfigRule) Name() string { return "schedule-config" }
+func (r ScheduleConfigRule) Description() string {
+	return "Validates scheduled process configuration (cron/interval)"
+}
+
+func (r ScheduleConfigRule) Check(pc *ProcessCompose) []Violation {
+	var violations []Violation
+
+	for name, proc := range pc.Processes {
+		if proc.Disabled || proc.Schedule == nil {
+			continue
+		}
+
+		s := proc.Schedule
+
+		// Check that either cron or interval is specified (not both, not neither)
+		hasCron := s.Cron != ""
+		hasInterval := s.Interval != ""
+
+		if !hasCron && !hasInterval {
+			violations = append(violations, Violation{
+				File:     pc.Path,
+				Line:     pc.FindProcessLineNumber(name),
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("scheduled process '%s' must have either 'cron' or 'interval' configured", name),
+				Severity: SeverityError,
+			})
+		}
+
+		if hasCron && hasInterval {
+			violations = append(violations, Violation{
+				File:     pc.Path,
+				Line:     pc.FindProcessLineNumber(name),
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("scheduled process '%s' has both 'cron' and 'interval' - use only one", name),
+				Severity: SeverityError,
+			})
+		}
+
+		// Validate cron expression format with detailed field validation
+		if hasCron {
+			if cronErr := validateCronExpression(s.Cron); cronErr != "" {
+				violations = append(violations, Violation{
+					File:     pc.Path,
+					Line:     pc.FindProcessLineNumber(name),
+					Rule:     r.Name(),
+					Message:  fmt.Sprintf("scheduled process '%s' cron '%s': %s", name, s.Cron, cronErr),
+					Severity: SeverityError,
+				})
+			}
+		}
+
+		// Validate interval format (Go duration)
+		if hasInterval {
+			if !isValidDuration(s.Interval) {
+				violations = append(violations, Violation{
+					File:     pc.Path,
+					Line:     pc.FindProcessLineNumber(name),
+					Rule:     r.Name(),
+					Message:  fmt.Sprintf("scheduled process '%s' interval '%s' is not a valid Go duration (e.g., \"30s\", \"5m\", \"1h\")", name, s.Interval),
+					Severity: SeverityError,
+				})
+			}
+		}
+
+		// Warn if max_concurrent > 1 without explicit acknowledgment
+		if s.MaxConcurrent > 1 {
+			violations = append(violations, Violation{
+				File:     pc.Path,
+				Line:     pc.FindProcessLineNumber(name),
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("scheduled process '%s' allows %d concurrent executions - ensure this is intentional", name, s.MaxConcurrent),
+				Severity: SeverityWarning,
+			})
+		}
+
+		// Scheduled processes shouldn't have readiness probes (they're not long-running)
+		if proc.HasReadinessProbe() {
+			violations = append(violations, Violation{
+				File:     pc.Path,
+				Line:     pc.FindProcessLineNumber(name),
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("scheduled process '%s' has readiness_probe but scheduled processes are not long-running", name),
+				Severity: SeverityWarning,
+			})
+		}
+
+		// Scheduled processes shouldn't have depends_on with process_healthy
+		// (they run independently on schedule)
+		for dep, cfg := range proc.DependsOn {
+			if cfg.Condition == "process_healthy" {
+				violations = append(violations, Violation{
+					File:     pc.Path,
+					Line:     pc.FindProcessLineNumber(name),
+					Rule:     r.Name(),
+					Message:  fmt.Sprintf("scheduled process '%s' depends on '%s' with process_healthy - consider using process_started or removing dependency", name, dep),
+					Severity: SeverityWarning,
+				})
+			}
+		}
+	}
+
+	return violations
+}
+
+// isValidDuration checks if s is a valid Go duration string using time.ParseDuration.
+func isValidDuration(s string) bool {
+	if s == "" {
+		return false
+	}
+	_, err := time.ParseDuration(s)
+	return err == nil
+}
+
+// validateCronExpression performs detailed validation of a cron expression.
+// Returns an error message if invalid, empty string if valid.
+func validateCronExpression(cron string) string {
+	fields := strings.Fields(cron)
+	if len(fields) != 5 {
+		return fmt.Sprintf("should have 5 fields (minute hour day month weekday), got %d", len(fields))
+	}
+
+	fieldNames := []string{"minute", "hour", "day", "month", "weekday"}
+	fieldRanges := []struct{ min, max int }{
+		{0, 59},  // minute
+		{0, 23},  // hour
+		{1, 31},  // day
+		{1, 12},  // month
+		{0, 7},   // weekday (0 and 7 are both Sunday)
+	}
+
+	for i, field := range fields {
+		if err := validateCronField(field, fieldNames[i], fieldRanges[i].min, fieldRanges[i].max); err != "" {
+			return err
+		}
+	}
+
+	return ""
+}
+
+// validateCronField validates a single cron field.
+func validateCronField(field, name string, min, max int) string {
+	// Handle wildcard
+	if field == "*" {
+		return ""
+	}
+
+	// Handle step values: */5, 0-30/5
+	if strings.Contains(field, "/") {
+		parts := strings.SplitN(field, "/", 2)
+		if len(parts) != 2 {
+			return fmt.Sprintf("%s: invalid step syntax '%s'", name, field)
+		}
+		// Validate the base part (before /)
+		if parts[0] != "*" {
+			if err := validateCronField(parts[0], name, min, max); err != "" {
+				return err
+			}
+		}
+		// Validate step value
+		step, err := strconv.Atoi(parts[1])
+		if err != nil || step <= 0 {
+			return fmt.Sprintf("%s: step value must be positive integer, got '%s'", name, parts[1])
+		}
+		return ""
+	}
+
+	// Handle ranges: 1-5, 0-30
+	if strings.Contains(field, "-") {
+		parts := strings.SplitN(field, "-", 2)
+		if len(parts) != 2 {
+			return fmt.Sprintf("%s: invalid range syntax '%s'", name, field)
+		}
+		start, err1 := strconv.Atoi(parts[0])
+		end, err2 := strconv.Atoi(parts[1])
+		if err1 != nil || err2 != nil {
+			return fmt.Sprintf("%s: range values must be integers in '%s'", name, field)
+		}
+		if start < min || start > max {
+			return fmt.Sprintf("%s: start value %d out of range (%d-%d)", name, start, min, max)
+		}
+		if end < min || end > max {
+			return fmt.Sprintf("%s: end value %d out of range (%d-%d)", name, end, min, max)
+		}
+		if start > end {
+			return fmt.Sprintf("%s: range start %d > end %d", name, start, end)
+		}
+		return ""
+	}
+
+	// Handle lists: 1,3,5
+	if strings.Contains(field, ",") {
+		for _, part := range strings.Split(field, ",") {
+			if err := validateCronField(strings.TrimSpace(part), name, min, max); err != "" {
+				return err
+			}
+		}
+		return ""
+	}
+
+	// Plain number
+	val, err := strconv.Atoi(field)
+	if err != nil {
+		return fmt.Sprintf("%s: '%s' is not a valid value", name, field)
+	}
+	if val < min || val > max {
+		return fmt.Sprintf("%s: value %d out of range (%d-%d)", name, val, min, max)
+	}
+
+	return ""
 }
 
 // ===== Fmt Rules (auto-fixable) =====
@@ -413,6 +635,7 @@ func AllLintRules() []Rule {
 		EnvSubstitutionRule{}, // Secrets use ${VAR}
 		EnvFileRule{},         // env_file configured if using substitution
 		ReadinessProbeRule{},  // Readiness probes configured
+		ScheduleConfigRule{},  // Scheduled process validation (v1.87.0+)
 	}
 }
 

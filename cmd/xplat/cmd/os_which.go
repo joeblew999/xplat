@@ -159,7 +159,7 @@ func init() {
 func outputJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v)
 }
 
 // runWhichAll shows all locations where the binary exists

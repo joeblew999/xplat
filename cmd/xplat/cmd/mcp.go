@@ -144,10 +144,10 @@ func newTaskfileServer(dir, entrypoint string) (*taskfileServer, error) {
 
 	// Set PLAT_* env vars like xplat task does
 	config.SetPlatEnv(workdir)
-	os.Setenv("PATH", config.PathWithPlatBin(workdir))
+	_ = os.Setenv("PATH", config.PathWithPlatBin(workdir))
 
 	// Enable remote taskfiles
-	os.Setenv("TASK_X_REMOTE_TASKFILES", "1")
+	_ = os.Setenv("TASK_X_REMOTE_TASKFILES", "1")
 	experiments.Parse(workdir)
 
 	// Create executor options

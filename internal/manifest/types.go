@@ -80,14 +80,35 @@ type TaskfileConfig struct {
 
 // ProcessConfig defines a process for process-compose.
 type ProcessConfig struct {
-	Command    string          `yaml:"command"`
-	Port       int             `yaml:"port,omitempty"`
-	HealthPath string          `yaml:"health_path,omitempty"`
-	HTTPS      bool            `yaml:"https,omitempty"`
-	Disabled   bool            `yaml:"disabled,omitempty"`
-	DependsOn  []string        `yaml:"depends_on,omitempty"`
-	Namespace  string          `yaml:"namespace,omitempty"`
-	Readiness  *ReadinessProbe `yaml:"readiness,omitempty"`
+	Command    string           `yaml:"command"`
+	Port       int              `yaml:"port,omitempty"`
+	HealthPath string           `yaml:"health_path,omitempty"`
+	HTTPS      bool             `yaml:"https,omitempty"`
+	Disabled   bool             `yaml:"disabled,omitempty"`
+	DependsOn  []string         `yaml:"depends_on,omitempty"`
+	Namespace  string           `yaml:"namespace,omitempty"`
+	Readiness  *ReadinessProbe  `yaml:"readiness,omitempty"`
+	Schedule   *ScheduleConfig  `yaml:"schedule,omitempty"` // v1.87.0: cron/interval scheduling
+}
+
+// ScheduleConfig defines scheduling for a process (process-compose v1.87.0+).
+// Use either Cron OR Interval, not both.
+type ScheduleConfig struct {
+	// Cron expression (5 fields: minute hour day month weekday)
+	// Examples: "0 2 * * *" (daily 2am), "*/5 * * * *" (every 5 min)
+	Cron string `yaml:"cron,omitempty"`
+
+	// Timezone for cron (e.g., "UTC", "America/New_York")
+	Timezone string `yaml:"timezone,omitempty"`
+
+	// Interval as Go duration (e.g., "30s", "5m", "1h")
+	Interval string `yaml:"interval,omitempty"`
+
+	// RunOnStart runs immediately when process-compose starts
+	RunOnStart bool `yaml:"run_on_start,omitempty"`
+
+	// MaxConcurrent limits simultaneous executions (default: 1)
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
 }
 
 // ReadinessProbe defines health check timing.

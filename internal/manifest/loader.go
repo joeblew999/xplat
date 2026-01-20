@@ -56,7 +56,7 @@ func (l *Loader) LoadURL(url string) (*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("manifest URL returned HTTP %d", resp.StatusCode)
@@ -214,7 +214,7 @@ func (l *Loader) DiscoverGitHub(owner, prefix string) ([]*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch repos: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
