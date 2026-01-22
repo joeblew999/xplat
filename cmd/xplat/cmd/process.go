@@ -166,6 +166,9 @@ func runProcessWithArgs(args []string) error {
 	// Auto-detect config file if not specified
 	args = autoDetectProcessConfig(args)
 
+	// Auto-detect .env.local for per-machine port overrides
+	args = autoDetectEnvLocal(args)
+
 	// Save original args and restore after
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -218,4 +221,37 @@ func autoDetectProcessConfig(args []string) []string {
 
 	// No config file found, let process-compose handle it
 	return args
+}
+
+// autoDetectEnvLocal adds .env.local to the env files if it exists.
+// This enables per-machine port overrides without modifying tracked files.
+// Only applies for "up" command or no subcommand (default is up with TUI).
+func autoDetectEnvLocal(args []string) []string {
+	// Only apply for "up" command or no subcommand
+	if len(args) > 0 {
+		firstArg := args[0]
+		// Skip if first arg is a subcommand that doesn't use -e
+		if firstArg != "up" && !strings.HasPrefix(firstArg, "-") {
+			return args
+		}
+	}
+
+	// Check if .env.local exists
+	if _, err := os.Stat(".env.local"); err != nil {
+		return args
+	}
+
+	// Check if -e .env.local is already specified
+	for i, arg := range args {
+		if arg == "-e" && i+1 < len(args) && args[i+1] == ".env.local" {
+			return args
+		}
+		if arg == "-e.env.local" || arg == "--env=.env.local" {
+			return args
+		}
+	}
+
+	// Add .env.local to the env files
+	// Process-compose loads .env by default, .env.local provides overrides
+	return append([]string{"-e", ".env.local"}, args...)
 }

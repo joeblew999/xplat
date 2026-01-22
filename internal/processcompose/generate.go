@@ -5,9 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
+
+// formatPort returns the port as a string, optionally with env var override syntax.
+// If envVar is set, returns "${ENVVAR:-default}", otherwise just the port number.
+func formatPort(port int, envVar string) string {
+	if envVar != "" {
+		return fmt.Sprintf("${%s:-%d}", envVar, port)
+	}
+	return strconv.Itoa(port)
+}
 
 // Generator generates and manages process-compose.yaml files.
 type Generator struct {
@@ -156,7 +166,8 @@ type ProcessInput struct {
 	Disabled    bool
 	Namespace   string
 	DependsOn   []string
-	Port        int
+	Port        int    // Default port value
+	PortEnvVar  string // Environment variable name for port override (e.g., "WEB_PORT")
 	HealthPath  string
 	HTTPS       bool
 	Readiness   *ReadinessConfig
@@ -203,11 +214,15 @@ func ProcessFromInput(input *ProcessInput) *Process {
 		if input.HTTPS {
 			scheme = "https"
 		}
+
+		// Format port as string with optional env var override
+		portStr := formatPort(input.Port, input.PortEnvVar)
+
 		proc.ReadinessProbe = &ReadinessProbe{
 			HTTPGet: &HTTPGet{
 				Scheme: scheme,
 				Host:   "127.0.0.1",
-				Port:   input.Port,
+				Port:   portStr,
 				Path:   input.HealthPath,
 			},
 		}

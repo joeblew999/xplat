@@ -348,8 +348,16 @@ func runReleaseMatrix(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// releasesDir is the standard output directory for release binaries
+const releasesDir = ".releases"
+
 func runReleaseBuild(cmd *cobra.Command, args []string) error {
 	tool := args[0]
+
+	// Special case: building xplat itself
+	if tool == "xplat" {
+		return buildXplatSelf(cmd)
+	}
 
 	matrix, err := getToolConfig(tool)
 	if err != nil {
@@ -456,5 +464,84 @@ func runReleaseList(cmd *cobra.Command, args []string) error {
 func runReleaseBinaryName(cmd *cobra.Command, args []string) error {
 	tool := args[0]
 	fmt.Println(binaryFilename(tool, runtime.GOOS, runtime.GOARCH))
+	return nil
+}
+
+// buildXplatSelf handles building xplat itself for release.
+// This is a special case because xplat is in the repo root, not taskfiles/.
+// It builds directly without delegating to Taskfile, using the SSOT naming.
+func buildXplatSelf(_ *cobra.Command) error {
+	// Find repo root
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	repoRoot, err := findRepoRoot(cwd)
+	if err != nil {
+		return fmt.Errorf("could not find xplat repo root: %w", err)
+	}
+
+	// Get version from environment or git
+	version := os.Getenv("VERSION")
+	if version == "" {
+		gitCmd := exec.Command("git", "describe", "--tags", "--always", "--dirty")
+		gitCmd.Dir = repoRoot
+		out, err := gitCmd.Output()
+		if err != nil {
+			version = "dev"
+		} else {
+			version = strings.TrimSpace(string(out))
+		}
+	}
+
+	// Determine which platforms to build
+	var targetPlatforms []Platform
+	inCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+
+	if buildCurrent {
+		targetPlatforms = []Platform{{OS: runtime.GOOS, Arch: runtime.GOARCH}}
+	} else if buildPlatform != "" {
+		parts := strings.Split(buildPlatform, "/")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid platform format: %s (expected os/arch)", buildPlatform)
+		}
+		targetPlatforms = []Platform{{OS: parts[0], Arch: parts[1]}}
+	} else if inCI && runtime.GOOS != "linux" {
+		// In CI on non-Linux: Skip, Linux runner builds all platforms
+		fmt.Printf("Skipping: xplat build on %s in CI, Linux runner builds all platforms\n", runtime.GOOS)
+		return nil
+	} else {
+		// Build all platforms (xplat is CGO=0)
+		targetPlatforms = allPlatforms
+	}
+
+	// Create output directory
+	outputDir := filepath.Join(repoRoot, releasesDir)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Build each platform
+	ldflags := fmt.Sprintf("-s -w -X main.Version=%s", version)
+	for _, p := range targetPlatforms {
+		outFile := filepath.Join(outputDir, binaryFilename("xplat", p.OS, p.Arch))
+		fmt.Printf("Building xplat for %s/%s -> %s\n", p.OS, p.Arch, outFile)
+
+		buildCmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", outFile, ".")
+		buildCmd.Dir = repoRoot
+		buildCmd.Env = append(os.Environ(),
+			"CGO_ENABLED=0",
+			fmt.Sprintf("GOOS=%s", p.OS),
+			fmt.Sprintf("GOARCH=%s", p.Arch),
+		)
+		buildCmd.Stdout = os.Stdout
+		buildCmd.Stderr = os.Stderr
+
+		if err := buildCmd.Run(); err != nil {
+			return fmt.Errorf("build failed for %s/%s: %w", p.OS, p.Arch, err)
+		}
+	}
+
+	fmt.Printf("\nOK: Built xplat %s for %d platform(s) -> %s/\n", version, len(targetPlatforms), releasesDir)
 	return nil
 }

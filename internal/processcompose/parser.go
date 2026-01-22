@@ -78,10 +78,11 @@ type ExecProbe struct {
 }
 
 // HTTPGet for HTTP-based health checks.
+// Port is a string to support environment variable substitution (e.g., "${WEB_PORT:-8080}").
 type HTTPGet struct {
 	Scheme string `yaml:"scheme"`
 	Host   string `yaml:"host"`
-	Port   int    `yaml:"port"`
+	Port   string `yaml:"port"`
 	Path   string `yaml:"path"`
 }
 

@@ -2,11 +2,13 @@
 //
 // Templates are organized into two categories:
 //
-// 1. Internal templates (internal:gen) - For xplat development
+// 1. xplat/ - Templates for xplat's own files (xplat internal dev build)
 //   - install.sh.tmpl - Install script for end users
 //   - action.yml.tmpl - GitHub Actions setup action
+//   - readme.xplat.md.tmpl - xplat's own README
+//   - taskfile.xplat.yml.tmpl - xplat's own Taskfile
 //
-// 2. External templates (gen) - For plat-* project users
+// 2. project/ - Templates for user projects (xplat gen *)
 //   - ci.yml.tmpl - GitHub Actions CI workflow
 //   - gitignore.tmpl - .gitignore file
 //   - taskfile.yml.tmpl - Taskfile for project tasks
@@ -14,6 +16,7 @@
 //   - readme.md.tmpl - Project README
 //   - taskfile.generated.yml.tmpl - Generated taskfile with remote includes
 //   - process.generated.yml.tmpl - Generated process-compose file
+//   - service.taskfile.yml.tmpl - Service taskfile for packages
 //
 // All templates use values from internal/config/config.go as the source of truth.
 package templates
@@ -26,11 +29,11 @@ import (
 	"text/template"
 )
 
-//go:embed *.tmpl
-var internalFS embed.FS
+//go:embed xplat/*.tmpl
+var xplatFS embed.FS
 
-//go:embed external/*.tmpl
-var externalFS embed.FS
+//go:embed project/*.tmpl
+var projectFS embed.FS
 
 // Common template functions available to all templates.
 var commonFuncs = template.FuncMap{
@@ -75,19 +78,30 @@ func listTemplates(fs embed.FS, dir string) ([]string, error) {
 	return names, nil
 }
 
-// === Internal Templates (xplat internal gen) ===
+// === Xplat Templates (xplat internal dev build) ===
 
-// RenderInternal renders an internal template by name.
+// RenderXplat renders an xplat template by name.
+// These are templates for xplat's own files.
+func RenderXplat(name string, data any) ([]byte, error) {
+	return render(xplatFS, "xplat/"+name, data)
+}
+
+// ListXplatTemplates returns names of all xplat templates.
+func ListXplatTemplates() ([]string, error) {
+	return listTemplates(xplatFS, "xplat")
+}
+
+// RenderInternal is an alias for RenderXplat for backwards compatibility.
 func RenderInternal(name string, data any) ([]byte, error) {
-	return render(internalFS, name, data)
+	return RenderXplat(name, data)
 }
 
-// ListTemplates returns names of all internal templates.
+// ListTemplates is an alias for ListXplatTemplates for backwards compatibility.
 func ListTemplates() ([]string, error) {
-	return listTemplates(internalFS, ".")
+	return ListXplatTemplates()
 }
 
-// === Internal Template Data Types ===
+// === Xplat Template Data Types ===
 
 // InstallData holds values for install.sh and action.yml templates.
 type InstallData struct {
@@ -127,25 +141,46 @@ type XplatTaskfileData struct {
 	Commands []CommandInfo
 }
 
-// === External Templates (xplat gen) ===
+// === Project Templates (xplat gen *) ===
 
-// RenderExternal renders an external template by name.
+// RenderProject renders a project template by name.
+// These are templates for user projects that use xplat.
+func RenderProject(name string, data any) ([]byte, error) {
+	return render(projectFS, "project/"+name, data)
+}
+
+// ListProjectTemplates returns names of all project templates.
+func ListProjectTemplates() ([]string, error) {
+	return listTemplates(projectFS, "project")
+}
+
+// RenderExternal is an alias for RenderProject for backwards compatibility.
 func RenderExternal(name string, data any) ([]byte, error) {
-	return render(externalFS, "external/"+name, data)
+	return RenderProject(name, data)
 }
 
-// ListExternalTemplates returns names of all external templates.
+// ListExternalTemplates is an alias for ListProjectTemplates for backwards compatibility.
 func ListExternalTemplates() ([]string, error) {
-	return listTemplates(externalFS, "external")
+	return ListProjectTemplates()
 }
 
-// === External Template Data Types ===
+// === Project Template Data Types ===
 
 // CIWorkflowData holds values for ci.yml template.
 type CIWorkflowData struct {
 	Language       string // go, rust, bun, or empty
 	XplatRepo      string // joeblew999/xplat
 	IsExternalRepo bool   // true if binary comes from external git repo (changes CI tasks)
+
+	// xplat-specific options (for xplat's own CI)
+	IsXplatSelf   bool   // true if generating CI for xplat itself
+	BinaryName    string // binary name for releases (e.g., "xplat")
+	TagPrefix     string // tag prefix for releases (e.g., "xplat-" → tags like "xplat-v1.0.0")
+	TaskBuild     string // build task name (e.g., "dev:build")
+	TaskTest      string // test task name (e.g., "dev:test")
+	TaskLint      string // lint task name (e.g., "dev:lint")
+	TaskRelease   string // release task name (e.g., "release:build:all")
+	SingleOS      bool   // if true, only run on ubuntu-latest (no matrix)
 }
 
 // GitignoreData holds values for gitignore template.

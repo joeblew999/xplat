@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -17,6 +18,14 @@ import (
 	"github.com/joeblew999/xplat/internal/registry"
 	"github.com/joeblew999/xplat/internal/taskfile"
 )
+
+// pkgPortEnvVar derives the environment variable name for a process port.
+// e.g., "web" -> "WEB_PORT", "api-server" -> "API_SERVER_PORT"
+func pkgPortEnvVar(processName string) string {
+	name := strings.ToUpper(processName)
+	name = strings.ReplaceAll(name, "-", "_")
+	return name + "_PORT"
+}
 
 // PkgCmd is the parent command for package operations
 var PkgCmd = &cobra.Command{
@@ -452,6 +461,7 @@ func installProcess(pkg *registry.Package) error {
 		Namespace:  pkg.Process.Namespace,
 		DependsOn:  pkg.Process.DependsOn,
 		Port:       pkg.Process.Port,
+		PortEnvVar: pkgPortEnvVar(pkg.Name),
 		HealthPath: pkg.Process.HealthPath,
 	}
 	proc := processcompose.ProcessFromInput(input)
@@ -480,6 +490,7 @@ func runPkgAddProcess(cmd *cobra.Command, args []string) error {
 		Namespace:  pkg.Process.Namespace,
 		DependsOn:  pkg.Process.DependsOn,
 		Port:       pkg.Process.Port,
+		PortEnvVar: pkgPortEnvVar(pkg.Name),
 		HealthPath: pkg.Process.HealthPath,
 	}
 	proc := processcompose.ProcessFromInput(input)

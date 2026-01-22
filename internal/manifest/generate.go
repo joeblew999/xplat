@@ -10,6 +10,14 @@ import (
 	"github.com/joeblew999/xplat/internal/templates"
 )
 
+// portEnvVar derives the environment variable name for a process port.
+// e.g., "web" -> "WEB_PORT", "api-server" -> "API_SERVER_PORT"
+func portEnvVar(processName string) string {
+	name := strings.ToUpper(processName)
+	name = strings.ReplaceAll(name, "-", "_")
+	return name + "_PORT"
+}
+
 
 // Generator generates files from manifests.
 type Generator struct {
@@ -87,6 +95,7 @@ func (g *Generator) GenerateProcessCompose(outputPath string) error {
 			}
 
 			// Convert manifest ProcessConfig to ProcessInput
+			// Derive port env var from process name for per-machine overrides
 			input := &processcompose.ProcessInput{
 				Name:       name,
 				Command:    p.Command,
@@ -94,6 +103,7 @@ func (g *Generator) GenerateProcessCompose(outputPath string) error {
 				Namespace:  p.Namespace,
 				DependsOn:  p.DependsOn,
 				Port:       p.Port,
+				PortEnvVar: portEnvVar(name),
 				HealthPath: p.HealthPath,
 				HTTPS:      p.HTTPS,
 			}
@@ -204,6 +214,16 @@ func DetectLanguage(baseDir string) string {
 type WorkflowOptions struct {
 	Language       string // go, rust, bun, or empty
 	IsExternalRepo bool   // true if binary comes from external git repo
+
+	// xplat-specific options (for xplat's own CI)
+	IsXplatSelf bool   // true if generating CI for xplat itself
+	BinaryName  string // binary name for releases (e.g., "xplat")
+	TagPrefix   string // tag prefix for releases (e.g., "xplat-")
+	TaskBuild   string // build task name (e.g., "dev:build")
+	TaskTest    string // test task name (e.g., "dev:test")
+	TaskLint    string // lint task name (e.g., "dev:lint")
+	TaskRelease string // release task name (e.g., "release:build:all")
+	SingleOS    bool   // if true, only run on ubuntu-latest
 }
 
 // GenerateWorkflow generates a unified GitHub Actions CI workflow.
@@ -215,6 +235,14 @@ func (g *Generator) GenerateWorkflow(outputPath string, opts WorkflowOptions) er
 		Language:       normalizeLanguage(opts.Language),
 		XplatRepo:      "joeblew999/xplat",
 		IsExternalRepo: opts.IsExternalRepo,
+		IsXplatSelf:    opts.IsXplatSelf,
+		BinaryName:     opts.BinaryName,
+		TagPrefix:      opts.TagPrefix,
+		TaskBuild:      opts.TaskBuild,
+		TaskTest:       opts.TaskTest,
+		TaskLint:       opts.TaskLint,
+		TaskRelease:    opts.TaskRelease,
+		SingleOS:       opts.SingleOS,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render CI workflow: %w", err)

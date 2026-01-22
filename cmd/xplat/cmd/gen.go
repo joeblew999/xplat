@@ -177,8 +177,34 @@ func runGenWorkflow(cmd *cobra.Command, args []string) error {
 		baseDir = "."
 	}
 
+	// Try to load manifest to detect xplat itself
+	var opts manifest.WorkflowOptions
+	opts.Language = manifest.DetectLanguage(baseDir)
+
+	loader := manifest.NewLoader()
+	m, err := loader.LoadDir(genDir)
+	if err == nil && m != nil {
+		// Check if this is xplat itself by name or binary
+		binaryName := m.Name
+		if m.Binary != nil && m.Binary.Name != "" {
+			binaryName = m.Binary.Name
+		}
+
+		if binaryName == "xplat" {
+			// xplat's own CI - use special settings
+			opts.IsXplatSelf = true
+			opts.BinaryName = "xplat"
+			opts.TagPrefix = "xplat-"
+			opts.TaskBuild = "dev:build"
+			opts.TaskTest = "dev:test"
+			opts.TaskLint = "dev:lint"
+			opts.TaskRelease = "release:build:all"
+			opts.SingleOS = true
+		}
+	}
+
 	gen := manifest.NewGenerator(nil)
-	if err := gen.GenerateWorkflowDir(baseDir); err != nil {
+	if err := gen.GenerateWorkflowDirWithOptions(baseDir, opts); err != nil {
 		return fmt.Errorf("failed to generate workflow: %w", err)
 	}
 
@@ -366,17 +392,31 @@ func runGenAll(cmd *cobra.Command, args []string) error {
 	gen := manifest.NewGenerator([]*manifest.Manifest{m})
 	baseDir := genOutput
 
-	// Generate workflow
-	if err := gen.GenerateWorkflowDir(baseDir); err != nil {
-		return fmt.Errorf("failed to generate workflow: %w", err)
-	}
-	fmt.Printf("Generated %s/.github/workflows/ci.yml\n", baseDir)
-
-	// Generate .gitignore
+	// Generate workflow with xplat-specific options if applicable
 	binaryName := m.Name
 	if m.Binary != nil && m.Binary.Name != "" {
 		binaryName = m.Binary.Name
 	}
+
+	var workflowOpts manifest.WorkflowOptions
+	workflowOpts.Language = manifest.DetectLanguage(baseDir)
+	if binaryName == "xplat" {
+		workflowOpts.IsXplatSelf = true
+		workflowOpts.BinaryName = "xplat"
+		workflowOpts.TagPrefix = "xplat-"
+		workflowOpts.TaskBuild = "dev:build"
+		workflowOpts.TaskTest = "dev:test"
+		workflowOpts.TaskLint = "dev:lint"
+		workflowOpts.TaskRelease = "release:build:all"
+		workflowOpts.SingleOS = true
+	}
+
+	if err := gen.GenerateWorkflowDirWithOptions(baseDir, workflowOpts); err != nil {
+		return fmt.Errorf("failed to generate workflow: %w", err)
+	}
+	fmt.Printf("Generated %s/.github/workflows/ci.yml\n", baseDir)
+
+	// Generate .gitignore (binaryName already set above)
 	opts := taskfile.GitignoreOptions{BinaryName: binaryName}
 	if m.HasGitignore() {
 		opts.Patterns = m.Gitignore.Patterns
