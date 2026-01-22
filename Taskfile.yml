@@ -54,14 +54,9 @@ tasks:
 
   dev:build:
     desc: Build xplat binary with code generation
+    deps: [_ensure-xplat]
     cmds:
-      # Bootstrap: if xplat not installed, build it first then run full build
-      - |
-        if ! command -v {{.XPLAT}} >/dev/null 2>&1; then
-          echo "Bootstrap: building xplat first..."
-          go build -o {{.BINARY}} {{.MAIN}}
-        fi
-      - '{{.XPLAT}} internal dev build'
+      - './xplat internal dev build'
 
   dev:clean:
     desc: Remove build artifacts
