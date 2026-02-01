@@ -61,6 +61,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -419,9 +420,28 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		e.TaskSorter = alphaNumericWithRootTasksFirst
 	}
 
+	// On Windows, normalize backslashes to forward slashes in directory paths.
+	// go-task's shell interpreter (mvdan.cc/sh) treats backslashes as escape
+	// characters during template expansion, corrupting paths like
+	// D:\a\plat-auth → D:aplat-auth (\a and \p are interpreted as escapes).
+	// Forward slashes work fine on Windows in both Go and bash.
+	if runtime.GOOS == "windows" {
+		e.Dir = filepath.ToSlash(e.Dir)
+	}
+
 	// Setup the executor (loads Taskfile, validates, etc.)
 	if err := e.Setup(); err != nil {
 		return err
+	}
+
+	// Also normalize any Taskfile vars that resolved to backslash paths.
+	if runtime.GOOS == "windows" {
+		for k, v := range e.Taskfile.Vars.All() {
+			if s, ok := v.Value.(string); ok && strings.ContainsRune(s, '\\') {
+				v.Value = strings.ReplaceAll(s, "\\", "/")
+				e.Taskfile.Vars.Set(k, v)
+			}
+		}
 	}
 
 	// Handle --clear-cache
