@@ -420,22 +420,26 @@ func runTask(cmd *cobra.Command, osArgs []string) error {
 		e.TaskSorter = alphaNumericWithRootTasksFirst
 	}
 
-	// On Windows, normalize backslashes to forward slashes in directory paths.
-	// go-task's shell interpreter (mvdan.cc/sh) treats backslashes as escape
-	// characters during template expansion, corrupting paths like
-	// D:\a\plat-auth → D:aplat-auth (\a and \p are interpreted as escapes).
-	// Forward slashes work fine on Windows in both Go and bash.
-	if runtime.GOOS == "windows" {
-		e.Dir = filepath.ToSlash(e.Dir)
-	}
-
 	// Setup the executor (loads Taskfile, validates, etc.)
 	if err := e.Setup(); err != nil {
 		return err
 	}
 
-	// Also normalize any Taskfile vars that resolved to backslash paths.
+	// On Windows, normalize backslashes to forward slashes in all paths.
+	// go-task's shell interpreter (mvdan.cc/sh) treats backslashes as escape
+	// characters during template expansion, corrupting paths like
+	// D:\a\plat-auth → D:aplat-auth (\a and \p are interpreted as escapes).
+	// Forward slashes work fine on Windows in both Go and bash.
+	//
+	// Must run AFTER e.Setup() because Setup() overwrites e.Dir via node.Dir().
+	// We normalize e.Dir, e.Compiler.Dir (source of ROOT_DIR in templates),
+	// and all static Taskfile vars that may contain resolved paths.
 	if runtime.GOOS == "windows" {
+		e.Dir = filepath.ToSlash(e.Dir)
+		if e.Compiler != nil {
+			e.Compiler.Dir = filepath.ToSlash(e.Compiler.Dir)
+			e.Compiler.UserWorkingDir = filepath.ToSlash(e.Compiler.UserWorkingDir)
+		}
 		for k, v := range e.Taskfile.Vars.All() {
 			if s, ok := v.Value.(string); ok && strings.ContainsRune(s, '\\') {
 				v.Value = strings.ReplaceAll(s, "\\", "/")
