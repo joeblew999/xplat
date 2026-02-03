@@ -1,13 +1,16 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/joeblew999/xplat/internal/processcompose"
 	"github.com/joeblew999/xplat/internal/taskfile"
+	"github.com/joeblew999/xplat/internal/templates"
 )
 
 // BootstrapOptions configures the bootstrap process.
@@ -146,6 +149,20 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 		result.Errors = append(result.Errors, fmt.Sprintf(".github/workflows/ci.yml: %v", err))
 	}
 
+	// 4b. Generate .github/workflows/pages.yml for GitHub Pages
+	pagesPath := filepath.Join(dir, ".github", "workflows", "pages.yml")
+	if err := generateIfNeeded(pagesPath, opts, result, func() error {
+		content, err := templates.RenderExternal("pages.yml.tmpl", templates.PagesWorkflowData{
+			Name: projectName,
+		})
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(pagesPath, content, 0644)
+	}); err != nil {
+		result.Errors = append(result.Errors, fmt.Sprintf(".github/workflows/pages.yml: %v", err))
+	}
+
 	// 5. Generate README.md (only if missing - don't overwrite custom READMEs)
 	readmePath := filepath.Join(dir, "README.md")
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
@@ -182,9 +199,48 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 	// 8. Generate taskfiles/Taskfile.service.yml for remote include by consumers
 	serviceTaskfilePath := filepath.Join(dir, "taskfiles", "Taskfile.service.yml")
 	if err := generateIfNeeded(serviceTaskfilePath, opts, result, func() error {
-		return taskfile.GenerateServiceTaskfile(serviceTaskfilePath, binaryName, projectName)
+		// Extract port and health path from the first process with a port
+		var svcOpts *taskfile.ServiceTaskfileOptions
+		for _, proc := range m.Processes {
+			if proc.Port > 0 {
+				svcOpts = &taskfile.ServiceTaskfileOptions{
+					Port:       fmt.Sprintf("%d", proc.Port),
+					HealthPath: strings.TrimPrefix(proc.HealthPath, "/"),
+				}
+				break
+			}
+		}
+		return taskfile.GenerateServiceTaskfile(serviceTaskfilePath, binaryName, projectName, svcOpts)
 	}); err != nil {
 		result.Errors = append(result.Errors, fmt.Sprintf("taskfiles/Taskfile.service.yml: %v", err))
+	}
+
+	// 9. Create docs/ directory with .gitkeep for GitHub Pages
+	docsDir := filepath.Join(dir, "docs")
+	docsGitkeep := filepath.Join(docsDir, ".gitkeep")
+	if _, err := os.Stat(docsDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(docsDir, 0755); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("docs/: %v", err))
+		} else {
+			// Create .gitkeep to ensure the folder is tracked
+			if err := os.WriteFile(docsGitkeep, []byte(""), 0644); err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("docs/.gitkeep: %v", err))
+			} else {
+				result.Created = append(result.Created, "docs/")
+			}
+		}
+	} else {
+		result.Skipped = append(result.Skipped, "docs/ (exists)")
+	}
+
+	// 10. Enable GitHub Pages via gh CLI (only if in a git repo with remote)
+	if err := enableGitHubPages(dir, opts.Verbose); err != nil {
+		// Not a fatal error - just note it
+		if opts.Verbose {
+			result.Errors = append(result.Errors, fmt.Sprintf("GitHub Pages: %v", err))
+		}
+	} else {
+		result.Created = append(result.Created, "GitHub Pages (enabled)")
 	}
 
 	return result, nil
@@ -273,6 +329,11 @@ func generateProcessCompose(path string, m *Manifest) error {
 			}
 		}
 
+		// Dev mode: replace "task run" with "task dev" for hot reload
+		if proc.DevMode {
+			command = strings.Replace(command, "task run", "task dev", 1)
+		}
+
 		pcProc := &processcompose.Process{
 			Command:    command,
 			WorkingDir: ".",
@@ -296,7 +357,7 @@ func generateProcessCompose(path string, m *Manifest) error {
 			}
 		}
 
-		// Add readiness probe using task health command
+		// Add readiness probe
 		if proc.Port > 0 {
 			initialDelay := 3
 			period := 5
@@ -308,13 +369,29 @@ func generateProcessCompose(path string, m *Manifest) error {
 					period = proc.Readiness.Period
 				}
 			}
-			pcProc.ReadinessProbe = &processcompose.ReadinessProbe{
-				Exec: &processcompose.ExecProbe{
-					Command: fmt.Sprintf("xplat task %s:health", name),
-				},
+			probe := &processcompose.ReadinessProbe{
 				InitialDelaySeconds: initialDelay,
 				PeriodSeconds:       period,
 			}
+			if proc.HealthPath != "" {
+				// Use http_get probe when health_path is defined
+				scheme := "http"
+				if proc.HTTPS {
+					scheme = "https"
+				}
+				probe.HTTPGet = &processcompose.HTTPGet{
+					Scheme: scheme,
+					Host:   "127.0.0.1",
+					Port:   fmt.Sprintf("%d", proc.Port),
+					Path:   proc.HealthPath,
+				}
+			} else {
+				// Fall back to exec probe using task health command
+				probe.Exec = &processcompose.ExecProbe{
+					Command: fmt.Sprintf("xplat task %s:health", name),
+				}
+			}
+			pcProc.ReadinessProbe = probe
 		}
 
 		config.Processes[name] = pcProc
@@ -336,6 +413,47 @@ func generateProcessCompose(path string, m *Manifest) error {
 `, m.Name)
 
 	return gen.WriteWithHeader(config, header)
+}
+
+// enableGitHubPages attempts to enable GitHub Pages for the repository.
+// It requires the gh CLI to be installed and authenticated.
+func enableGitHubPages(dir string, verbose bool) error {
+	// Check if gh is available
+	if _, err := exec.LookPath("gh"); err != nil {
+		return fmt.Errorf("gh CLI not installed")
+	}
+
+	// Get repo name from gh
+	cmd := exec.Command("gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = nil // Suppress errors
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("not a GitHub repo or gh not authenticated")
+	}
+
+	repo := strings.TrimSpace(out.String())
+	if repo == "" {
+		return fmt.Errorf("could not determine repository name")
+	}
+
+	// Try to enable GitHub Pages with workflow build type
+	// First try POST (create), then PUT (update) if it already exists
+	cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", repo),
+		"--method", "POST", "-f", "build_type=workflow")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		// Try PUT if POST fails (pages might already exist)
+		cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", repo),
+			"--method", "PUT", "-f", "build_type=workflow")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("pages already enabled or API error")
+		}
+	}
+
+	return nil
 }
 
 // CheckConformity checks if a directory conforms to plat-* standards.

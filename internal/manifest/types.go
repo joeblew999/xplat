@@ -89,6 +89,7 @@ type ProcessConfig struct {
 	Namespace  string           `yaml:"namespace,omitempty"`
 	Readiness  *ReadinessProbe  `yaml:"readiness,omitempty"`
 	Schedule   *ScheduleConfig  `yaml:"schedule,omitempty"` // v1.87.0: cron/interval scheduling
+	DevMode    bool             `yaml:"dev_mode,omitempty"` // Use "task dev" for hot reload
 }
 
 // ScheduleConfig defines scheduling for a process (process-compose v1.87.0+).

@@ -269,8 +269,16 @@ tasks:
   run:
     desc: Build and run
     deps: [build]
-    cmds:
+{{if eq .Language "go"}}    sources:
+      - '{{ "{{" }} .MAIN {{ "}}" }}/**/*.go'
+      - go.mod
+{{end}}    cmds:
       - ./{{ "{{" }} .BINARY {{ "}}" }}
+
+  dev:
+    desc: Build and run with hot reload (watches for file changes)
+    cmds:
+      - '{{ "{{" }}.XPLAT{{ "}}" }} task run --watch'
 
   mod:
     desc: Tidy modules
@@ -294,4 +302,22 @@ tasks:
     desc: List built release binaries
     cmds:
       - ls -la .releases/ 2>/dev/null || echo "No releases built yet"
+
+  # ===========================================================================
+  # GitHub Pages
+  # ===========================================================================
+
+  pages:enable:
+    desc: Enable GitHub Pages for this repo (requires gh CLI)
+    cmds:
+      - |
+        REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+        if [ -z "$REPO" ]; then
+          echo "Error: Not in a GitHub repo or gh not authenticated"
+          exit 1
+        fi
+        gh api repos/$REPO/pages --method POST -f build_type=workflow 2>/dev/null || \
+        gh api repos/$REPO/pages --method PUT -f build_type=workflow 2>/dev/null || \
+        echo "Pages already enabled or error occurred"
+        echo "GitHub Pages: https://$(echo $REPO | cut -d/ -f1).github.io/$(echo $REPO | cut -d/ -f2)/"
 {{end}}

@@ -189,6 +189,11 @@ type GitignoreData struct {
 	Patterns   []string
 }
 
+// PagesWorkflowData holds values for pages.yml template.
+type PagesWorkflowData struct {
+	Name string // Project name
+}
+
 // TaskfileData holds values for taskfile.yml template.
 type TaskfileData struct {
 	Name           string
