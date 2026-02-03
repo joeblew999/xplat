@@ -1,7 +1,9 @@
 # Jekyll configuration for GitHub Pages
 title: xplat
 description: One binary to bootstrap and run any plat-* project
-theme: jekyll-theme-minimal
+remote_theme: pages-themes/cayman@v0.2.0
+plugins:
+  - jekyll-remote-theme
 markdown: kramdown
 
 # Include docs folder
@@ -19,3 +21,7 @@ exclude:
   - go.sum
   - Taskfile.yml
   - Makefile
+  - cmd
+  - internal
+  - workers
+  - taskfiles
