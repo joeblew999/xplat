@@ -163,6 +163,25 @@ func Bootstrap(dir string, opts BootstrapOptions) (*BootstrapResult, error) {
 		result.Errors = append(result.Errors, fmt.Sprintf(".github/workflows/pages.yml: %v", err))
 	}
 
+	// 4c. Generate _config.yml for Jekyll
+	jekyllPath := filepath.Join(dir, "_config.yml")
+	if err := generateIfNeeded(jekyllPath, opts, result, func() error {
+		description := m.Description
+		if description == "" {
+			description = projectName + " - powered by xplat"
+		}
+		content, err := templates.RenderExternal("_config.yml.tmpl", templates.JekyllConfigData{
+			Name:        projectName,
+			Description: description,
+		})
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(jekyllPath, content, 0644)
+	}); err != nil {
+		result.Errors = append(result.Errors, fmt.Sprintf("_config.yml: %v", err))
+	}
+
 	// 5. Generate README.md (only if missing - don't overwrite custom READMEs)
 	readmePath := filepath.Join(dir, "README.md")
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {

@@ -194,6 +194,12 @@ type PagesWorkflowData struct {
 	Name string // Project name
 }
 
+// JekyllConfigData holds values for _config.yml template.
+type JekyllConfigData struct {
+	Name        string // Project name
+	Description string // Project description
+}
+
 // TaskfileData holds values for taskfile.yml template.
 type TaskfileData struct {
 	Name           string

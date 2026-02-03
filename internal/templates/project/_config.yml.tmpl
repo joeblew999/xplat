@@ -1,0 +1,28 @@
+# Jekyll configuration for GitHub Pages
+title: {{.Name}}
+description: {{.Description}}
+remote_theme: pages-themes/cayman@v0.2.0
+plugins:
+  - jekyll-remote-theme
+markdown: kramdown
+
+# Exclude build artifacts
+exclude:
+  - .git
+  - .github
+  - node_modules
+  - vendor
+  - "*.go"
+  - go.mod
+  - go.sum
+  - Taskfile.yml
+  - Makefile
+  - cmd
+  - internal
+  - bin
+  - .bin
+  - .src
+  - .data
+  - .releases
+  - .task
+  - .via
