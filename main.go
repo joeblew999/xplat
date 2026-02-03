@@ -101,6 +101,9 @@ KEY COMMANDS:
 	// P15 (Setup wizard for external service configuration)
 	rootCmd.AddCommand(cmd.SetupCmd)
 
+	// P16 (Documentation server - preview docs locally matching GitHub Pages)
+	rootCmd.AddCommand(cmd.DocsServeCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
