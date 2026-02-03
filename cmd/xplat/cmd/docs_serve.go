@@ -63,16 +63,20 @@ This creates the exact same output that GitHub Pages will serve.
 Use this for deployment or to verify the build locally.
 
 Examples:
-  xplat docs build           # Output to _site/
-  xplat docs build -o dist   # Output to dist/`,
+  xplat docs build                    # Output to _site/
+  xplat docs build -o dist            # Output to dist/
+  xplat docs build --base /my-repo    # Set base path for GitHub Pages project site`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return buildDocs(buildOutput)
+		return buildDocs(buildOutput, buildBasePath)
 	},
 }
+
+var buildBasePath string
 
 func init() {
 	docsServeSubCmd.Flags().StringVarP(&servePort, "port", "p", config.DefaultDocsPort, "Port to serve on")
 	docsBuildCmd.Flags().StringVarP(&buildOutput, "output", "o", "_site", "Output directory")
+	docsBuildCmd.Flags().StringVar(&buildBasePath, "base", "", "Base URL path for GitHub Pages (e.g., /my-repo)")
 
 	DocsServeCmd.AddCommand(docsServeSubCmd)
 	DocsServeCmd.AddCommand(docsBuildCmd)
@@ -97,11 +101,22 @@ func newMarkdown() goldmark.Markdown {
 	)
 }
 
-func buildDocs(outputDir string) error {
+func buildDocs(outputDir string, basePath string) error {
 	// Get project info
 	title := filepath.Base(mustGetCwd())
 	description := ""
 	repoURL := getGitHubRepoURL()
+
+	// Auto-detect basePath from repo URL if not provided
+	// For GitHub Pages project sites: https://user.github.io/repo-name/
+	if basePath == "" && repoURL != "" {
+		// Extract repo name from URL like https://github.com/user/repo
+		parts := strings.Split(strings.TrimSuffix(repoURL, ".git"), "/")
+		if len(parts) > 0 {
+			repoName := parts[len(parts)-1]
+			basePath = "/" + repoName
+		}
+	}
 
 	// Check for xplat.yaml to get real title/description
 	if data, err := os.ReadFile("xplat.yaml"); err == nil {
@@ -166,7 +181,7 @@ func buildDocs(outputDir string) error {
 		tocHTML := generateTOC(content)
 
 		// Write HTML
-		html := renderCaymanHTMLWithNav(title, description, htmlContent.String(), doc.Path, docsList, repoURL, tocHTML)
+		html := renderCaymanHTMLWithNav(title, description, htmlContent.String(), doc.Path, docsList, repoURL, tocHTML, basePath)
 		if err := os.WriteFile(outFile, []byte(html), 0644); err != nil {
 			return fmt.Errorf("failed to write %s: %w", outFile, err)
 		}
@@ -273,7 +288,7 @@ func serveDocs(port string) error {
 
 		// Render with Cayman-style template
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		io.WriteString(w, renderCaymanHTMLWithNav(title, description, htmlContent.String(), path, docsList, repoURL, tocHTML))
+		io.WriteString(w, renderCaymanHTMLWithNav(title, description, htmlContent.String(), path, docsList, repoURL, tocHTML, ""))
 	})
 
 	fmt.Printf("\n📚 Serving docs at http://localhost:%s\n", port)
@@ -447,7 +462,7 @@ func findPrevNext(docs []docFile, currentPath string) (*docFile, *docFile) {
 	return nil, nil
 }
 
-func renderCaymanHTMLWithNav(title, description, content, currentPath string, docs []docFile, repoURL string, tocHTML string) string {
+func renderCaymanHTMLWithNav(title, description, content, currentPath string, docs []docFile, repoURL string, tocHTML string, basePath string) string {
 	// Find prev/next for navigation
 	prev, next := findPrevNext(docs, currentPath)
 
@@ -460,12 +475,16 @@ func renderCaymanHTMLWithNav(title, description, content, currentPath string, do
 		}
 	}
 
-	// Build navigation items
+	// Build navigation items (with basePath prefix)
 	var overviewItems, guideItems []templates.DocsNavItem
 	for _, doc := range docs {
+		fullPath := basePath + doc.Path
+		if doc.Path == "/" && basePath != "" {
+			fullPath = basePath + "/"
+		}
 		item := templates.DocsNavItem{
 			Name:   doc.Name,
-			Path:   doc.Path,
+			Path:   fullPath,
 			Active: doc.Path == currentPath || (currentPath == "/" && doc.Path == "/"),
 		}
 		if doc.Category == "overview" {
@@ -475,14 +494,18 @@ func renderCaymanHTMLWithNav(title, description, content, currentPath string, do
 		}
 	}
 
-	// Build search data JSON
+	// Build search data JSON (with basePath prefix)
 	type searchItem struct {
 		Title string `json:"title"`
 		Path  string `json:"path"`
 	}
 	var searchItems []searchItem
 	for _, doc := range docs {
-		searchItems = append(searchItems, searchItem{Title: doc.Name, Path: doc.Path})
+		fullPath := basePath + doc.Path
+		if doc.Path == "/" && basePath != "" {
+			fullPath = basePath + "/"
+		}
+		searchItems = append(searchItems, searchItem{Title: doc.Name, Path: fullPath})
 	}
 	searchJSON, _ := json.Marshal(searchItems)
 
@@ -498,13 +521,21 @@ func renderCaymanHTMLWithNav(title, description, content, currentPath string, do
 		editURL = repoURL + "/edit/main/" + currentMDFile
 	}
 
-	// Prev/Next docs
+	// Prev/Next docs (with basePath prefix)
 	var prevDoc, nextDoc *templates.DocsNavItem
 	if prev != nil {
-		prevDoc = &templates.DocsNavItem{Name: prev.Name, Path: prev.Path}
+		fullPath := basePath + prev.Path
+		if prev.Path == "/" && basePath != "" {
+			fullPath = basePath + "/"
+		}
+		prevDoc = &templates.DocsNavItem{Name: prev.Name, Path: fullPath}
 	}
 	if next != nil {
-		nextDoc = &templates.DocsNavItem{Name: next.Name, Path: next.Path}
+		fullPath := basePath + next.Path
+		if next.Path == "/" && basePath != "" {
+			fullPath = basePath + "/"
+		}
+		nextDoc = &templates.DocsNavItem{Name: next.Name, Path: fullPath}
 	}
 
 	// Build template data
