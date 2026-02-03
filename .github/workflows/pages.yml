@@ -1,4 +1,4 @@
-# GitHub Pages deployment for xplat documentation
+# GitHub Pages deployment using Jekyll
 name: Deploy Docs
 
 on:
@@ -7,6 +7,7 @@ on:
     paths:
       - 'docs/**'
       - 'README.md'
+      - '_config.yml'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -28,46 +29,14 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Build docs site
-        run: |
-          mkdir -p _site/docs
-          # Copy docs (preserving structure for links)
-          cp -r docs/* _site/docs/
-          # Also copy to root for direct access
-          cp -r docs/* _site/
-          # Copy README as index
-          cp README.md _site/index.md
-          # Create simple index.html that renders markdown
-          cat > _site/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>xplat</title>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
-            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-            <style>
-              body { max-width: 900px; }
-              img { max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-            </style>
-          </head>
-          <body>
-            <div id="content"></div>
-            <script>
-              fetch('index.md')
-                .then(r => r.text())
-                .then(md => {
-                  document.getElementById('content').innerHTML = marked.parse(md);
-                });
-            </script>
-          </body>
-          </html>
-          EOF
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
 
   deploy:
     environment:

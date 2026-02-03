@@ -1,0 +1,21 @@
+# Jekyll configuration for GitHub Pages
+title: xplat
+description: One binary to bootstrap and run any plat-* project
+theme: jekyll-theme-minimal
+markdown: kramdown
+
+# Include docs folder
+include:
+  - docs
+
+# Exclude build artifacts
+exclude:
+  - .git
+  - .github
+  - node_modules
+  - vendor
+  - "*.go"
+  - go.mod
+  - go.sum
+  - Taskfile.yml
+  - Makefile
