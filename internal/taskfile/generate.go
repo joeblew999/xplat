@@ -147,8 +147,14 @@ func GenerateReadme(outputPath string, name, description string) error {
 	return os.WriteFile(outputPath, content, 0644)
 }
 
+// ServiceTaskfileOptions holds optional process-level config for service taskfile generation.
+type ServiceTaskfileOptions struct {
+	Port       string
+	HealthPath string
+}
+
 // GenerateServiceTaskfile creates a taskfiles/Taskfile.service.yml for remote include by consumers.
-func GenerateServiceTaskfile(outputPath string, binaryName string, projectName string) error {
+func GenerateServiceTaskfile(outputPath string, binaryName string, projectName string, opts *ServiceTaskfileOptions) error {
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -157,12 +163,22 @@ func GenerateServiceTaskfile(outputPath string, binaryName string, projectName s
 	// Generate binary variable name (uppercase)
 	varName := strings.ToUpper(binaryName)
 
+	port := "8080"
+	healthPath := ""
+	if opts != nil {
+		if opts.Port != "" {
+			port = opts.Port
+		}
+		healthPath = opts.HealthPath
+	}
+
 	content, err := templates.RenderExternal("service.taskfile.yml.tmpl", templates.ServiceTaskfileData{
 		Name:          projectName,
 		BinaryName:    binaryName,
 		BinaryVarName: varName,
-		Port:          "8080",
+		Port:          port,
 		Host:          "0.0.0.0",
+		HealthPath:    healthPath,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render service taskfile: %w", err)
