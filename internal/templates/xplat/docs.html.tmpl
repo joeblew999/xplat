@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <style>
+    :root {
+      --bg-color: #fff;
+      --text-color: #606c71;
+      --heading-color: #159957;
+      --link-color: #1e6bb8;
+      --code-bg: #f3f6fa;
+      --code-color: #383e41;
+      --sidebar-bg: #f6f8fa;
+      --border-color: #eaecef;
+      --nav-hover: #e1e4e8;
+      --header-gradient-start: #155799;
+      --header-gradient-end: #159957;
+    }
+    [data-theme="dark"] {
+      --bg-color: #0d1117;
+      --text-color: #c9d1d9;
+      --heading-color: #58a6ff;
+      --link-color: #58a6ff;
+      --code-bg: #161b22;
+      --code-color: #c9d1d9;
+      --sidebar-bg: #161b22;
+      --border-color: #30363d;
+      --nav-hover: #21262d;
+      --header-gradient-start: #0d1117;
+      --header-gradient-end: #21262d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-color);
+      background: var(--bg-color);
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .page-header {
+      color: #fff;
+      text-align: center;
+      background-color: var(--header-gradient-end);
+      background-image: linear-gradient(120deg, var(--header-gradient-start), var(--header-gradient-end));
+      padding: 1.5rem 2rem;
+      position: relative;
+    }
+    .page-header h1 { margin: 0; font-size: 2rem; }
+    .page-header p { margin: 0.5rem 0 0; opacity: 0.9; }
+    .header-controls {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .version-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    .theme-toggle {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      padding: 0.4rem 0.6rem;
+      border-radius: 0.3rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background 0.2s;
+    }
+    .theme-toggle:hover { background: rgba(255,255,255,0.2); }
+    .container {
+      display: flex;
+      max-width: 80rem;
+      margin: 0 auto;
+      min-height: calc(100vh - 120px);
+    }
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      padding: 1.5rem 1rem;
+      border-right: 1px solid var(--border-color);
+      background: var(--sidebar-bg);
+      position: sticky;
+      top: 0;
+      height: fit-content;
+      max-height: 100vh;
+      overflow-y: auto;
+    }
+    .search-box { margin-bottom: 1rem; }
+    .search-box input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-size: 0.875rem;
+    }
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--heading-color);
+      box-shadow: 0 0 0 3px rgba(21,153,87,0.1);
+    }
+    .search-results {
+      display: none;
+      position: absolute;
+      background: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 100;
+      width: calc(100% - 2rem);
+    }
+    .search-results.active { display: block; }
+    .search-results a {
+      display: block;
+      padding: 0.5rem 0.75rem;
+      color: var(--text-color);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .search-results a:last-child { border-bottom: none; }
+    .search-results a:hover { background: var(--nav-hover); }
+    .nav-section { margin-bottom: 1.5rem; }
+    .nav-section h4 {
+      margin: 0 0 0.5rem 0.5rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-color);
+      opacity: 0.7;
+      font-weight: 600;
+    }
+    .nav-section ul { list-style: none; padding: 0; margin: 0; }
+    .nav-section li { margin: 2px 0; }
+    .nav-section a {
+      display: block;
+      padding: 0.4rem 0.75rem;
+      color: var(--text-color);
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      border-left: 3px solid transparent;
+    }
+    .nav-section a:hover { background: var(--nav-hover); }
+    .nav-section li.active a {
+      background: linear-gradient(90deg, rgba(21,153,87,0.15), transparent);
+      border-left-color: var(--heading-color);
+      color: var(--heading-color);
+      font-weight: 500;
+    }
+    .toc-section {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+    }
+    .toc-section h4 {
+      margin: 0 0 0.5rem 0.5rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-color);
+      opacity: 0.7;
+      font-weight: 600;
+    }
+    .main-content {
+      flex: 1;
+      padding: 2rem 3rem;
+      min-width: 0;
+      max-width: 50rem;
+    }
+    .content-header {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 1rem;
+    }
+    .edit-link {
+      font-size: 0.8rem;
+      color: var(--link-color);
+      text-decoration: none;
+      opacity: 0.7;
+    }
+    .edit-link:hover { opacity: 1; text-decoration: underline; }
+    .main-content h1, .main-content h2, .main-content h3 { color: var(--heading-color); margin-top: 2rem; }
+    .main-content h1 { font-size: 1.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3rem; }
+    .main-content h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3rem; }
+    .main-content h3 { font-size: 1.25rem; }
+    .main-content a { color: var(--link-color); text-decoration: none; }
+    .main-content a:hover { text-decoration: underline; }
+    .main-content code {
+      padding: 2px 4px;
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.9em;
+      color: var(--code-color);
+      background-color: var(--code-bg);
+      border-radius: 3px;
+    }
+    .main-content pre {
+      padding: 0.8rem;
+      overflow: auto;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      border-radius: 3px;
+      background-color: var(--code-bg);
+    }
+    .main-content pre code { padding: 0; background-color: transparent; }
+    .main-content table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    .main-content th, .main-content td { padding: 0.5rem 1rem; border: 1px solid var(--border-color); }
+    .main-content th { background-color: var(--sidebar-bg); font-weight: 600; }
+    .main-content img { max-width: 100%; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .main-content blockquote { padding: 0 1rem; margin: 0; color: var(--text-color); opacity: 0.8; border-left: 4px solid var(--border-color); }
+    .btn {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.75rem 1.5rem;
+      color: rgba(255,255,255,0.9);
+      background-color: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 0.3rem;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      color: #fff;
+      background-color: rgba(255,255,255,0.2);
+      border-color: rgba(255,255,255,0.3);
+    }
+    .toc { margin-top: 0.5rem; }
+    .toc ul { padding-left: 0.75rem; margin: 0.25rem 0; list-style: none; }
+    .toc li { margin: 0.15rem 0; font-size: 0.8rem; }
+    .toc a {
+      color: var(--text-color);
+      opacity: 0.8;
+      text-decoration: none;
+      display: block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+    .toc a:hover { color: var(--heading-color); background: rgba(21,153,87,0.08); opacity: 1; }
+    .prev-next {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+    }
+    .prev-next a {
+      color: var(--link-color);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .prev-next a:hover {
+      background: var(--sidebar-bg);
+      border-color: var(--heading-color);
+    }
+    .prev-next .prev { margin-right: auto; }
+    .prev-next .next { margin-left: auto; }
+    @media screen and (max-width: 42em) {
+      .container { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        position: static;
+        max-height: none;
+      }
+      .main-content { padding: 1rem; }
+      .header-controls { position: static; margin-top: 1rem; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <div class="header-controls">
+      {{if .VersionBadge}}<span class="version-badge">{{.VersionBadge}}</span>{{end}}
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">&#127769;</button>
+    </div>
+    <h1>{{.Title}}</h1>
+    <p>{{.Description}}</p>
+    {{if .RepoURL}}<a href="{{.RepoURL}}" class="btn">View on GitHub</a>{{end}}
+  </header>
+  <div class="container">
+    <nav class="sidebar">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search docs..." autocomplete="off">
+        <div class="search-results" id="search-results"></div>
+      </div>
+      {{if .OverviewItems}}
+      <div class="nav-section">
+        <h4>Overview</h4>
+        <ul>
+          {{range .OverviewItems}}<li{{if .Active}} class="active"{{end}}><a href="{{.Path}}">{{.Name}}</a></li>
+          {{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .GuideItems}}
+      <div class="nav-section">
+        <h4>Guides</h4>
+        <ul>
+          {{range .GuideItems}}<li{{if .Active}} class="active"{{end}}><a href="{{.Path}}">{{.Name}}</a></li>
+          {{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .TOC}}
+      <div class="toc-section">
+        <h4>On This Page</h4>
+        {{.TOC}}
+      </div>
+      {{end}}
+    </nav>
+    <main class="main-content">
+      {{if .EditURL}}<div class="content-header"><a href="{{.EditURL}}" class="edit-link">Edit this page</a></div>{{end}}
+      {{.Content}}
+      {{if or .PrevDoc .NextDoc}}
+      <nav class="prev-next">
+        {{if .PrevDoc}}<a href="{{.PrevDoc.Path}}" class="prev">&larr; {{.PrevDoc.Name}}</a>{{else}}<span></span>{{end}}
+        {{if .NextDoc}}<a href="{{.NextDoc.Path}}" class="next">{{.NextDoc.Name}} &rarr;</a>{{end}}
+      </nav>
+      {{end}}
+    </main>
+  </div>
+  <script>
+    const searchData = {{.SearchDataJSON}};
+
+    // Theme toggle
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      document.querySelector('.theme-toggle').innerHTML = next === 'dark' ? '&#9728;' : '&#127769;';
+    }
+
+    // Load saved theme
+    (function() {
+      const saved = localStorage.getItem('theme');
+      if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+        document.querySelector('.theme-toggle').innerHTML = saved === 'dark' ? '&#9728;' : '&#127769;';
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.querySelector('.theme-toggle').innerHTML = '&#9728;';
+      }
+    })();
+
+    // Search functionality
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+
+    searchInput.addEventListener('input', function(e) {
+      const query = e.target.value.toLowerCase().trim();
+      if (!query) {
+        searchResults.classList.remove('active');
+        return;
+      }
+
+      const matches = searchData.filter(doc =>
+        doc.title.toLowerCase().includes(query)
+      );
+
+      if (matches.length === 0) {
+        searchResults.innerHTML = '<div style="padding: 0.5rem 0.75rem; opacity: 0.6;">No results</div>';
+      } else {
+        searchResults.innerHTML = matches.map(doc =>
+          '<a href="' + doc.path + '">' + doc.title + '</a>'
+        ).join('');
+      }
+      searchResults.classList.add('active');
+    });
+
+    searchInput.addEventListener('blur', function() {
+      setTimeout(() => searchResults.classList.remove('active'), 200);
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        searchResults.classList.remove('active');
+        searchInput.blur();
+      }
+    });
+  </script>
+</body>
+</html>

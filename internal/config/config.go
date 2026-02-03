@@ -46,6 +46,8 @@ const (
 	DefaultMCPPortInt         = 8762
 	DefaultWebhookPort        = "8763"
 	DefaultWebhookPortInt     = 8763
+	DefaultDocsPort           = "8764"
+	DefaultDocsPortInt        = 8764
 
 	// External tool ports (their defaults)
 	DefaultHugoPort       = 1313
