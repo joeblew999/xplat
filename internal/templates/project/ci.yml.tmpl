@@ -7,7 +7,7 @@
 # Template: internal/templates/project/ci.yml.tmpl
 # ============================================================================
 #
-# Unified CI/CD workflow - build, test, and release
+# Unified CI/CD workflow - build, test, release, and deploy docs
 #
 # Triggers:
 #   - Push/PR to main: Build + Test + Lint
@@ -15,6 +15,9 @@
 #   - Tag push ({{.TagPrefix}}v*): Build + Test + Release
 {{- else}}
 #   - Tag push (v*): Build + Test + Release
+{{- end}}
+{{- if .EnablePages}}
+#   - Push to main: Deploy docs to GitHub Pages
 {{- end}}
 
 name: CI
@@ -29,6 +32,20 @@ on:
 {{- end}}
   pull_request:
     branches: [main]
+
+{{- if .EnablePages}}
+
+# Permissions for GitHub Pages deployment
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Prevent concurrent Pages deployments
+concurrency:
+  group: pages-${{"{{"}} github.ref {{"}}"}}
+  cancel-in-progress: false
+{{- end}}
 
 jobs:
   ci:
@@ -181,3 +198,42 @@ jobs:
 {{- end}}
             --generate-release-notes \
             release/*
+{{- if .EnablePages}}
+
+  # GitHub Pages deployment (only on main branch push, not PRs or tags)
+  pages-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - uses: {{.XplatRepo}}/.github/actions/setup@main
+
+      - name: Build docs
+        run: xplat docs build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  pages-deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: pages-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{"{{"}} steps.deployment.outputs.page_url {{"}}"}}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+{{- end}}

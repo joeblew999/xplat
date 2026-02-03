@@ -224,6 +224,7 @@ type WorkflowOptions struct {
 	TaskLint    string // lint task name (e.g., "dev:lint")
 	TaskRelease string // release task name (e.g., "release:build:all")
 	SingleOS    bool   // if true, only run on ubuntu-latest
+	EnablePages bool   // if true, deploy docs to GitHub Pages after CI
 }
 
 // GenerateWorkflow generates a unified GitHub Actions CI workflow.
@@ -243,6 +244,7 @@ func (g *Generator) GenerateWorkflow(outputPath string, opts WorkflowOptions) er
 		TaskLint:       opts.TaskLint,
 		TaskRelease:    opts.TaskRelease,
 		SingleOS:       opts.SingleOS,
+		EnablePages:    opts.EnablePages,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render CI workflow: %w", err)

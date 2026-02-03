@@ -20,6 +20,7 @@ var (
 	genOutput  string
 	genRepoURL string
 	genForce   bool
+	genPages   bool // enable GitHub Pages deployment in CI workflow
 )
 
 // GenCmd is the parent command for all generation from xplat.yaml.
@@ -54,6 +55,8 @@ Creates a minimal workflow that:
 - Sets up the project language (auto-detected: go, rust, bun)
 - Installs xplat
 - Runs: xplat task build, test, lint
+
+Use --pages to include GitHub Pages deployment (deploys docs/ to Pages after CI passes).
 
 The same commands work locally and in CI.`,
 	RunE: runGenWorkflow,
@@ -153,6 +156,8 @@ func init() {
 	GenCmd.PersistentFlags().StringVar(&genRepoURL, "repo-url", "https://github.com/joeblew999", "Base URL for GitHub repos")
 	GenCmd.PersistentFlags().BoolVarP(&genForce, "force", "f", false, "Overwrite existing files")
 
+	genWorkflowCmd.Flags().BoolVar(&genPages, "pages", false, "Include GitHub Pages deployment (uses xplat docs build)")
+
 	GenCmd.AddCommand(genWorkflowCmd)
 	GenCmd.AddCommand(genGitignoreCmd)
 	GenCmd.AddCommand(genEnvCmd)
@@ -202,6 +207,9 @@ func runGenWorkflow(cmd *cobra.Command, args []string) error {
 			opts.SingleOS = true
 		}
 	}
+
+	// Enable Pages deployment if --pages flag was set
+	opts.EnablePages = genPages
 
 	gen := manifest.NewGenerator(nil)
 	if err := gen.GenerateWorkflowDirWithOptions(baseDir, opts); err != nil {

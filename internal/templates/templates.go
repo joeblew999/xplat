@@ -141,6 +141,29 @@ type XplatTaskfileData struct {
 	Commands []CommandInfo
 }
 
+// DocsPageData holds values for the docs HTML template.
+type DocsPageData struct {
+	Title          string
+	Description    string
+	Content        string // HTML content (already rendered from markdown)
+	RepoURL        string
+	VersionBadge   string
+	EditURL        string
+	TOC            string // HTML table of contents
+	SearchDataJSON string // JSON array of {title, path} for search
+	OverviewItems  []DocsNavItem
+	GuideItems     []DocsNavItem
+	PrevDoc        *DocsNavItem
+	NextDoc        *DocsNavItem
+}
+
+// DocsNavItem represents a navigation item in the docs sidebar.
+type DocsNavItem struct {
+	Name   string
+	Path   string
+	Active bool
+}
+
 // === Project Templates (xplat gen *) ===
 
 // RenderProject renders a project template by name.
@@ -181,6 +204,7 @@ type CIWorkflowData struct {
 	TaskLint      string // lint task name (e.g., "dev:lint")
 	TaskRelease   string // release task name (e.g., "release:build:all")
 	SingleOS      bool   // if true, only run on ubuntu-latest (no matrix)
+	EnablePages   bool   // if true, deploy docs to GitHub Pages after CI passes
 }
 
 // GitignoreData holds values for gitignore template.
