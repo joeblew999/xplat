@@ -30,8 +30,10 @@ jobs:
 
       - name: Build docs site
         run: |
-          mkdir -p _site
-          # Copy docs
+          mkdir -p _site/docs
+          # Copy docs (preserving structure for links)
+          cp -r docs/* _site/docs/
+          # Also copy to root for direct access
           cp -r docs/* _site/
           # Copy README as index
           cp README.md _site/index.md

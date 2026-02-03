@@ -39,8 +39,9 @@ jobs:
 
       - name: Build docs site
         run: |
-          mkdir -p _site/images
-          # Copy docs if exists
+          mkdir -p _site/docs
+          # Copy docs if exists (preserve structure for links like docs/images/)
+          [ -d docs ] && cp -r docs/* _site/docs/ || true
           [ -d docs ] && cp -r docs/* _site/ || true
           # Copy README as index
           cp README.md _site/index.md
