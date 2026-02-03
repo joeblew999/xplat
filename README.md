@@ -45,7 +45,7 @@ Run `xplat up` to launch the unified web dashboard:
 
 | Tasks | Processes |
 |-------|-----------|
-| ![Tasks](docs/images/ui-tasks-tab.png) | ![Processes](docs/images/ui-processes-tab-running.png) |
+| [![Tasks](docs/images/ui-tasks-tab.png)](docs/images/ui-tasks-tab.png) | [![Processes](docs/images/ui-processes-tab-running.png)](docs/images/ui-processes-tab-running.png) |
 
 **Features:**
 - **Tasks** - Run any task from Taskfile.yml with one click

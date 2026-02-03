@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/joeblew999/xplat/internal/processcompose"
+	"github.com/joeblew999/xplat/internal/syncgh"
 	"github.com/joeblew999/xplat/internal/taskfile"
 	"github.com/joeblew999/xplat/internal/templates"
 )
@@ -435,36 +436,46 @@ func generateProcessCompose(path string, m *Manifest) error {
 }
 
 // enableGitHubPages attempts to enable GitHub Pages for the repository.
-// It requires the gh CLI to be installed and authenticated.
+// It tries GITHUB_TOKEN first (no gh CLI needed), then falls back to gh CLI.
 func enableGitHubPages(dir string, verbose bool) error {
-	// Check if gh is available
-	if _, err := exec.LookPath("gh"); err != nil {
-		return fmt.Errorf("gh CLI not installed")
-	}
-
-	// Get repo name from gh
-	cmd := exec.Command("gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
+	// Try to get repo info from git remote
+	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	cmd.Stderr = nil // Suppress errors
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("not a GitHub repo or gh not authenticated")
+		return fmt.Errorf("not a git repo with remote")
 	}
 
-	repo := strings.TrimSpace(out.String())
-	if repo == "" {
-		return fmt.Errorf("could not determine repository name")
+	remoteURL := strings.TrimSpace(out.String())
+	owner, repo, err := syncgh.GetRepoFromRemote(remoteURL)
+	if err != nil {
+		return err
 	}
+
+	// Try using GITHUB_TOKEN directly (no gh CLI needed)
+	if os.Getenv("GITHUB_TOKEN") != "" {
+		if err := syncgh.EnablePages(owner, repo); err == nil {
+			return nil
+		}
+		// Fall through to gh CLI
+	}
+
+	// Fall back to gh CLI
+	if _, err := exec.LookPath("gh"); err != nil {
+		return fmt.Errorf("neither GITHUB_TOKEN nor gh CLI available")
+	}
+
+	fullRepo := owner + "/" + repo
 
 	// Try to enable GitHub Pages with workflow build type
 	// First try POST (create), then PUT (update) if it already exists
-	cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", repo),
+	cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", fullRepo),
 		"--method", "POST", "-f", "build_type=workflow")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		// Try PUT if POST fails (pages might already exist)
-		cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", repo),
+		cmd = exec.Command("gh", "api", fmt.Sprintf("repos/%s/pages", fullRepo),
 			"--method", "PUT", "-f", "build_type=workflow")
 		cmd.Dir = dir
 		if err := cmd.Run(); err != nil {
