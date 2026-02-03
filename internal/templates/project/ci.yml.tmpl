@@ -218,7 +218,7 @@ jobs:
 
       - uses: {{.XplatRepo}}/.github/actions/setup@main
         with:
-          token: ${{"{{"}} secrets.GITHUB_TOKEN {{"}}"}}
+          version: dev  # docs command requires latest source
 
       - name: Build docs
         run: xplat docs build
