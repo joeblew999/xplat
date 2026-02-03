@@ -29,6 +29,10 @@ inputs:
     description: 'xplat version to install (e.g., v0.3.8, "dev" to build from source). Defaults to latest release.'
     required: false
     default: 'latest'
+  token:
+    description: 'GitHub token for API requests (avoids rate limiting). Defaults to github.token.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -64,11 +68,18 @@ runs:
       if: inputs.version != 'dev'
       id: version
       shell: bash
+      env:
+        GH_TOKEN: ${{ "{{" }} inputs.token {{ "}}" }}
       run: |
         set +e  # Don't exit on error for version detection
         VERSION="${{ "{{" }} inputs.version {{ "}}" }}"
         if [ "$VERSION" = "latest" ]; then
-          RELEASE_JSON=$(curl -sL https://api.github.com/repos/{{.Repo}}/releases/latest)
+          # Use token if provided to avoid rate limiting
+          if [ -n "$GH_TOKEN" ]; then
+            RELEASE_JSON=$(curl -sL -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/{{.Repo}}/releases/latest)
+          else
+            RELEASE_JSON=$(curl -sL https://api.github.com/repos/{{.Repo}}/releases/latest)
+          fi
           VERSION=$(echo "$RELEASE_JSON" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/{{.TagPrefix}}//')
           if [ -z "$VERSION" ]; then
             echo "Failed to get latest version. API response:"
